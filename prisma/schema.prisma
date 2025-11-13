@@ -1,0 +1,484 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== USUARIOS ====================
+enum UserRole {
+  CLIENTE
+  TRABAJADOR
+  GERENTE
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+model User {
+  id        String     @id @default(uuid())
+  email     String     @unique
+  password  String
+  role      UserRole
+  status    UserStatus @default(ACTIVE)
+  
+  // Profile
+  firstName String
+  lastName  String
+  phone     String?
+  avatar    String?
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lastLogin DateTime?
+  
+  // Relations
+  cliente           Cliente?
+  trabajador        Trabajador?
+  notifications     Notification[]
+  createdOrders     ServiceOrder[]     @relation("CreatedByUser")
+  assignedOrders    ServiceOrder[]     @relation("AssignedToUser")
+  
+  @@map("users")
+}
+
+// ==================== CLIENTES ====================
+model Cliente {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Datos adicionales
+  dni           String?  @unique
+  address       String?
+  city          String?
+  postalCode    String?
+  
+  // Preferencias
+  newsletter    Boolean  @default(true)
+  smsAlerts     Boolean  @default(true)
+  
+  // Timestamps
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relations
+  vehicles      Vehicle[]
+  appointments  Appointment[]
+  serviceOrders ServiceOrder[]
+  
+  @@map("clientes")
+}
+
+// ==================== TRABAJADORES ====================
+enum TrabajadorType {
+  MECANICO
+  ELECTRICISTA
+  CHAPISTA
+  PINTOR
+  ASESOR
+  ADMINISTRATIVO
+}
+
+model Trabajador {
+  id            String          @id @default(uuid())
+  userId        String          @unique
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Datos laborales
+  employeeCode  String          @unique
+  type          TrabajadorType
+  specialties   String[]        // Array de especialidades
+  salary        Decimal?        @db.Decimal(10, 2)
+  commission    Decimal?        @db.Decimal(5, 2)
+  
+  // Horario
+  startDate     DateTime
+  endDate       DateTime?
+  isActive      Boolean         @default(true)
+  
+  // Timestamps
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  
+  // Relations
+  workSessions  WorkSession[]
+  tasks         Task[]
+  
+  @@map("trabajadores")
+}
+
+// ==================== VEHÍCULOS ====================
+model Vehicle {
+  id            String   @id @default(uuid())
+  clienteId     String
+  cliente       Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  
+  // Datos del vehículo
+  brand         String
+  model         String
+  year          Int
+  licensePlate  String   @unique
+  vin           String?  @unique // Vehicle Identification Number
+  color         String?
+  kilometers    Int?
+  
+  // Motor
+  engineType    String?  // Gasolina, Diesel, Híbrido, Eléctrico
+  engineSize    String?
+  
+  // Documentos
+  documents     Json?    // Array de URLs de documentos
+  
+  // Timestamps
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relations
+  appointments  Appointment[]
+  serviceOrders ServiceOrder[]
+  maintenanceHistory MaintenanceRecord[]
+  
+  @@map("vehicles")
+}
+
+// ==================== CITAS ====================
+enum AppointmentStatus {
+  PENDIENTE
+  CONFIRMADA
+  EN_PROCESO
+  COMPLETADA
+  CANCELADA
+  NO_ASISTIO
+}
+
+model Appointment {
+  id            String            @id @default(uuid())
+  clienteId     String
+  cliente       Cliente           @relation(fields: [clienteId], references: [id])
+  vehicleId     String
+  vehicle       Vehicle           @relation(fields: [vehicleId], references: [id])
+  
+  // Detalles de la cita
+  scheduledDate DateTime
+  estimatedDuration Int           // minutos
+  status        AppointmentStatus @default(PENDIENTE)
+  serviceType   String            // Revisión, Reparación, Mantenimiento
+  description   String?
+  notes         String?
+  
+  // Timestamps
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  
+  // Relations
+  serviceOrder  ServiceOrder?
+  
+  @@map("appointments")
+}
+
+// ==================== ÓRDENES DE SERVICIO ====================
+enum ServiceOrderStatus {
+  CREADA
+  EN_DIAGNOSTICO
+  PRESUPUESTADA
+  APROBADA
+  EN_PROCESO
+  PENDIENTE_PIEZAS
+  COMPLETADA
+  ENTREGADA
+  CANCELADA
+}
+
+enum ServiceOrderPriority {
+  BAJA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+model ServiceOrder {
+  id              String              @id @default(uuid())
+  orderNumber     String              @unique // OS-2024-0001
+  
+  // Cliente y vehículo
+  clienteId       String
+  cliente         Cliente             @relation(fields: [clienteId], references: [id])
+  vehicleId       String
+  vehicle         Vehicle             @relation(fields: [vehicleId], references: [id])
+  
+  // Cita relacionada (opcional)
+  appointmentId   String?             @unique
+  appointment     Appointment?        @relation(fields: [appointmentId], references: [id])
+  
+  // Estado y prioridad
+  status          ServiceOrderStatus  @default(CREADA)
+  priority        ServiceOrderPriority @default(MEDIA)
+  
+  // Detalles
+  description     String
+  symptoms        String?             // Síntomas reportados
+  diagnosis       String?             // Diagnóstico técnico
+  
+  // Fechas
+  estimatedStartDate  DateTime?
+  estimatedEndDate    DateTime?
+  actualStartDate     DateTime?
+  actualEndDate       DateTime?
+  
+  // Costos
+  laborCost       Decimal             @default(0) @db.Decimal(10, 2)
+  partsCost       Decimal             @default(0) @db.Decimal(10, 2)
+  totalCost       Decimal             @default(0) @db.Decimal(10, 2)
+  discount        Decimal             @default(0) @db.Decimal(5, 2)
+  tax             Decimal             @default(21) @db.Decimal(5, 2)
+  finalCost       Decimal             @default(0) @db.Decimal(10, 2)
+  
+  // Asignación
+  createdById     String
+  createdBy       User                @relation("CreatedByUser", fields: [createdById], references: [id])
+  assignedToId    String?
+  assignedTo      User?               @relation("AssignedToUser", fields: [assignedToId], references: [id])
+  
+  // Aprobación del cliente
+  clientApproved  Boolean             @default(false)
+  approvalDate    DateTime?
+  
+  // Timestamps
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  
+  // Relations
+  tasks           Task[]
+  usedParts       UsedPart[]
+  statusHistory   OrderStatusHistory[]
+  
+  @@map("service_orders")
+}
+
+// ==================== HISTORIAL DE ESTADOS ====================
+model OrderStatusHistory {
+  id              String              @id @default(uuid())
+  serviceOrderId  String
+  serviceOrder    ServiceOrder        @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+  
+  status          ServiceOrderStatus
+  notes           String?
+  changedAt       DateTime            @default(now())
+  
+  @@map("order_status_history")
+}
+
+// ==================== TAREAS ====================
+enum TaskStatus {
+  PENDIENTE
+  EN_PROCESO
+  COMPLETADA
+  CANCELADA
+}
+
+model Task {
+  id              String        @id @default(uuid())
+  serviceOrderId  String
+  serviceOrder    ServiceOrder  @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+  
+  title           String
+  description     String?
+  status          TaskStatus    @default(PENDIENTE)
+  priority        Int           @default(1) // 1-5
+  
+  // Asignación
+  assignedToId    String?
+  assignedTo      Trabajador?   @relation(fields: [assignedToId], references: [id])
+  
+  // Tiempo
+  estimatedHours  Decimal?      @db.Decimal(5, 2)
+  actualHours     Decimal?      @db.Decimal(5, 2)
+  
+  // Timestamps
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  @@map("tasks")
+}
+
+// ==================== INVENTARIO ====================
+enum ProductCategory {
+  ACEITES
+  FILTROS
+  FRENOS
+  NEUMATICOS
+  BATERIAS
+  ILUMINACION
+  SUSPENSION
+  MOTOR
+  TRANSMISION
+  REFRIGERACION
+  ELECTRICIDAD
+  CARROCERIA
+  ACCESORIOS
+  OTROS
+}
+
+model Product {
+  id              String          @id @default(uuid())
+  sku             String          @unique
+  name            String
+  description     String?
+  category        ProductCategory
+  
+  // Proveedor
+  supplier        String?
+  supplierCode    String?
+  
+  // Inventario
+  stock           Int             @default(0)
+  minStock        Int             @default(0)
+  maxStock        Int?
+  
+  // Precios
+  costPrice       Decimal         @db.Decimal(10, 2)
+  salePrice       Decimal         @db.Decimal(10, 2)
+  
+  // Ubicación
+  location        String?
+  
+  // Estado
+  isActive        Boolean         @default(true)
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relations
+  usedParts       UsedPart[]
+  stockMovements  StockMovement[]
+  
+  @@map("products")
+}
+
+// ==================== PIEZAS USADAS ====================
+model UsedPart {
+  id              String        @id @default(uuid())
+  serviceOrderId  String
+  serviceOrder    ServiceOrder  @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id])
+  
+  quantity        Int
+  unitPrice       Decimal       @db.Decimal(10, 2)
+  totalPrice      Decimal       @db.Decimal(10, 2)
+  
+  createdAt       DateTime      @default(now())
+  
+  @@map("used_parts")
+}
+
+// ==================== MOVIMIENTOS DE STOCK ====================
+enum MovementType {
+  ENTRADA
+  SALIDA
+  AJUSTE
+  DEVOLUCION
+}
+
+model StockMovement {
+  id          String        @id @default(uuid())
+  productId   String
+  product     Product       @relation(fields: [productId], references: [id])
+  
+  type        MovementType
+  quantity    Int
+  reason      String?
+  reference   String?       // Número de factura, orden, etc.
+  
+  // Stock antes y después
+  previousStock Int
+  newStock      Int
+  
+  createdAt   DateTime      @default(now())
+  
+  @@map("stock_movements")
+}
+
+// ==================== SESIONES DE TRABAJO ====================
+model WorkSession {
+  id              String      @id @default(uuid())
+  trabajadorId    String
+  trabajador      Trabajador  @relation(fields: [trabajadorId], references: [id])
+  
+  checkIn         DateTime
+  checkOut        DateTime?
+  
+  // Geolocalización (opcional)
+  checkInLat      Decimal?    @db.Decimal(10, 8)
+  checkInLng      Decimal?    @db.Decimal(11, 8)
+  checkOutLat     Decimal?    @db.Decimal(10, 8)
+  checkOutLng     Decimal?    @db.Decimal(11, 8)
+  
+  notes           String?
+  
+  @@map("work_sessions")
+}
+
+// ==================== HISTORIAL DE MANTENIMIENTO ====================
+model MaintenanceRecord {
+  id          String   @id @default(uuid())
+  vehicleId   String
+  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  
+  date        DateTime
+  kilometers  Int
+  type        String   // Cambio de aceite, Revisión, etc.
+  description String
+  cost        Decimal  @db.Decimal(10, 2)
+  
+  nextService DateTime?
+  nextServiceKm Int?
+  
+  createdAt   DateTime @default(now())
+  
+  @@map("maintenance_records")
+}
+
+// ==================== NOTIFICACIONES ====================
+enum NotificationType {
+  CITA_RECORDATORIO
+  CITA_CONFIRMADA
+  ORDEN_CREADA
+  ORDEN_ACTUALIZADA
+  ORDEN_COMPLETADA
+  PRESUPUESTO_LISTO
+  VEHICULO_LISTO
+  PROMOCION
+  SISTEMA
+}
+
+model Notification {
+  id        String            @id @default(uuid())
+  userId    String
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type      NotificationType
+  title     String
+  message   String
+  data      Json?             // Datos adicionales
+  
+  isRead    Boolean           @default(false)
+  readAt    DateTime?
+  
+  createdAt DateTime          @default(now())
+  
+  @@map("notifications")
+}

@@ -10,7 +10,7 @@
 
 export const API_CONFIG = {
   // URL base del backend
-  BASE_URL: 'http://localhost:4000',
+  BASE_URL: 'https://mytreefam.com/sass/api',
   
   // Timeout de peticiones (30 segundos)
   TIMEOUT: 30000,

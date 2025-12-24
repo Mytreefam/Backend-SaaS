@@ -15,7 +15,7 @@ export const APP_CONFIG = {
 
   // API Configuration
   api: {
-    baseUrl: 'http://localhost:3000',
+    baseUrl: 'https://mytreefam.com/sass/api',
     version: 'v1',
     timeout: 30000,
   },

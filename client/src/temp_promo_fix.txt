@@ -1,0 +1,188 @@
+                      {/* Promoción 4 */}
+                      <tr className="border-b hover:bg-gray-50 transition-colors">
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-3">
+                            <img 
+                              src="https://images.unsplash.com/photo-1549931319-a545dcf3bc73?w=100" 
+                              alt="3 Baguettes al Precio de 2"
+                              className="w-12 h-12 object-cover rounded"
+                            />
+                            <div>
+                              <p className="font-semibold text-gray-900 text-sm">3 Baguettes al Precio de 2</p>
+                              <Badge className="mt-1 bg-red-100 text-red-700 text-xs h-5">33% OFF</Badge>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className="text-gray-400 line-through text-xs block">€9.00</span>
+                          <span className="text-teal-600 font-semibold text-sm">€6.00</span>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs">
+                            Fidelización
+                          </Badge>
+                        </td>
+                        <td className="py-3 px-4 text-center text-xs text-gray-600">
+                          <div>05/09/2024</div>
+                          <div className="text-gray-400">20/12/2025</div>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <div className="flex items-center justify-center gap-1 text-teal-600">
+                            <Users className="w-3 h-3" />
+                            <span className="font-medium text-sm">218</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs">
+                            Activa
+                          </Badge>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center justify-center gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 w-8 p-0"
+                              onClick={() => {
+                                console.log('📤 EVENTO: EDITAR_PROMOCION', { id_promo: 'PROMO-004' });
+                                setPromocionSeleccionada({
+                                  id: 'PROMO-004',
+                                  nombre: '3 Baguettes al Precio de 2',
+                                  descuento: '33% OFF',
+                                  pvp: 6.00,
+                                  tipo: 'Fidelización'
+                                });
+                                setModalEditarPromocion(true);
+                              }}
+                            >
+                              <Edit className="w-4 h-4 text-blue-600" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+
+                      {/* Promoción 5 */}
+                      <tr className="border-b hover:bg-gray-50 transition-colors">
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-3">
+                            <img 
+                              src="https://images.unsplash.com/photo-1488477181946-6428a0291777?w=100" 
+                              alt="20% Descuento en Postres"
+                              className="w-12 h-12 object-cover rounded"
+                            />
+                            <div>
+                              <p className="font-semibold text-gray-900 text-sm">20% Descuento en Postres</p>
+                              <Badge className="mt-1 bg-red-100 text-red-700 text-xs h-5">20% OFF</Badge>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className="text-gray-400 line-through text-xs block">€5.50</span>
+                          <span className="text-teal-600 font-semibold text-sm">€4.40</span>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs">
+                            Bienvenida
+                          </Badge>
+                        </td>
+                        <td className="py-3 px-4 text-center text-xs text-gray-600">
+                          <div>12/11/2024</div>
+                          <div className="text-gray-400">31/12/2025</div>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <div className="flex items-center justify-center gap-1 text-teal-600">
+                            <Users className="w-3 h-3" />
+                            <span className="font-medium text-sm">95</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs">
+                            Activa
+                          </Badge>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center justify-center gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 w-8 p-0"
+                              onClick={() => {
+                                console.log('📤 EVENTO: EDITAR_PROMOCION', { id_promo: 'PROMO-005' });
+                                setPromocionSeleccionada({
+                                  id: 'PROMO-005',
+                                  nombre: '20% Descuento en Postres',
+                                  descuento: '20% OFF',
+                                  pvp: 4.40,
+                                  tipo: 'Bienvenida'
+                                });
+                                setModalEditarPromocion(true);
+                              }}
+                            >
+                              <Edit className="w-4 h-4 text-blue-600" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+
+                      {/* Promoción 6 */}
+                      <tr className="border-b hover:bg-gray-50 transition-colors">
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-3">
+                            <img 
+                              src="https://images.unsplash.com/photo-1598373182133-52452f7691ef?w=100" 
+                              alt="Martes de Pan Artesanal"
+                              className="w-12 h-12 object-cover rounded"
+                            />
+                            <div>
+                              <p className="font-semibold text-gray-900 text-sm">Martes de Pan Artesanal</p>
+                              <Badge className="mt-1 bg-red-100 text-red-700 text-xs h-5">50% OFF</Badge>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className="text-gray-400 line-through text-xs block">€3.80</span>
+                          <span className="text-teal-600 font-semibold text-sm">€2.85</span>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 text-xs">
+                            Personalizada
+                          </Badge>
+                        </td>
+                        <td className="py-3 px-4 text-center text-xs text-gray-600">
+                          <div>01/01/2024</div>
+                          <div className="text-gray-400">31/01/2026</div>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <div className="flex items-center justify-center gap-1 text-teal-600">
+                            <Users className="w-3 h-3" />
+                            <span className="font-medium text-sm">364</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs">
+                            Activa
+                          </Badge>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center justify-center gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 w-8 p-0"
+                              onClick={() => {
+                                console.log('📤 EVENTO: EDITAR_PROMOCION', { id_promo: 'PROMO-006' });
+                                setPromocionSeleccionada({
+                                  id: 'PROMO-006',
+                                  nombre: 'Martes de Pan Artesanal',
+                                  descuento: '50% OFF',
+                                  pvp: 2.85,
+                                  tipo: 'Personalizada'
+                                });
+                                setModalEditarPromocion(true);
+                              }}
+                            >
+                              <Edit className="w-4 h-4 text-blue-600" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>

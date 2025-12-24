@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ========================================== -->
+    <!-- INFORMACIÓN DE LA APP                     -->
+    <!-- ========================================== -->
+    
+    <string name="app_name">Udar Edge</string>
+    <string name="title_activity_main">Udar Edge</string>
+    <string name="package_name">com.udaredge.app</string>
+    <string name="custom_url_scheme">udaredge</string>
+    
+    <!-- ========================================== -->
+    <!-- NOTIFICACIONES                            -->
+    <!-- ========================================== -->
+    
+    <!-- Canal por defecto -->
+    <string name="default_notification_channel_id">udar_edge_default</string>
+    <string name="default_notification_channel_name">Notificaciones Generales</string>
+    <string name="default_notification_channel_description">Notificaciones generales de la app Udar Edge</string>
+    
+    <!-- Canal de pedidos -->
+    <string name="orders_notification_channel_id">udar_edge_orders</string>
+    <string name="orders_notification_channel_name">Pedidos</string>
+    <string name="orders_notification_channel_description">Notificaciones sobre nuevos pedidos y actualizaciones</string>
+    
+    <!-- Canal de mensajes/chats -->
+    <string name="messages_notification_channel_id">udar_edge_messages</string>
+    <string name="messages_notification_channel_name">Mensajes</string>
+    <string name="messages_notification_channel_description">Mensajes de clientes y equipo</string>
+    
+    <!-- Canal de fichaje -->
+    <string name="attendance_notification_channel_id">udar_edge_attendance</string>
+    <string name="attendance_notification_channel_name">Fichaje</string>
+    <string name="attendance_notification_channel_description">Recordatorios de fichaje y geofencing</string>
+    
+    <!-- Canal de tareas -->
+    <string name="tasks_notification_channel_id">udar_edge_tasks</string>
+    <string name="tasks_notification_channel_name">Tareas</string>
+    <string name="tasks_notification_channel_description">Tareas asignadas y recordatorios</string>
+    
+    <!-- Canal de documentación -->
+    <string name="documents_notification_channel_id">udar_edge_documents</string>
+    <string name="documents_notification_channel_name">Documentación</string>
+    <string name="documents_notification_channel_description">Nuevos documentos y documentación laboral</string>
+    
+    <!-- ========================================== -->
+    <!-- PERMISOS - RATIONALE                      -->
+    <!-- ========================================== -->
+    
+    <!-- Cámara -->
+    <string name="camera_permission_title">Permiso de Cámara</string>
+    <string name="camera_permission_rationale">Necesitamos acceso a la cámara para escanear códigos QR, documentos y tomar fotos de productos</string>
+    <string name="camera_permission_denied">No se puede usar la cámara sin el permiso correspondiente</string>
+    
+    <!-- Ubicación -->
+    <string name="location_permission_title">Permiso de Ubicación</string>
+    <string name="location_permission_rationale">Necesitamos tu ubicación para el fichaje automático con geofencing cuando llegues al trabajo</string>
+    <string name="location_permission_background_rationale">Necesitamos acceso a la ubicación en segundo plano para detectar automáticamente cuando llegas o sales del trabajo</string>
+    <string name="location_permission_denied">El fichaje automático no funcionará sin permisos de ubicación</string>
+    
+    <!-- Biometría -->
+    <string name="biometric_permission_title">Autenticación Biométrica</string>
+    <string name="biometric_permission_rationale">Usa huella digital o Face ID para acceso rápido y seguro a la app</string>
+    <string name="biometric_login_title">Iniciar sesión</string>
+    <string name="biometric_login_subtitle">Usa tu huella digital o Face ID</string>
+    <string name="biometric_login_description">Toca el sensor para iniciar sesión</string>
+    <string name="biometric_not_available">La autenticación biométrica no está disponible en este dispositivo</string>
+    
+    <!-- Notificaciones -->
+    <string name="notifications_permission_title">Permiso de Notificaciones</string>
+    <string name="notifications_permission_rationale">Necesitamos enviarte notificaciones para mantenerte informado sobre pedidos, mensajes y tareas</string>
+    <string name="notifications_permission_denied">No recibirás notificaciones importantes sin este permiso</string>
+    
+    <!-- Almacenamiento -->
+    <string name="storage_permission_title">Permiso de Almacenamiento</string>
+    <string name="storage_permission_rationale">Necesitamos acceso al almacenamiento para guardar documentos, fotos y facturas</string>
+    <string name="storage_permission_denied">No podrás guardar ni acceder a archivos sin este permiso</string>
+    
+    <!-- ========================================== -->
+    <!-- MENSAJES DE ERROR                         -->
+    <!-- ========================================== -->
+    
+    <string name="error_network">Error de conexión. Verifica tu internet</string>
+    <string name="error_generic">Ha ocurrido un error. Intenta de nuevo</string>
+    <string name="error_unauthorized">Sesión expirada. Inicia sesión nuevamente</string>
+    <string name="error_not_found">No se encontró el recurso solicitado</string>
+    <string name="error_server">Error del servidor. Intenta más tarde</string>
+    
+    <!-- ========================================== -->
+    <!-- MENSAJES DE ÉXITO                         -->
+    <!-- ========================================== -->
+    
+    <string name="success_saved">Guardado correctamente</string>
+    <string name="success_updated">Actualizado correctamente</string>
+    <string name="success_deleted">Eliminado correctamente</string>
+    <string name="success_uploaded">Subido correctamente</string>
+    
+    <!-- ========================================== -->
+    <!-- ACCIONES COMUNES                          -->
+    <!-- ========================================== -->
+    
+    <string name="action_accept">Aceptar</string>
+    <string name="action_cancel">Cancelar</string>
+    <string name="action_save">Guardar</string>
+    <string name="action_delete">Eliminar</string>
+    <string name="action_edit">Editar</string>
+    <string name="action_share">Compartir</string>
+    <string name="action_download">Descargar</string>
+    <string name="action_upload">Subir</string>
+    <string name="action_retry">Reintentar</string>
+    <string name="action_close">Cerrar</string>
+    <string name="action_ok">OK</string>
+    <string name="action_yes">Sí</string>
+    <string name="action_no">No</string>
+    <string name="action_continue">Continuar</string>
+    <string name="action_skip">Omitir</string>
+    <string name="action_next">Siguiente</string>
+    <string name="action_back">Atrás</string>
+    <string name="action_finish">Finalizar</string>
+    <string name="action_send">Enviar</string>
+    <string name="action_search">Buscar</string>
+    <string name="action_filter">Filtrar</string>
+    <string name="action_refresh">Actualizar</string>
+    <string name="action_settings">Configuración</string>
+    <string name="action_logout">Cerrar sesión</string>
+    
+    <!-- ========================================== -->
+    <!-- OFFLINE / SINCRONIZACIÓN                  -->
+    <!-- ========================================== -->
+    
+    <string name="offline_mode">Modo sin conexión</string>
+    <string name="offline_mode_description">Estás trabajando sin conexión. Los cambios se sincronizarán automáticamente cuando vuelvas a estar en línea</string>
+    <string name="syncing">Sincronizando…</string>
+    <string name="sync_complete">Sincronización completa</string>
+    <string name="sync_error">Error al sincronizar. Reintentando…</string>
+    
+    <!-- ========================================== -->
+    <!-- ACTUALIZACIÓN DE APP                      -->
+    <!-- ========================================== -->
+    
+    <string name="update_available_title">Actualización disponible</string>
+    <string name="update_required_title">Actualización requerida</string>
+    <string name="update_message">Hay una nueva versión de Udar Edge disponible</string>
+    <string name="update_required_message">Esta actualización es obligatoria para seguir usando la app</string>
+    <string name="action_update">Actualizar</string>
+    <string name="action_later">Más tarde</string>
+    
+    <!-- ========================================== -->
+    <!-- GEOFENCING / FICHAJE                      -->
+    <!-- ========================================== -->
+    
+    <string name="geofence_enter_title">Has llegado al trabajo</string>
+    <string name="geofence_enter_message">¿Quieres fichar tu entrada?</string>
+    <string name="geofence_exit_title">Has salido del trabajo</string>
+    <string name="geofence_exit_message">¿Quieres fichar tu salida?</string>
+    <string name="attendance_checked_in">Entrada fichada correctamente</string>
+    <string name="attendance_checked_out">Salida fichada correctamente</string>
+    
+    <!-- ========================================== -->
+    <!-- ONBOARDING                                -->
+    <!-- ========================================== -->
+    
+    <string name="onboarding_welcome_title">Bienvenido a Udar Edge</string>
+    <string name="onboarding_welcome_description">La solución completa para digitalizar tu negocio</string>
+    
+    <string name="onboarding_features_title">Todas tus operaciones en un solo lugar</string>
+    <string name="onboarding_features_description">TPV, gestión de clientes, stock, fichaje y mucho más</string>
+    
+    <string name="onboarding_offline_title">Funciona sin conexión</string>
+    <string name="onboarding_offline_description">Trabaja sin internet y sincroniza automáticamente cuando vuelvas a estar en línea</string>
+    
+    <string name="onboarding_security_title">Seguro y privado</string>
+    <string name="onboarding_security_description">Biometría, cifrado y cumplimiento GDPR</string>
+    
+    <!-- ========================================== -->
+    <!-- DEEP LINKS                                -->
+    <!-- ========================================== -->
+    
+    <string name="deeplink_error">No se pudo abrir el enlace</string>
+    <string name="deeplink_order_not_found">Pedido no encontrado</string>
+    <string name="deeplink_customer_not_found">Cliente no encontrado</string>
+    
+</resources>

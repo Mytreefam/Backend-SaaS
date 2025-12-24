@@ -1,0 +1,203 @@
+            {/* TAB: DOCUMENTACIÓN */}
+            <TabsContent value="documentacion" className="space-y-4 mt-6">
+              <Accordion type="multiple" className="w-full space-y-3">
+                {/* DOCUMENTACIÓN DEL TRABAJADOR */}
+                <AccordionItem value="documentacion-trabajador" className="border rounded-lg px-4">
+                  <AccordionTrigger className="hover:no-underline py-4">
+                    <div className="flex items-center gap-3">
+                      <FileText className="w-5 h-5 text-teal-600" />
+                      <div className="text-left">
+                        <p className="text-sm font-medium text-gray-900">Documentación del trabajador</p>
+                        <p className="text-xs text-gray-500">3 documentos disponibles</p>
+                      </div>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="space-y-2 pt-2 pb-4">
+                    <div className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded bg-blue-100 flex items-center justify-center">
+                          <IdCard className="w-4 h-4 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">DNI / NIE</p>
+                          <p className="text-xs text-gray-500">Actualizado: 15 Mar 2024</p>
+                        </div>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        variant="ghost"
+                        className="text-teal-600 hover:text-teal-700"
+                        onClick={() => toast.info('Descargando DNI...')}
+                      >
+                        <Download className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <div className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded bg-purple-100 flex items-center justify-center">
+                          <CreditCard className="w-4 h-4 text-purple-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">Cuenta Bancaria</p>
+                          <p className="text-xs text-gray-500">Actualizado: 10 Mar 2024</p>
+                        </div>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        variant="ghost"
+                        className="text-teal-600 hover:text-teal-700"
+                        onClick={() => toast.info('Descargando cuenta bancaria...')}
+                      >
+                        <Download className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <div className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded bg-green-100 flex items-center justify-center">
+                          <Receipt className="w-4 h-4 text-green-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">Vida Laboral</p>
+                          <p className="text-xs text-gray-500">Actualizado: 28 Feb 2024</p>
+                        </div>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        variant="ghost"
+                        className="text-teal-600 hover:text-teal-700"
+                        onClick={() => toast.info('Descargando vida laboral...')}
+                      >
+                        <Download className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full mt-2"
+                      onClick={() => toast.info('Añadiendo nuevo documento...')}
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Añadir documento
+                    </Button>
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* NÓMINAS */}
+                <AccordionItem value="nominas" className="border rounded-lg px-4">
+                  <AccordionTrigger className="hover:no-underline py-4">
+                    <div className="flex items-center gap-3">
+                      <Euro className="w-5 h-5 text-green-600" />
+                      <div className="text-left">
+                        <p className="text-sm font-medium text-gray-900">Nóminas</p>
+                        <p className="text-xs text-gray-500">5 nóminas disponibles</p>
+                      </div>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="space-y-2 pt-2 pb-4">
+                    <div className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded bg-green-100 flex items-center justify-center">
+                          <Receipt className="w-4 h-4 text-green-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">Nómina Noviembre 2024</p>
+                          <p className="text-xs text-gray-500">Emitida: 01 Dic 2024 • 2.250,00 €</p>
+                        </div>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        variant="ghost"
+                        className="text-teal-600 hover:text-teal-700"
+                        onClick={() => toast.info('Descargando nómina de noviembre...')}
+                      >
+                        <Download className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <div className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded bg-green-100 flex items-center justify-center">
+                          <Receipt className="w-4 h-4 text-green-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">Nómina Octubre 2024</p>
+                          <p className="text-xs text-gray-500">Emitida: 01 Nov 2024 • 2.250,00 €</p>
+                        </div>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        variant="ghost"
+                        className="text-teal-600 hover:text-teal-700"
+                        onClick={() => toast.info('Descargando nómina de octubre...')}
+                      >
+                        <Download className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <div className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded bg-green-100 flex items-center justify-center">
+                          <Receipt className="w-4 h-4 text-green-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">Nómina Septiembre 2024</p>
+                          <p className="text-xs text-gray-500">Emitida: 01 Oct 2024 • 2.250,00 €</p>
+                        </div>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        variant="ghost"
+                        className="text-teal-600 hover:text-teal-700"
+                        onClick={() => toast.info('Descargando nómina de septiembre...')}
+                      >
+                        <Download className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <div className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded bg-green-100 flex items-center justify-center">
+                          <Receipt className="w-4 h-4 text-green-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">Nómina Agosto 2024</p>
+                          <p className="text-xs text-gray-500">Emitida: 01 Sep 2024 • 2.250,00 €</p>
+                        </div>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        variant="ghost"
+                        className="text-teal-600 hover:text-teal-700"
+                        onClick={() => toast.info('Descargando nómina de agosto...')}
+                      >
+                        <Download className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <div className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded bg-green-100 flex items-center justify-center">
+                          <Receipt className="w-4 h-4 text-green-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">Nómina Julio 2024</p>
+                          <p className="text-xs text-gray-500">Emitida: 01 Ago 2024 • 2.250,00 €</p>
+                        </div>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        variant="ghost"
+                        className="text-teal-600 hover:text-teal-700"
+                        onClick={() => toast.info('Descargando nómina de julio...')}
+                      >
+                        <Download className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full mt-2"
+                      onClick={() => toast.info('Ver todas las nóminas...')}
+                    >
+                      Ver historial completo
+                    </Button>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </TabsContent>

@@ -1,0 +1,725 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Chat {
+  id        Int       @id @default(autoincrement())
+  asunto    String
+  tipo      String    @default("informacion")
+  estado    String    @default("abierto")
+  clienteId Int
+  pedidoId  Int?
+  creadoEn  DateTime  @default(now())
+  cliente   Cliente   @relation(fields: [clienteId], references: [id])
+  pedido    Pedido?   @relation(fields: [pedidoId], references: [id])
+  mensajes  Mensaje[]
+}
+
+model Mensaje {
+  id     Int      @id @default(autoincrement())
+  chatId Int
+  autor  String
+  texto  String
+  fecha  DateTime @default(now())
+  chat   Chat     @relation(fields: [chatId], references: [id])
+}
+
+model Turno {
+  id             Int      @id @default(autoincrement())
+  numero         String
+  estado         String   @default("pendiente")
+  tiempoEstimado String?
+  clienteId      Int
+  pedidoId       Int
+  creadoEn       DateTime @default(now())
+  cliente        Cliente  @relation(fields: [clienteId], references: [id])
+  pedido         Pedido   @relation(fields: [pedidoId], references: [id])
+}
+
+model Cliente {
+  id             Int            @id @default(autoincrement())
+  codigo         String         @unique // Ejemplo: CLI-001
+  nombre         String
+  email          String         @unique
+  password       String
+  telefono       String?
+  creadoEn       DateTime       @default(now())
+  role           String         @default("cliente")
+  avatar         String?
+  ciudad         String?
+  idioma         String?
+  chats          Chat[]
+  citas          Cita[]
+  cupones        Cupon[]
+  direcciones    Direccion[]
+  documentos     Documento[]
+  facturas       Factura[]
+  garajes        Garaje[]
+  notificaciones Notificacion[]
+  pedidos        Pedido[]
+  presupuestos   Presupuesto[]
+  turnos         Turno[]
+}
+
+model Cupon {
+  id          Int      @id @default(autoincrement())
+  codigo      String   @unique
+  descripcion String
+  descuento   String
+  validoHasta DateTime
+  clienteId   Int?
+  usado       Boolean  @default(false)
+  cliente     Cliente? @relation(fields: [clienteId], references: [id])
+}
+
+model Direccion {
+  id           Int     @id @default(autoincrement())
+  clienteId    Int
+  calle        String
+  ciudad       String
+  provincia    String
+  pais         String
+  codigoPostal String
+  cliente      Cliente @relation(fields: [clienteId], references: [id])
+}
+
+model Producto {
+  id          Int          @id @default(autoincrement())
+  nombre      String
+  descripcion String
+  precio      Float
+  stock       Int
+  imagen      String?
+  pedidoItems PedidoItem[]
+}
+
+model Pedido {
+  id        Int          @id @default(autoincrement())
+  clienteId Int
+  fecha     DateTime     @default(now())
+  estado    String       @default("pendiente")
+  total     Float
+  tipoEntrega String?
+  metodoPago String?
+  chats     Chat[]
+  facturas  Factura[]
+  cliente   Cliente      @relation(fields: [clienteId], references: [id])
+  items     PedidoItem[]
+  turnos    Turno[]
+}
+
+model PedidoItem {
+  id         Int      @id @default(autoincrement())
+  pedidoId   Int
+  productoId Int
+  cantidad   Int
+  precio     Float
+  pedido     Pedido   @relation(fields: [pedidoId], references: [id])
+  producto   Producto @relation(fields: [productoId], references: [id])
+}
+
+model Cita {
+  id            Int      @id @default(autoincrement())
+  fecha         DateTime
+  hora          String?  // HH:mm formato
+  motivo        String
+  servicio      String?
+  estado        String   @default("solicitada") // solicitada, confirmada, en_progreso, completada, cancelada, no_presentado
+  clienteId     Int
+  telefono      String?
+  email         String?
+  notas         String?
+  canceladaPor  String?  // usuario que canceló
+  razonCancelacion String?
+  creadoEn      DateTime @default(now())
+  modificadoEn  DateTime @default(now()) @updatedAt
+  cliente       Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+}
+
+model Documento {
+  id        Int     @id @default(autoincrement())
+  nombre    String
+  url       String
+  clienteId Int
+  cliente   Cliente @relation(fields: [clienteId], references: [id])
+}
+
+model Factura {
+  id               Int             @id @default(autoincrement())
+  numero           String          @unique // "FAC-2024-001"
+  fecha            DateTime        @default(now())
+  clienteId        Int
+  pedidoId         Int?
+  total            Float
+  subtotal         Float
+  impuestos        Float           @default(0)
+  metodoPago       String          @default("tarjeta") // tarjeta, efectivo, transferencia
+  estadoVerifactu  String          @default("pendiente") // pendiente, verificado, rechazado
+  marcaId          String          @default("default") // Para multiempresa
+  puntoVentaId     String?
+  notas            String?
+  creadoEn         DateTime        @default(now())
+  modificadoEn     DateTime        @updatedAt
+  
+  cliente          Cliente         @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  pedido           Pedido?         @relation(fields: [pedidoId], references: [id], onDelete: SetNull)
+  lineas           LineaFactura[]
+}
+
+model LineaFactura {
+  id               Int             @id @default(autoincrement())
+  facturaId        Int
+  productoId       Int?
+  descripcion      String
+  cantidad         Int
+  precioUnitario   Float
+  descuento        Float          @default(0)
+  total            Float
+  
+  factura          Factura        @relation(fields: [facturaId], references: [id], onDelete: Cascade)
+}
+
+model Garaje {
+  id        Int     @id @default(autoincrement())
+  nombre    String
+  ubicacion String
+  clienteId Int
+  cliente   Cliente @relation(fields: [clienteId], references: [id])
+}
+
+model Notificacion {
+  id        Int     @id @default(autoincrement())
+  mensaje   String
+  leida     Boolean @default(false)
+  clienteId Int
+  cliente   Cliente @relation(fields: [clienteId], references: [id])
+}
+
+model Presupuesto {
+  id        Int      @id @default(autoincrement())
+  fecha     DateTime
+  monto     Float
+  clienteId Int
+  cliente   Cliente  @relation(fields: [clienteId], references: [id])
+}
+
+model Promocion {
+  id          Int      @id @default(autoincrement())
+  titulo      String
+  descripcion String
+  descuento   String
+  validoHasta DateTime
+}
+
+model Empleado {
+  id              Int          @id @default(autoincrement())
+  nombre          String
+  email           String       @unique
+  telefono        String?
+  foto            String?
+  puesto          String
+  empresaId       String
+  marcaId         String?
+  puntoVentaId    String
+  horarioEntrada  String
+  horarioSalida   String
+  turno           String?
+  salarioBase     Float
+  fechaAlta       DateTime     @default(now())
+  fechaBaja       DateTime?
+  estado          String       @default("activo")
+  desempeno       Float        @default(0)
+  horasMes        Float        @default(0)
+  creadoEn        DateTime     @default(now())
+  modificadoEn    DateTime     @updatedAt
+  cierresApertura CierreCaja[] @relation("EmpleadoApertura")
+  cierresCierre   CierreCaja[] @relation("EmpleadoCierre")
+  fichajes        Fichaje[]
+  tareas          Tarea[]
+  asignacionesTurno AsignacionTurno[]
+  horariosEmpleado  HorarioEmpleado[]
+  tareasAsignadas   TareaOperativa[] @relation("TareasAsignadas")
+  tareasCreadas     TareaOperativa[] @relation("TareasCreadas")
+  documentosSubidos DocumentoEmpresa[] @relation("DocumentosSubidos")
+  gastosRegistrados GastoEmpresa[] @relation("GastosRegistrados")
+}
+
+// ⭐ NUEVO: Horarios de trabajo (plantillas)
+model Horario {
+  id              Int       @id @default(autoincrement())
+  nombre          String
+  descripcion     String?
+  empresaId       String
+  lunes           String?   // HH:mm-HH:mm
+  martes          String?
+  miercoles       String?
+  jueves          String?
+  viernes         String?
+  sabado          String?
+  domingo         String?
+  horasSemana     Float     @default(40)
+  activo          Boolean   @default(true)
+  creadoEn        DateTime  @default(now())
+  modificadoEn    DateTime  @updatedAt
+  asignaciones    AsignacionTurno[]
+}
+
+// ⭐ NUEVO: Asignaciones de turnos a empleados
+model AsignacionTurno {
+  id              Int       @id @default(autoincrement())
+  empleadoId      Int
+  horarioId       Int
+  fechaAsignacion DateTime  @default(now())
+  fechaVigenciaDesde DateTime
+  fechaVigenciaHasta DateTime?
+  estado          String    @default("activo")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  empleado        Empleado  @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+  horario         Horario   @relation(fields: [horarioId], references: [id], onDelete: Cascade)
+
+  @@unique([empleadoId, fechaVigenciaDesde])
+}
+
+// ⭐ NUEVO: Horarios específicos por empleado y fecha
+model HorarioEmpleado {
+  id              Int       @id @default(autoincrement())
+  empleadoId      Int
+  fecha           DateTime
+  horaEntrada     String
+  horaSalida      String
+  tipodia         String    @default("laboral") // laboral, descanso, festivo
+  observaciones   String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  empleado        Empleado  @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@unique([empleadoId, fecha])
+}
+
+
+model Fichaje {
+  id                Int      @id @default(autoincrement())
+  empleadoId        Int
+  tipo              String
+  fecha             DateTime
+  hora              String
+  horaRealTimestamp DateTime @default(now())
+  horaTeorica       String?
+  diferenciaMinutos Int      @default(0)
+  puntoVentaId      String
+  validado          Boolean  @default(false)
+  validadoPor       Int?
+  observaciones     String?
+  creadoEn          DateTime @default(now())
+  empleado          Empleado @relation(fields: [empleadoId], references: [id])
+}
+
+model Tarea {
+  id                 Int       @id @default(autoincrement())
+  empleadoId         Int
+  titulo             String
+  descripcion        String?
+  prioridad          String    @default("media")
+  estado             String    @default("pendiente")
+  fechaAsignacion    DateTime  @default(now())
+  fechaLimite        DateTime?
+  fechaCompletada    DateTime?
+  requiereReporte    Boolean   @default(false)
+  reporteEmpleado    String?
+  asignadoPor        Int
+  requiereAprobacion Boolean   @default(false)
+  aprobada           Boolean?
+  comentarioGerente  String?
+  creadoEn           DateTime  @default(now())
+  modificadoEn       DateTime  @updatedAt
+  empleado           Empleado  @relation(fields: [empleadoId], references: [id])
+}
+
+model ArticuloStock {
+  id                 Int               @id @default(autoincrement())
+  codigoInterno      String            @unique
+  nombre             String
+  categoria          String
+  unidadMedida       String
+  stockActual        Float             @default(0)
+  stockMinimo        Float             @default(0)
+  stockMaximo        Float             @default(999999)
+  empresaId          String
+  puntoVentaId       String
+  proveedorId        Int?
+  precioUltimaCompra Float?
+  fechaUltimaCompra  DateTime?
+  ubicacionAlmacen   String?
+  alertaStockBajo    Boolean           @default(false)
+  creadoEn           DateTime          @default(now())
+  modificadoEn       DateTime          @updatedAt
+  proveedor          Proveedor?        @relation(fields: [proveedorId], references: [id])
+  movimientos        MovimientoStock[]
+}
+
+model MovimientoStock {
+  id                Int           @id @default(autoincrement())
+  articuloId        Int
+  tipo              String
+  cantidad          Float
+  stockAnterior     Float
+  stockPosterior    Float
+  motivo            String?
+  observaciones     String?
+  usuarioId         Int?
+  usuarioNombre     String?
+  pedidoProveedorId Int?
+  fecha             DateTime      @default(now())
+  creadoEn          DateTime      @default(now())
+  articulo          ArticuloStock @relation(fields: [articuloId], references: [id])
+}
+
+model Proveedor {
+  id                Int               @id @default(autoincrement())
+  nombre            String
+  cif               String?
+  categoria         String
+  contactoNombre    String?
+  contactoTelefono  String?
+  contactoEmail     String?
+  direccion         String?
+  ciudad            String?
+  codigoPostal      String?
+  pais              String            @default("España")
+  empresaId         String
+  activo            Boolean           @default(true)
+  diasEntrega       Int?
+  formaPago         String?
+  descuentoAplicado Float             @default(0)
+  totalPedidos      Int               @default(0)
+  totalCompras      Float             @default(0)
+  fechaUltimoPedido DateTime?
+  fechaAlta         DateTime          @default(now())
+  creadoEn          DateTime          @default(now())
+  modificadoEn      DateTime          @updatedAt
+  articulos         ArticuloStock[]
+  pedidos           PedidoProveedor[]
+}
+
+model PedidoProveedor {
+  id                   Int                   @id @default(autoincrement())
+  numero               String                @unique
+  proveedorId          Int
+  puntoVentaId         String
+  empresaId            String
+  estado               String                @default("pendiente")
+  fechaPedido          DateTime              @default(now())
+  fechaEntregaEstimada DateTime?
+  fechaRecepcion       DateTime?
+  subtotal             Float
+  iva                  Float
+  total                Float
+  observaciones        String?
+  creadoPor            Int?
+  recibidoPor          Int?
+  creadoEn             DateTime              @default(now())
+  modificadoEn         DateTime              @updatedAt
+  items                ItemPedidoProveedor[]
+  proveedor            Proveedor             @relation(fields: [proveedorId], references: [id])
+}
+
+model ItemPedidoProveedor {
+  id                Int             @id @default(autoincrement())
+  pedidoProveedorId Int
+  articuloId        Int
+  nombreArticulo    String
+  cantidad          Float
+  precioUnitario    Float
+  total             Float
+  cantidadRecibida  Float?
+  observaciones     String?
+  creadoEn          DateTime        @default(now())
+  pedidoProveedor   PedidoProveedor @relation(fields: [pedidoProveedorId], references: [id])
+}
+
+model CierreCaja {
+  id                  Int       @id @default(autoincrement())
+  numero              String    @unique
+  puntoVentaId        String
+  empresaId           String
+  fecha               DateTime  @default(now())
+  turno               String
+  empleadoAperturaId  Int?
+  empleadoCierreId    Int?
+  efectivoInicial     Float
+  totalVentasEfectivo Float
+  totalVentasTarjeta  Float
+  totalVentasOnline   Float
+  gastosCaja          Float
+  efectivoEsperado    Float
+  efectivoContado     Float
+  diferencia          Float
+  estado              String    @default("cerrado")
+  observaciones       String?
+  validadoPor         Int?
+  fechaValidacion     DateTime?
+  creadoEn            DateTime  @default(now())
+  modificadoEn        DateTime  @updatedAt
+  empleadoApertura    Empleado? @relation("EmpleadoApertura", fields: [empleadoAperturaId], references: [id])
+  empleadoCierre      Empleado? @relation("EmpleadoCierre", fields: [empleadoCierreId], references: [id])
+}
+
+// ⭐ SESIONES DE INVENTARIO
+model SesionInventario {
+  id                  Int       @id @default(autoincrement())
+  numero              String    @unique
+  nombre              String
+  tipo                String    @default("ciclico") // ciclico, total, aleatorio
+  almacen             String
+  empresaId           String
+  puntoVentaId        String
+  progreso            Float     @default(0)
+  diferenciasUnidades Float     @default(0)
+  diferenciasValor    Float     @default(0)
+  responsables        String?   // IDs separados por coma
+  fechaInicio         DateTime  @default(now())
+  fechaLimite         DateTime?
+  fechaFinalizacion   DateTime?
+  estado              String    @default("activa") // activa, pausada, completada, cancelada
+  observaciones       String?
+  creadoPor           Int?
+  creadoEn            DateTime  @default(now())
+  modificadoEn        DateTime  @updatedAt
+  lineas              LineaInventario[]
+}
+
+model LineaInventario {
+  id                  Int              @id @default(autoincrement())
+  sesionInventarioId  Int
+  articuloId          Int
+  codigoArticulo      String
+  nombreArticulo      String
+  stockTeorico        Float
+  stockContado        Float?
+  diferencia          Float?
+  valorDiferencia     Float?
+  contadoPor          Int?
+  fechaConteo         DateTime?
+  observaciones       String?
+  creadoEn            DateTime         @default(now())
+  modificadoEn        DateTime         @updatedAt
+  sesionInventario    SesionInventario @relation(fields: [sesionInventarioId], references: [id], onDelete: Cascade)
+}
+
+// ⭐ TAREAS OPERATIVAS
+model TareaOperativa {
+  id                  Int       @id @default(autoincrement())
+  numero              String    @unique
+  tipo                String    @default("operativa") // operativa, formacion
+  
+  // Información básica
+  titulo              String
+  descripcion         String
+  instrucciones       String?
+  
+  // Jerarquía multiempresa
+  empresaId           String
+  empresaNombre       String?
+  marcaId             String?
+  marcaNombre         String?
+  puntoVentaId        String?
+  puntoVentaNombre    String?
+  
+  // Asignación
+  asignadoAId         Int?
+  asignadoANombre     String?
+  asignadoPorId       Int?
+  asignadoPorNombre   String?
+  
+  // Estado y prioridad
+  estado              String    @default("pendiente") // pendiente, en_progreso, completada, aprobada, rechazada, vencida
+  prioridad           String    @default("media") // baja, media, alta, urgente
+  
+  // Control de reporte
+  requiereReporte     Boolean   @default(true)
+  requiereAprobacion  Boolean   @default(true)
+  
+  // Fechas
+  fechaAsignacion     DateTime  @default(now())
+  fechaInicio         DateTime?
+  fechaVencimiento    DateTime?
+  fechaCompletada     DateTime?
+  fechaAprobada       DateTime?
+  fechaRevision       DateTime?
+  
+  // Recurrencia
+  recurrente          Boolean   @default(false)
+  frecuencia          String?   // unica, diaria, semanal, mensual
+  diasSemana          String?   // JSON array de días
+  
+  // Evidencia/Reporte del trabajador
+  comentarioTrabajador String?
+  evidenciaUrls       String?   // JSON array de URLs
+  tiempoEmpleado      Int?      // Minutos
+  
+  // Aprobación gerente
+  comentarioGerente   String?
+  
+  // Formación
+  esFormacion         Boolean   @default(false)
+  moduloFormacionId   String?
+  certificadoUrl      String?
+  puntuacion          Float?
+  duracionEstimada    Int?
+  urlRecurso          String?
+  
+  // Metadatos
+  etiquetas           String?   // JSON array
+  categoria           String?
+  observaciones       String?
+  
+  creadoEn            DateTime  @default(now())
+  modificadoEn        DateTime  @updatedAt
+  
+  // Relaciones
+  asignadoA           Empleado? @relation("TareasAsignadas", fields: [asignadoAId], references: [id])
+  asignadoPor         Empleado? @relation("TareasCreadas", fields: [asignadoPorId], references: [id])
+}
+
+// ⭐ DOCUMENTACIÓN EMPRESARIAL
+model DocumentoEmpresa {
+  id                  Int       @id @default(autoincrement())
+  codigo              String    @unique // DOC-001
+  empresaId           String
+  puntoVentaId        String?
+  
+  // Clasificación
+  categoria           String    // sociedad, vehiculos, contratos, licencias, fiscalidad, otros
+  tipo                String    // Legal, Técnico, Permisos, Fiscal, Contrato, General
+  nombre              String
+  descripcion         String?
+  
+  // Archivo
+  archivoUrl          String?
+  archivoNombre       String?
+  tamanoArchivo       Int?      // en KB
+  mimeType            String?
+  
+  // Fechas
+  fechaSubida         DateTime  @default(now())
+  fechaVencimiento    DateTime?
+  fechaEmision        DateTime?
+  
+  // Estado
+  estado              String    @default("vigente") // vigente, proximo_vencer, caducado, archivado
+  
+  // Costes asociados
+  costeAsociado       Float?
+  categoriaEBITDA     String?   // seguros, alquiler, tecnologia, asesoria, etc.
+  
+  // Responsable
+  responsable         String?
+  subidoPorId         Int?
+  
+  // Metadatos
+  observaciones       String?
+  etiquetas           String?   // JSON array
+  
+  creadoEn            DateTime  @default(now())
+  modificadoEn        DateTime  @updatedAt
+  
+  subidoPor           Empleado? @relation("DocumentosSubidos", fields: [subidoPorId], references: [id])
+}
+
+// ⭐ GASTOS EMPRESARIALES
+model GastoEmpresa {
+  id                  Int       @id @default(autoincrement())
+  codigo              String    @unique // GAS-001
+  empresaId           String
+  puntoVentaId        String?
+  
+  // Datos del gasto
+  concepto            String
+  proveedorNombre     String?
+  nifProveedor        String?
+  numeroFactura       String?
+  importe             Float
+  iva                 Float?
+  total               Float
+  
+  // Clasificación
+  categoria           String    // Suministros, Mantenimiento, Servicios, Personal, etc.
+  subtipo             String?   // Papel, Limpieza, Tecnología, etc.
+  centroCoste         String?
+  
+  // Fecha y pago
+  fechaGasto          DateTime
+  fechaPago           DateTime?
+  metodoPago          String?   // efectivo, tarjeta, transferencia
+  estadoPago          String    @default("pendiente") // pendiente, pagado
+  
+  // Contabilidad
+  contabilizado       Boolean   @default(false)
+  cuentaContable      String?
+  
+  // Adjuntos
+  ticketUrl           String?
+  facturaUrl          String?
+  
+  // Vinculación a evento/pago programado
+  pagoCalendarioId    Int?
+  
+  // OCR/IA
+  datosOCR            String?   // JSON con datos extraídos por OCR
+  
+  // Metadatos
+  observaciones       String?
+  registradoPorId     Int?
+  
+  creadoEn            DateTime  @default(now())
+  modificadoEn        DateTime  @updatedAt
+  
+  pagoCalendario      PagoCalendario? @relation(fields: [pagoCalendarioId], references: [id])
+  registradoPor       Empleado? @relation("GastosRegistrados", fields: [registradoPorId], references: [id])
+}
+
+// ⭐ CALENDARIO DE PAGOS
+model PagoCalendario {
+  id                  Int       @id @default(autoincrement())
+  codigo              String    @unique // PAG-001
+  empresaId           String
+  puntoVentaId        String?
+  
+  // Datos del pago
+  concepto            String
+  descripcion         String?
+  monto               Float
+  
+  // Categoría
+  categoria           String    // Alquiler, Nóminas, Seguridad Social, Suministros, etc.
+  
+  // Fechas
+  fecha               DateTime
+  fechaRecordatorio   DateTime?
+  
+  // Estado
+  estadoPago          String    @default("pendiente") // pendiente, pagado, vencido
+  
+  // Recurrencia
+  recurrente          Boolean   @default(false)
+  frecuencia          String?   // mensual, trimestral, anual
+  diaDelMes           Int?      // Día fijo del mes (1-31)
+  
+  // Método de pago
+  metodoPago          String?   // efectivo, tarjeta, transferencia, domiciliacion
+  
+  // Metadatos
+  observaciones       String?
+  
+  creadoEn            DateTime  @default(now())
+  modificadoEn        DateTime  @updatedAt
+  
+  gastos              GastoEmpresa[]
+}
+

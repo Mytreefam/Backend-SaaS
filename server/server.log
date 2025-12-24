@@ -1,0 +1,529 @@
+[dotenv@17.2.3] injecting env (8) from .env -- tip: ⚙️  enable debug logging with { debug: true }
+✅ Servidor escuchando en puerto 4000
+📚 Documentación Swagger: http://localhost:4000/api-docs
+📥 obtenerDocumentos - Parámetros: {
+  empresa_id: '1',
+  punto_venta_id: undefined,
+  categoria: undefined,
+  estado: undefined,
+  busqueda: undefined
+}
+✅ Documentos encontrados: 0
+📥 crearDocumento - Body recibido: {
+  "empresa_id": "1",
+  "categoria": "sociedad",
+  "tipo": "Legal",
+  "nombre": "Escritura de Constitución",
+  "descripcion": "Documento de constitución de la sociedad",
+  "fecha_vencimiento": "2025-12-31"
+}
+✅ Documento creado: DOC-001
+📥 crearGasto - Body recibido: {
+  "empresa_id": "1",
+  "concepto": "Material de oficina",
+  "proveedor_nombre": "Papelería Central",
+  "importe": 125.5,
+  "iva": 26.35,
+  "total": 151.85,
+  "categoria": "Suministros",
+  "metodo_pago": "Transferencia"
+}
+✅ Gasto creado: GAS-0001
+📥 crearPagoCalendario - Body: {
+  empresa_id: '1',
+  concepto: 'Alquiler local',
+  monto: 1200,
+  categoria: 'Alquileres',
+  fecha: '2025-01-01',
+  recurrente: true,
+  frecuencia: 'mensual',
+  dia_del_mes: 1
+}
+✅ Pago creado: PAG-0001
+Error al obtener cierres de caja: PrismaClientValidationError: 
+Invalid `prisma.cierreCaja.findMany()` invocation in
+/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/dist/src/controllers/gerente/finanzas.controller.js:311:51
+
+  308     }
+  309 }
+  310 // Obtener cierres de caja desde la base de datos
+→ 311 const cierresDB = await prisma.cierreCaja.findMany({
+        where: {
+          puntoVentaId: "undefined",
+          fecha: {
+            gte: new Date("Invalid Date"),
+                 ~~~~~~~~~~~~~~~~~~~~~~~~
+            lte: new Date("Invalid Date")
+          }
+        },
+        orderBy: {
+          fecha: "desc"
+        },
+        include: {
+          empleadoApertura: true,
+          empleadoCierre: true
+        }
+      })
+
+Invalid value for argument `gte`: Provided Date object is invalid. Expected Date.
+    at Tn (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:6855)
+    at e.throwValidationError (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:11245)
+    at Xa (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:9331)
+    at el (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10467)
+    at Xa (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10024)
+    at el (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10467)
+    at Xa (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10024)
+    at el (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10467)
+    at Yi (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:7910)
+    at Za (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:7775) {
+  clientVersion: '5.15.0'
+}
+📥 obtenerDocumentos - Parámetros: {
+  empresa_id: '1',
+  punto_venta_id: undefined,
+  categoria: undefined,
+  estado: undefined,
+  busqueda: undefined
+}
+✅ Documentos encontrados: 1
+📥 obtenerGastos - Parámetros: [Object: null prototype] { empresa_id: '1' }
+✅ Gastos encontrados: 1
+📥 obtenerPagosCalendario - Parámetros: [Object: null prototype] { empresa_id: '1' }
+✅ Pagos encontrados: 1
+Error al obtener cierres de caja: PrismaClientValidationError: 
+Invalid `prisma.cierreCaja.findMany()` invocation in
+/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/dist/src/controllers/gerente/finanzas.controller.js:311:51
+
+  308     }
+  309 }
+  310 // Obtener cierres de caja desde la base de datos
+→ 311 const cierresDB = await prisma.cierreCaja.findMany({
+        where: {
+          puntoVentaId: "undefined",
+          fecha: {
+            gte: new Date("Invalid Date"),
+                 ~~~~~~~~~~~~~~~~~~~~~~~~
+            lte: new Date("Invalid Date")
+          }
+        },
+        orderBy: {
+          fecha: "desc"
+        },
+        include: {
+          empleadoApertura: true,
+          empleadoCierre: true
+        }
+      })
+
+Invalid value for argument `gte`: Provided Date object is invalid. Expected Date.
+    at Tn (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:6855)
+    at e.throwValidationError (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:11245)
+    at Xa (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:9331)
+    at el (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10467)
+    at Xa (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10024)
+    at el (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10467)
+    at Xa (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10024)
+    at el (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10467)
+    at Yi (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:7910)
+    at Za (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:7775) {
+  clientVersion: '5.15.0'
+}
+Error al obtener cierres de caja: PrismaClientValidationError: 
+Invalid `prisma.cierreCaja.findMany()` invocation in
+/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/dist/src/controllers/gerente/finanzas.controller.js:311:51
+
+  308     }
+  309 }
+  310 // Obtener cierres de caja desde la base de datos
+→ 311 const cierresDB = await prisma.cierreCaja.findMany({
+        where: {
+          puntoVentaId: "undefined",
+          fecha: {
+            gte: new Date("Invalid Date"),
+                 ~~~~~~~~~~~~~~~~~~~~~~~~
+            lte: new Date("Invalid Date")
+          }
+        },
+        orderBy: {
+          fecha: "desc"
+        },
+        include: {
+          empleadoApertura: true,
+          empleadoCierre: true
+        }
+      })
+
+Invalid value for argument `gte`: Provided Date object is invalid. Expected Date.
+    at Tn (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:6855)
+    at e.throwValidationError (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:11245)
+    at Xa (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:9331)
+    at el (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10467)
+    at Xa (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10024)
+    at el (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10467)
+    at Xa (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10024)
+    at el (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10467)
+    at Yi (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:7910)
+    at Za (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:7775) {
+  clientVersion: '5.15.0'
+}
+Error al obtener cierres de caja: PrismaClientValidationError: 
+Invalid `prisma.cierreCaja.findMany()` invocation in
+/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/dist/src/controllers/gerente/finanzas.controller.js:311:51
+
+  308     }
+  309 }
+  310 // Obtener cierres de caja desde la base de datos
+→ 311 const cierresDB = await prisma.cierreCaja.findMany({
+        where: {
+          puntoVentaId: "undefined",
+          fecha: {
+            gte: new Date("Invalid Date"),
+                 ~~~~~~~~~~~~~~~~~~~~~~~~
+            lte: new Date("Invalid Date")
+          }
+        },
+        orderBy: {
+          fecha: "desc"
+        },
+        include: {
+          empleadoApertura: true,
+          empleadoCierre: true
+        }
+      })
+
+Invalid value for argument `gte`: Provided Date object is invalid. Expected Date.
+    at Tn (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:6855)
+    at e.throwValidationError (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:11245)
+    at Xa (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:9331)
+    at el (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10467)
+    at Xa (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10024)
+    at el (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10467)
+    at Xa (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10024)
+    at el (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10467)
+    at Yi (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:7910)
+    at Za (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:7775) {
+  clientVersion: '5.15.0'
+}
+Error al obtener cierres de caja: PrismaClientValidationError: 
+Invalid `prisma.cierreCaja.findMany()` invocation in
+/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/dist/src/controllers/gerente/finanzas.controller.js:311:51
+
+  308     }
+  309 }
+  310 // Obtener cierres de caja desde la base de datos
+→ 311 const cierresDB = await prisma.cierreCaja.findMany({
+        where: {
+          puntoVentaId: "undefined",
+          fecha: {
+            gte: new Date("Invalid Date"),
+                 ~~~~~~~~~~~~~~~~~~~~~~~~
+            lte: new Date("Invalid Date")
+          }
+        },
+        orderBy: {
+          fecha: "desc"
+        },
+        include: {
+          empleadoApertura: true,
+          empleadoCierre: true
+        }
+      })
+
+Invalid value for argument `gte`: Provided Date object is invalid. Expected Date.
+    at Tn (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:6855)
+    at e.throwValidationError (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:11245)
+    at Xa (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:9331)
+    at el (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10467)
+    at Xa (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10024)
+    at el (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10467)
+    at Xa (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10024)
+    at el (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10467)
+    at Yi (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:7910)
+    at Za (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:7775) {
+  clientVersion: '5.15.0'
+}
+Error al obtener cierres de caja: PrismaClientValidationError: 
+Invalid `prisma.cierreCaja.findMany()` invocation in
+/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/dist/src/controllers/gerente/finanzas.controller.js:311:51
+
+  308     }
+  309 }
+  310 // Obtener cierres de caja desde la base de datos
+→ 311 const cierresDB = await prisma.cierreCaja.findMany({
+        where: {
+          puntoVentaId: "undefined",
+          fecha: {
+            gte: new Date("Invalid Date"),
+                 ~~~~~~~~~~~~~~~~~~~~~~~~
+            lte: new Date("Invalid Date")
+          }
+        },
+        orderBy: {
+          fecha: "desc"
+        },
+        include: {
+          empleadoApertura: true,
+          empleadoCierre: true
+        }
+      })
+
+Invalid value for argument `gte`: Provided Date object is invalid. Expected Date.
+    at Tn (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:6855)
+    at e.throwValidationError (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:11245)
+    at Xa (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:9331)
+    at el (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10467)
+    at Xa (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10024)
+    at el (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10467)
+    at Xa (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10024)
+    at el (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10467)
+    at Yi (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:7910)
+    at Za (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:7775) {
+  clientVersion: '5.15.0'
+}
+Error al obtener cierres de caja: PrismaClientValidationError: 
+Invalid `prisma.cierreCaja.findMany()` invocation in
+/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/dist/src/controllers/gerente/finanzas.controller.js:311:51
+
+  308     }
+  309 }
+  310 // Obtener cierres de caja desde la base de datos
+→ 311 const cierresDB = await prisma.cierreCaja.findMany({
+        where: {
+          puntoVentaId: "undefined",
+          fecha: {
+            gte: new Date("Invalid Date"),
+                 ~~~~~~~~~~~~~~~~~~~~~~~~
+            lte: new Date("Invalid Date")
+          }
+        },
+        orderBy: {
+          fecha: "desc"
+        },
+        include: {
+          empleadoApertura: true,
+          empleadoCierre: true
+        }
+      })
+
+Invalid value for argument `gte`: Provided Date object is invalid. Expected Date.
+    at Tn (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:6855)
+    at e.throwValidationError (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:11245)
+    at Xa (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:9331)
+    at el (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10467)
+    at Xa (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10024)
+    at el (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10467)
+    at Xa (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10024)
+    at el (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10467)
+    at Yi (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:7910)
+    at Za (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:7775) {
+  clientVersion: '5.15.0'
+}
+Error al obtener citas: PrismaClientKnownRequestError: 
+Invalid `prisma.cita.findMany()` invocation in
+/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/dist/src/controllers/citas.controller.js:36:45
+
+  33         lte: fin,
+  34     };
+  35 }
+→ 36 const citas = await prisma.cita.findMany(
+Timed out fetching a new connection from the connection pool. More info: http://pris.ly/d/connection-pool (Current connection pool timeout: 10, connection limit: 17)
+    at In.handleRequestError (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:122:6877)
+    at In.handleAndLogRequestError (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:122:6211)
+    at In.request (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:122:5919)
+    at async l (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:127:11167)
+    at async getAll (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/dist/src/controllers/citas.controller.js:36:27) {
+  code: 'P2024',
+  clientVersion: '5.15.0',
+  meta: { modelName: 'Cita', connection_limit: 17, timeout: 10 }
+}
+Error al obtener citas: PrismaClientKnownRequestError: 
+Invalid `prisma.cita.findMany()` invocation in
+/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/dist/src/controllers/citas.controller.js:36:45
+
+  33         lte: fin,
+  34     };
+  35 }
+→ 36 const citas = await prisma.cita.findMany(
+Timed out fetching a new connection from the connection pool. More info: http://pris.ly/d/connection-pool (Current connection pool timeout: 10, connection limit: 17)
+    at In.handleRequestError (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:122:6877)
+    at In.handleAndLogRequestError (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:122:6211)
+    at In.request (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:122:5919)
+    at async l (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:127:11167)
+    at async getAll (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/dist/src/controllers/citas.controller.js:36:27) {
+  code: 'P2024',
+  clientVersion: '5.15.0',
+  meta: { modelName: 'Cita', connection_limit: 17, timeout: 10 }
+}
+Error al obtener cierres de caja: PrismaClientValidationError: 
+Invalid `prisma.cierreCaja.findMany()` invocation in
+/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/dist/src/controllers/gerente/finanzas.controller.js:311:51
+
+  308     }
+  309 }
+  310 // Obtener cierres de caja desde la base de datos
+→ 311 const cierresDB = await prisma.cierreCaja.findMany({
+        where: {
+          puntoVentaId: "undefined",
+          fecha: {
+            gte: new Date("Invalid Date"),
+                 ~~~~~~~~~~~~~~~~~~~~~~~~
+            lte: new Date("Invalid Date")
+          }
+        },
+        orderBy: {
+          fecha: "desc"
+        },
+        include: {
+          empleadoApertura: true,
+          empleadoCierre: true
+        }
+      })
+
+Invalid value for argument `gte`: Provided Date object is invalid. Expected Date.
+    at Tn (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:6855)
+    at e.throwValidationError (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:11245)
+    at Xa (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:9331)
+    at el (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10467)
+    at Xa (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10024)
+    at el (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10467)
+    at Xa (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10024)
+    at el (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:10467)
+    at Yi (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:7910)
+    at Za (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:7775) {
+  clientVersion: '5.15.0'
+}
+PrismaClientKnownRequestError: 
+Invalid `prisma.producto.findMany()` invocation in
+/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/dist/src/models/producto.model.js:8:32
+
+  5 const prisma = new client_1.PrismaClient();
+  6 exports.ProductoModel = {
+  7     async findAll() {
+→ 8         return prisma.producto.findMany(
+Timed out fetching a new connection from the connection pool. More info: http://pris.ly/d/connection-pool (Current connection pool timeout: 10, connection limit: 17)
+    at In.handleRequestError (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:122:6877)
+    at In.handleAndLogRequestError (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:122:6211)
+    at In.request (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:122:5919)
+    at async l (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:127:11167)
+    at async getAll (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/dist/src/controllers/producto.controller.js:7:27)
+Error al obtener citas: PrismaClientKnownRequestError: 
+Invalid `prisma.cita.findMany()` invocation in
+/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/dist/src/controllers/citas.controller.js:36:45
+
+  33         lte: fin,
+  34     };
+  35 }
+→ 36 const citas = await prisma.cita.findMany(
+Timed out fetching a new connection from the connection pool. More info: http://pris.ly/d/connection-pool (Current connection pool timeout: 10, connection limit: 17)
+    at In.handleRequestError (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:122:6877)
+    at In.handleAndLogRequestError (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:122:6211)
+    at In.request (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:122:5919)
+    at async l (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:127:11167)
+    at async getAll (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/dist/src/controllers/citas.controller.js:36:27) {
+  code: 'P2024',
+  clientVersion: '5.15.0',
+  meta: { modelName: 'Cita', connection_limit: 17, timeout: 10 }
+}
+Error al obtener citas: PrismaClientKnownRequestError: 
+Invalid `prisma.cita.findMany()` invocation in
+/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/dist/src/controllers/citas.controller.js:36:45
+
+  33         lte: fin,
+  34     };
+  35 }
+→ 36 const citas = await prisma.cita.findMany(
+Timed out fetching a new connection from the connection pool. More info: http://pris.ly/d/connection-pool (Current connection pool timeout: 10, connection limit: 17)
+    at In.handleRequestError (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:122:6877)
+    at In.handleAndLogRequestError (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:122:6211)
+    at In.request (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:122:5919)
+    at async l (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:127:11167)
+    at async getAll (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/dist/src/controllers/citas.controller.js:36:27) {
+  code: 'P2024',
+  clientVersion: '5.15.0',
+  meta: { modelName: 'Cita', connection_limit: 17, timeout: 10 }
+}
+📥 obtenerDocumentos - Parámetros: {
+  empresa_id: '1',
+  punto_venta_id: undefined,
+  categoria: undefined,
+  estado: undefined,
+  busqueda: undefined
+}
+📥 obtenerGastos - Parámetros: [Object: null prototype] { empresa_id: '1' }
+📥 obtenerPagosCalendario - Parámetros: [Object: null prototype] { empresa_id: '1' }
+✅ Gastos encontrados: 1
+✅ Documentos encontrados: 1
+✅ Pagos encontrados: 1
+📥 crearDocumento - Body recibido: {
+  "empresa_id": "EMP-001",
+  "punto_venta_id": "PDV-TIANA",
+  "categoria": "vehiculos",
+  "tipo": "Vehículo / Técnico",
+  "nombre": "asdasdasd",
+  "descripcion": "Seguro a todo riesgo con franquicia de 300€",
+  "fecha_vencimiento": "2026-12-24",
+  "coste_asociado": 505.41,
+  "categoria_ebitda": "seguros",
+  "responsable": "Admin"
+}
+❌ Error creando documento: PrismaClientKnownRequestError: 
+Invalid `prisma.documentoEmpresa.create()` invocation in
+/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/dist/src/controllers/documentacion.controller.js:138:57
+
+  135         estado = 'proximo_vencer';
+  136     }
+  137 }
+→ 138 const documento = await prisma.documentoEmpresa.create(
+Unique constraint failed on the fields: (`codigo`)
+    at In.handleRequestError (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:122:6877)
+    at In.handleAndLogRequestError (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:122:6211)
+    at In.request (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:122:5919)
+    at async l (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:127:11167)
+    at async crearDocumento (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/dist/src/controllers/documentacion.controller.js:138:27) {
+  code: 'P2002',
+  clientVersion: '5.15.0',
+  meta: { modelName: 'DocumentoEmpresa', target: [ 'codigo' ] }
+}
+📥 obtenerDocumentos - Parámetros: {
+  empresa_id: '1',
+  punto_venta_id: undefined,
+  categoria: undefined,
+  estado: undefined,
+  busqueda: undefined
+}
+✅ Documentos encontrados: 1
+PrismaClientValidationError: 
+Invalid `prisma.cupon.create()` invocation in
+/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/dist/src/models/cupon.model.js:14:29
+
+  11     return prisma.cupon.findUnique({ where: { id } });
+  12 },
+  13 async create(data) {
+→ 14     return prisma.cupon.create({
+           data: {
+             codigo: "BIENVENIDO10",
+             descripcion: "10% descuento en tu primer pedido",
+             descuento: "10%",
+             validoHasta: "2025-12-31",
+                          ~~~~~~~~~~~~
+             clienteId: 1
+           }
+         })
+
+Invalid value for argument `validoHasta`: premature end of input. Expected ISO-8601 DateTime.
+    at Tn (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:115:6855)
+    at In.handleRequestError (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:122:6533)
+    at In.handleAndLogRequestError (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:122:6211)
+    at In.request (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:122:5919)
+    at async l (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/node_modules/@prisma/client/runtime/library.js:127:11167)
+    at async create (/Volumes/Nuevo vol/Proyectos/udaredge/udar edge delivery 360/server/dist/src/controllers/cupon.controller.js:18:23)
+📥 obtenerDocumentos - Parámetros: {
+  empresa_id: '1',
+  punto_venta_id: undefined,
+  categoria: undefined,
+  estado: undefined,
+  busqueda: undefined
+}
+✅ Documentos encontrados: 1
+⚠️  SIGTERM recibido, cerrando servidor...
+✅ Servidor cerrado

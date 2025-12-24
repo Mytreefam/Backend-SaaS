@@ -1,0 +1,75 @@
+          {/* SUB-TAB: CONTROL DE HORARIOS */}
+          {subTabHorarios === 'control-horarios' && (
+            <>
+              {/* Estadísticas generales */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs sm:text-sm text-gray-600">Total Horas Mes</p>
+                        <p className="text-xl sm:text-2xl font-bold text-teal-600">
+                          {fichajes.reduce((acc, f) => acc + f.horasTrabajadas, 0).toFixed(0)}h
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          de {empleados.reduce((acc, e) => acc + e.horasContrato, 0)}h planificadas
+                        </p>
+                      </div>
+                      <Clock className="w-8 h-8 text-teal-600 opacity-50" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs sm:text-sm text-gray-600">Horas Extras</p>
+                        <p className="text-xl sm:text-2xl font-bold text-orange-600">
+                          {obtenerHorasExtras().reduce((acc, he) => acc + he.horasExtras, 0).toFixed(0)}h
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {obtenerHorasExtras().length} empleados
+                        </p>
+                      </div>
+                      <TrendingUp className="w-8 h-8 text-orange-600 opacity-50" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs sm:text-sm text-gray-600">Cumplimiento</p>
+                        <p className="text-xl sm:text-2xl font-bold text-green-600">
+                          {((fichajes.reduce((acc, f) => acc + f.horasTrabajadas, 0) / empleados.reduce((acc, e) => acc + e.horasContrato, 0)) * 100).toFixed(0)}%
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Media mensual
+                        </p>
+                      </div>
+                      <CheckCircle2 className="w-8 h-8 text-green-600 opacity-50" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs sm:text-sm text-gray-600">Retrasos</p>
+                        <p className="text-xl sm:text-2xl font-bold text-red-600">
+                          {fichajes.filter(f => f.retraso && f.retraso > 0).length}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Fichajes con retraso
+                        </p>
+                      </div>
+                      <AlertCircle className="w-8 h-8 text-red-600 opacity-50" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </>
+          )}

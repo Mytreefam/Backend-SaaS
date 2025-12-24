@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Network Security Configuration para Udar Edge
+    
+    Este archivo define las políticas de seguridad de red de la aplicación:
+    - Forzar HTTPS en producción
+    - Permitir HTTP solo para desarrollo local
+    - Configurar certificados SSL personalizados si es necesario
+    
+    Más información: https://developer.android.com/training/articles/security-config
+-->
+<network-security-config>
+    
+    <!-- ========================================== -->
+    <!-- CONFIGURACIÓN BASE (PRODUCCIÓN)            -->
+    <!-- Solo permite HTTPS por defecto             -->
+    <!-- ========================================== -->
+    
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <!-- Confiar en certificados del sistema Android -->
+            <certificates src="system" />
+            
+            <!-- Si tienes certificados SSL personalizados, añádelos aquí -->
+            <!-- <certificates src="@raw/my_custom_ca" /> -->
+        </trust-anchors>
+    </base-config>
+
+    <!-- ========================================== -->
+    <!-- EXCEPCIÓN PARA DESARROLLO LOCAL            -->
+    <!-- Permite HTTP solo para localhost           -->
+    <!-- ========================================== -->
+    
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- Localhost (emulador Android) -->
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">10.0.2.2</domain>
+        
+        <!-- IP local de desarrollo (ajusta según tu red) -->
+        <domain includeSubdomains="true">192.168.1.1</domain>
+        <domain includeSubdomains="true">192.168.0.1</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
+        
+        <!-- Vite dev server (puerto por defecto) -->
+        <domain includeSubdomains="true">localhost:5173</domain>
+        
+        <!-- ⚠️ ELIMINAR EN PRODUCCIÓN -->
+        <!-- Solo para desarrollo local -->
+    </domain-config>
+
+    <!-- ========================================== -->
+    <!-- DOMINIOS DE PRODUCCIÓN (HTTPS)             -->
+    <!-- Define tus dominios de API/CDN aquí        -->
+    <!-- ========================================== -->
+    
+    <domain-config cleartextTrafficPermitted="false">
+        <!-- Dominio principal de Udar Edge -->
+        <domain includeSubdomains="true">udaredge.com</domain>
+        <domain includeSubdomains="true">api.udaredge.com</domain>
+        <domain includeSubdomains="true">app.udaredge.com</domain>
+        <domain includeSubdomains="true">cdn.udaredge.com</domain>
+        <domain includeSubdomains="true">assets.udaredge.com</domain>
+        
+        <!-- Supabase (backend) -->
+        <domain includeSubdomains="true">supabase.co</domain>
+        <domain includeSubdomains="true">supabase.in</domain>
+        
+        <!-- Firebase (analytics, crashlytics, messaging) -->
+        <domain includeSubdomains="true">firebase.googleapis.com</domain>
+        <domain includeSubdomains="true">firebaseio.com</domain>
+        <domain includeSubdomains="true">googleapis.com</domain>
+        <domain includeSubdomains="true">google-analytics.com</domain>
+        <domain includeSubdomains="true">firebaseinstallations.googleapis.com</domain>
+        <domain includeSubdomains="true">fcm.googleapis.com</domain>
+        
+        <!-- Google Play Services -->
+        <domain includeSubdomains="true">google.com</domain>
+        <domain includeSubdomains="true">gstatic.com</domain>
+        
+        <!-- OAuth Providers -->
+        <domain includeSubdomains="true">accounts.google.com</domain>
+        <domain includeSubdomains="true">facebook.com</domain>
+        <domain includeSubdomains="true">appleid.apple.com</domain>
+        
+        <!-- CDNs de terceros (si los usas) -->
+        <domain includeSubdomains="true">cloudflare.com</domain>
+        <domain includeSubdomains="true">cloudinary.com</domain>
+        <domain includeSubdomains="true">imgix.net</domain>
+        
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+
+    <!-- ========================================== -->
+    <!-- DEBUG OVERRIDES (Solo para debug builds)   -->
+    <!-- ========================================== -->
+    
+    <!--
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="@raw/debug_ca" />
+            <certificates src="system" />
+        </trust-anchors>
+    </debug-overrides>
+    -->
+
+</network-security-config>

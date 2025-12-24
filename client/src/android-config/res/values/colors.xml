@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ========================================== -->
+    <!-- COLORES DE MARCA - UDAR EDGE              -->
+    <!-- ========================================== -->
+    
+    <!-- Color principal (Teal) -->
+    <color name="colorPrimary">#0d9488</color>
+    <color name="colorPrimaryDark">#0a6b61</color>
+    <color name="colorAccent">#14b8a6</color>
+    
+    <!-- Iconos de la app -->
+    <color name="ic_launcher_background">#0d9488</color>
+    
+    <!-- Notificaciones -->
+    <color name="notification_color">#0d9488</color>
+    <color name="notification_accent">#14b8a6</color>
+    
+    <!-- Splash Screen -->
+    <color name="splash_background">#0d9488</color>
+    <color name="splash_text">#ffffff</color>
+    
+    <!-- Status Bar -->
+    <color name="statusBarColor">#0d9488</color>
+    
+    <!-- Fondo -->
+    <color name="backgroundColor">#ffffff</color>
+    <color name="backgroundColorDark">#1a1a1a</color>
+    
+    <!-- Texto -->
+    <color name="textPrimary">#1f2937</color>
+    <color name="textSecondary">#6b7280</color>
+    <color name="textOnPrimary">#ffffff</color>
+    
+    <!-- Estados -->
+    <color name="success">#10b981</color>
+    <color name="warning">#f59e0b</color>
+    <color name="error">#ef4444</color>
+    <color name="info">#3b82f6</color>
+    
+    <!-- Bordes -->
+    <color name="border">#e5e7eb</color>
+    <color name="borderDark">#374151</color>
+    
+    <!-- Overlay -->
+    <color name="overlay">#80000000</color>
+    
+    <!-- Transparente -->
+    <color name="transparent">#00000000</color>
+</resources>

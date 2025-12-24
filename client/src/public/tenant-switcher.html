@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🏢 Cambiar Tenant - Udar Edge</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    
+    .container {
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      max-width: 500px;
+      width: 100%;
+    }
+    
+    h1 {
+      font-size: 32px;
+      margin-bottom: 10px;
+      color: #333;
+      text-align: center;
+    }
+    
+    .subtitle {
+      text-align: center;
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+    
+    .current {
+      background: #f0f0f0;
+      padding: 15px;
+      border-radius: 10px;
+      margin-bottom: 30px;
+      text-align: center;
+    }
+    
+    .current-label {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 5px;
+    }
+    
+    .current-tenant {
+      font-size: 24px;
+      font-weight: bold;
+      color: #333;
+    }
+    
+    .tenants {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+    
+    .tenant-btn {
+      background: white;
+      border: 3px solid #e0e0e0;
+      border-radius: 12px;
+      padding: 20px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .tenant-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+    }
+    
+    .tenant-btn.active {
+      border-color: #667eea;
+      background: #f5f7ff;
+    }
+    
+    .tenant-btn.active::after {
+      content: '✓ Activo';
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: #667eea;
+      color: white;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+    
+    .tenant-emoji {
+      font-size: 48px;
+      line-height: 1;
+    }
+    
+    .tenant-info {
+      flex: 1;
+    }
+    
+    .tenant-name {
+      font-size: 20px;
+      font-weight: bold;
+      margin-bottom: 5px;
+      color: #333;
+    }
+    
+    .tenant-desc {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+    
+    .tenant-colors {
+      display: flex;
+      gap: 6px;
+    }
+    
+    .color-dot {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 2px solid white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    
+    /* Colores específicos */
+    .udar-edge { border-color: #030213; }
+    .udar-edge:hover { border-color: #030213; background: #f9f9f9; }
+    
+    .la-pizzeria { border-color: #d32f2f; }
+    .la-pizzeria:hover { border-color: #d32f2f; background: #fff5f5; }
+    
+    .coffee-house { border-color: #5d4037; }
+    .coffee-house:hover { border-color: #5d4037; background: #faf9f7; }
+    
+    .fashion-store { border-color: #000000; }
+    .fashion-store:hover { border-color: #000000; background: #f9f9f9; }
+    
+    .instructions {
+      margin-top: 30px;
+      padding: 20px;
+      background: #fff9e6;
+      border-radius: 10px;
+      border-left: 4px solid #ffc107;
+    }
+    
+    .instructions h3 {
+      font-size: 14px;
+      margin-bottom: 10px;
+      color: #333;
+    }
+    
+    .instructions ol {
+      margin-left: 20px;
+      font-size: 13px;
+      color: #666;
+      line-height: 1.6;
+    }
+    
+    .footer {
+      margin-top: 30px;
+      text-align: center;
+      font-size: 12px;
+      color: #999;
+    }
+    
+    @media (max-width: 600px) {
+      .container {
+        padding: 30px 20px;
+      }
+      
+      h1 {
+        font-size: 24px;
+      }
+      
+      .tenant-emoji {
+        font-size: 36px;
+      }
+      
+      .tenant-name {
+        font-size: 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🏢 Cambiar Tenant</h1>
+    <p class="subtitle">Sistema White-Label Multi-Tenant</p>
+    
+    <div class="current">
+      <div class="current-label">Tenant Actual:</div>
+      <div class="current-tenant" id="currentTenant">🎨 Udar Edge</div>
+    </div>
+    
+    <div class="tenants">
+      <!-- Udar Edge -->
+      <button class="tenant-btn udar-edge" onclick="changeTenant('udar-edge', '🎨 Udar Edge')">
+        <div class="tenant-emoji">🎨</div>
+        <div class="tenant-info">
+          <div class="tenant-name">Udar Edge</div>
+          <div class="tenant-desc">Digitaliza tu negocio</div>
+          <div class="tenant-colors">
+            <div class="color-dot" style="background: #030213;"></div>
+            <div class="color-dot" style="background: #f3f3f5;"></div>
+            <div class="color-dot" style="background: #e9ebef;"></div>
+          </div>
+        </div>
+      </button>
+      
+      <!-- La Pizzería -->
+      <button class="tenant-btn la-pizzeria" onclick="changeTenant('la-pizzeria', '🍕 La Pizzería')">
+        <div class="tenant-emoji">🍕</div>
+        <div class="tenant-info">
+          <div class="tenant-name">La Pizzería</div>
+          <div class="tenant-desc">La mejor pizza de la ciudad</div>
+          <div class="tenant-colors">
+            <div class="color-dot" style="background: #d32f2f;"></div>
+            <div class="color-dot" style="background: #fff3e0;"></div>
+            <div class="color-dot" style="background: #ffcc80;"></div>
+          </div>
+        </div>
+      </button>
+      
+      <!-- Coffee House -->
+      <button class="tenant-btn coffee-house" onclick="changeTenant('coffee-house', '☕ Coffee House')">
+        <div class="tenant-emoji">☕</div>
+        <div class="tenant-info">
+          <div class="tenant-name">Coffee House</div>
+          <div class="tenant-desc">El mejor café artesanal</div>
+          <div class="tenant-colors">
+            <div class="color-dot" style="background: #5d4037;"></div>
+            <div class="color-dot" style="background: #f5f5f5;"></div>
+            <div class="color-dot" style="background: #d7ccc8;"></div>
+          </div>
+        </div>
+      </button>
+      
+      <!-- Fashion Store -->
+      <button class="tenant-btn fashion-store" onclick="changeTenant('fashion-store', '👗 Fashion Store')">
+        <div class="tenant-emoji">👗</div>
+        <div class="tenant-info">
+          <div class="tenant-name">Fashion Store</div>
+          <div class="tenant-desc">Tu estilo, nuestra pasión</div>
+          <div class="tenant-colors">
+            <div class="color-dot" style="background: #000000;"></div>
+            <div class="color-dot" style="background: #ffffff;"></div>
+            <div class="color-dot" style="background: #e91e63;"></div>
+          </div>
+        </div>
+      </button>
+    </div>
+    
+    <div class="instructions">
+      <h3>📋 Cómo usar:</h3>
+      <ol>
+        <li>Haz clic en el tenant que quieres activar</li>
+        <li>Se guardará en localStorage automáticamente</li>
+        <li>Recarga la aplicación principal (F5)</li>
+        <li>Verás los nuevos colores y textos aplicados</li>
+      </ol>
+    </div>
+    
+    <div class="footer">
+      Udar Edge v1.0 | Sistema White-Label
+    </div>
+  </div>
+
+  <script>
+    // Obtener tenant actual al cargar
+    window.addEventListener('DOMContentLoaded', function() {
+      updateCurrentTenant();
+      highlightActiveTenant();
+    });
+    
+    function changeTenant(slug, name) {
+      // Guardar en localStorage
+      localStorage.setItem('activeTenant', slug);
+      
+      // Actualizar UI
+      document.getElementById('currentTenant').textContent = name;
+      
+      // Highlight del botón activo
+      highlightActiveTenant();
+      
+      // Confirmación visual
+      const btn = event.currentTarget;
+      const originalText = btn.querySelector('.tenant-name').textContent;
+      btn.querySelector('.tenant-name').textContent = '✓ Seleccionado';
+      
+      setTimeout(() => {
+        btn.querySelector('.tenant-name').textContent = originalText;
+      }, 1000);
+      
+      // Mostrar mensaje
+      alert('✅ Tenant cambiado a: ' + name + '\n\n📱 Ahora recarga la aplicación principal (F5) para ver los cambios.');
+    }
+    
+    function updateCurrentTenant() {
+      const current = localStorage.getItem('activeTenant') || 'udar-edge';
+      const names = {
+        'udar-edge': '🎨 Udar Edge',
+        'la-pizzeria': '🍕 La Pizzería',
+        'coffee-house': '☕ Coffee House',
+        'fashion-store': '👗 Fashion Store'
+      };
+      
+      document.getElementById('currentTenant').textContent = names[current];
+    }
+    
+    function highlightActiveTenant() {
+      const current = localStorage.getItem('activeTenant') || 'udar-edge';
+      const buttons = document.querySelectorAll('.tenant-btn');
+      
+      buttons.forEach(btn => {
+        btn.classList.remove('active');
+      });
+      
+      const classes = {
+        'udar-edge': 'udar-edge',
+        'la-pizzeria': 'la-pizzeria',
+        'coffee-house': 'coffee-house',
+        'fashion-store': 'fashion-store'
+      };
+      
+      const activeBtn = document.querySelector(`.tenant-btn.${classes[current]}`);
+      if (activeBtn) {
+        activeBtn.classList.add('active');
+      }
+    }
+  </script>
+</body>
+</html>

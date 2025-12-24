@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    FileProvider Paths Configuration para Udar Edge
+    
+    Define qué rutas de archivos pueden ser compartidas con otras apps
+    mediante el FileProvider de Android.
+    
+    Usado para:
+    - Compartir facturas, tickets y documentos
+    - Compartir fotos capturadas con la cámara
+    - Exportar reportes y archivos
+    
+    Más información: https://developer.android.com/reference/androidx/core/content/FileProvider
+-->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    
+    <!-- ========================================== -->
+    <!-- CACHE INTERNA                              -->
+    <!-- Archivos temporales en cache               -->
+    <!-- ========================================== -->
+    
+    <!-- 
+        Ruta: /data/data/com.udaredge.app/cache/
+        Usado para: Archivos temporales, previews de compartir
+    -->
+    <cache-path 
+        name="cache" 
+        path="." />
+    
+    <cache-path 
+        name="temp_images" 
+        path="images/" />
+    
+    <cache-path 
+        name="temp_documents" 
+        path="documents/" />
+    
+    <!-- ========================================== -->
+    <!-- ARCHIVOS INTERNOS                          -->
+    <!-- Almacenamiento privado de la app           -->
+    <!-- ========================================== -->
+    
+    <!-- 
+        Ruta: /data/data/com.udaredge.app/files/
+        Usado para: Documentos persistentes, bases de datos offline
+    -->
+    <files-path 
+        name="files" 
+        path="." />
+    
+    <files-path 
+        name="invoices" 
+        path="invoices/" />
+    
+    <files-path 
+        name="tickets" 
+        path="tickets/" />
+    
+    <files-path 
+        name="receipts" 
+        path="receipts/" />
+    
+    <files-path 
+        name="employee_documents" 
+        path="employee_documents/" />
+    
+    <files-path 
+        name="reports" 
+        path="reports/" />
+    
+    <!-- ========================================== -->
+    <!-- ALMACENAMIENTO EXTERNO (SD CARD)           -->
+    <!-- Solo si está disponible                    -->
+    <!-- ========================================== -->
+    
+    <!-- 
+        Ruta: /storage/emulated/0/
+        Usado para: Exportaciones que el usuario puede ver fuera de la app
+    -->
+    <external-path 
+        name="external" 
+        path="." />
+    
+    <external-path 
+        name="external_downloads" 
+        path="Download/" />
+    
+    <external-path 
+        name="external_documents" 
+        path="Documents/" />
+    
+    <external-path 
+        name="external_pictures" 
+        path="Pictures/" />
+    
+    <!-- ========================================== -->
+    <!-- ARCHIVOS EXTERNOS DE LA APP                -->
+    <!-- Almacenamiento externo específico de app   -->
+    <!-- ========================================== -->
+    
+    <!-- 
+        Ruta: /storage/emulated/0/Android/data/com.udaredge.app/files/
+        Usado para: Backups, exportaciones, archivos grandes
+    -->
+    <external-files-path 
+        name="external_files" 
+        path="." />
+    
+    <external-files-path 
+        name="external_photos" 
+        path="Photos/" />
+    
+    <external-files-path 
+        name="external_backups" 
+        path="Backups/" />
+    
+    <external-files-path 
+        name="external_exports" 
+        path="Exports/" />
+    
+    <!-- ========================================== -->
+    <!-- CACHE EXTERNA                              -->
+    <!-- Cache en almacenamiento externo            -->
+    <!-- ========================================== -->
+    
+    <!-- 
+        Ruta: /storage/emulated/0/Android/data/com.udaredge.app/cache/
+        Usado para: Cache grande (imágenes, PDFs temporales)
+    -->
+    <external-cache-path 
+        name="external_cache" 
+        path="." />
+    
+    <external-cache-path 
+        name="external_cache_images" 
+        path="images/" />
+    
+    <external-cache-path 
+        name="external_cache_pdfs" 
+        path="pdfs/" />
+    
+    <!-- ========================================== -->
+    <!-- MEDIA EXTERNA (Solo Android 10+)           -->
+    <!-- ========================================== -->
+    
+    <!--
+    <external-media-path 
+        name="external_media" 
+        path="." />
+    -->
+
+</paths>

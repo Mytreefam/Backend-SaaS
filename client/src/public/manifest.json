@@ -1,0 +1,28 @@
+{
+  "name": "Hoy Pecamos - Pizzas, Burgers & Eventos",
+  "short_name": "Hoy Pecamos",
+  "description": "MODOMMIO Pizzas Artesanales, BLACKBURGER Gourmet y Eventos Premium",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#ED1C24",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["food", "shopping", "lifestyle"],
+  "lang": "es-ES",
+  "dir": "ltr",
+  "prefer_related_applications": false
+}

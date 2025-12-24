@@ -1,0 +1,233 @@
+  const renderCierres = () => {
+    // Helper function: Formato de fecha amigable
+    const formatFechaHora = (fechaISO: string) => {
+      const fecha = new Date(fechaISO);
+      const dia = fecha.getDate().toString().padStart(2, '0');
+      const mes = (fecha.getMonth() + 1).toString().padStart(2, '0');
+      const año = fecha.getFullYear();
+      const horas = fecha.getHours().toString().padStart(2, '0');
+      const minutos = fecha.getMinutes().toString().padStart(2, '0');
+      return `${dia}/${mes}/${año} ${horas}:${minutos}`;
+    };
+
+    // Helper function: Badge color según tipo de acción
+    const getBadgeTipoAccion = (tipoAccion: string) => {
+      switch (tipoAccion) {
+        case 'apertura':
+          return <Badge className="bg-blue-100 text-blue-800 border-blue-200">Apertura</Badge>;
+        case 'cierre':
+          return <Badge className="bg-green-100 text-green-800 border-green-200">Cierre</Badge>;
+        case 'arqueo':
+          return <Badge className="bg-purple-100 text-purple-800 border-purple-200">Arqueo</Badge>;
+        case 'retirada':
+          return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">Retirada</Badge>;
+        case 'devolucion':
+          return <Badge className="bg-red-100 text-red-800 border-red-200">Devolución</Badge>;
+        case 'consumo_propio':
+          return <Badge className="bg-orange-100 text-orange-800 border-orange-200">Consumo Propio</Badge>;
+        default:
+          return <Badge variant="outline">{tipoAccion}</Badge>;
+      }
+    };
+
+    // Helper function: Formato de moneda europea
+    const formatEuro = (valor: number) => {
+      return `€${valor.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    };
+
+    // Destructuring de los datos
+    const { totales, cierres, paginacion } = datosCierresAPI;
+
+    // Filtrar cierres por tienda seleccionada
+    const cierresFiltrados = tiendaSeleccionada === 'todas' 
+      ? cierres 
+      : cierres.filter(c => c.punto_venta_id === tiendaSeleccionada);
+
+    // Paginación
+    const cierresPaginados = cierresFiltrados.slice(
+      (paginaActualCierres - 1) * paginacion.por_pagina,
+      paginaActualCierres * paginacion.por_pagina
+    );
+
+    const totalPaginas = Math.ceil(cierresFiltrados.length / paginacion.por_pagina);
+
+    return (
+      <div className="space-y-6">
+        {/* Tarjetas superiores con totales */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {/* Total Cierres */}
+          <Card className="border-2 border-green-200 bg-green-50">
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <p className="text-sm text-gray-700 mb-1">Total Cierres</p>
+                <p className="text-3xl text-green-700" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                  {totales.total_cierres}
+                </p>
+                <p className="text-xs text-gray-600 mt-1">Este mes</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Efectivo Total */}
+          <Card className="border-2 border-blue-200 bg-blue-50">
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <p className="text-sm text-gray-700 mb-1">Efectivo Total</p>
+                <p className="text-3xl text-blue-700" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                  {formatEuro(totales.efectivo_total)}
+                </p>
+                <p className="text-xs text-gray-600 mt-1">Acumulado</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Transacciones (Tarjetas) */}
+          <Card className="border-2 border-yellow-200 bg-yellow-50">
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <p className="text-sm text-gray-700 mb-1">Transacciones</p>
+                <p className="text-3xl text-yellow-700" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                  {formatEuro(totales.tarjetas_total)}
+                </p>
+                <p className="text-xs text-gray-600 mt-1">Total tarjetas</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Diferencias */}
+          <Card className="border-2 border-purple-200 bg-purple-50">
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <p className="text-sm text-gray-700 mb-1">Diferencias</p>
+                <p className="text-3xl text-purple-700" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                  {formatEuro(totales.diferencias_total)}
+                </p>
+                <p className="text-xs text-gray-600 mt-1">Con ajustes</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Tabla de Cierres de Caja */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle style={{ fontFamily: 'Poppins, sans-serif' }}>
+                  Cierres de Caja
+                </CardTitle>
+                <CardDescription>
+                  Historial completo de cierres de caja del negocio
+                </CardDescription>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline">
+                  <Clock className="w-4 h-4 mr-2" />
+                  Filtrar
+                </Button>
+                <Button size="sm" className="bg-teal-600 hover:bg-teal-700">
+                  Exportar
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-teal-600 hover:bg-teal-600">
+                    <TableHead className="text-white">Día y hora</TableHead>
+                    <TableHead className="text-white">Tienda</TableHead>
+                    <TableHead className="text-white">Acción</TableHead>
+                    <TableHead className="text-white">Empleada</TableHead>
+                    <TableHead className="text-white">Contado Esperado</TableHead>
+                    <TableHead className="text-white">Contado Real</TableHead>
+                    <TableHead className="text-white">Diferencia</TableHead>
+                    <TableHead className="text-white">Total Ventas</TableHead>
+                    <TableHead className="text-white">Ventas Efectivo</TableHead>
+                    <TableHead className="text-white">Ventas Tarjeta</TableHead>
+                    <TableHead className="text-white">Retiradas</TableHead>
+                    <TableHead className="text-white">Resultado</TableHead>
+                    <TableHead className="text-white">Incoherencia</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {cierresPaginados.map((cierre) => (
+                    <TableRow key={cierre.id} className="hover:bg-gray-50">
+                      <TableCell className="text-sm whitespace-nowrap">
+                        {formatFechaHora(cierre.fecha_hora)}
+                      </TableCell>
+                      <TableCell className="text-sm">{cierre.punto_venta_id}</TableCell>
+                      <TableCell className="text-sm">
+                        {getBadgeTipoAccion(cierre.tipo_accion)}
+                      </TableCell>
+                      <TableCell className="text-sm">{cierre.empleado_nombre}</TableCell>
+                      <TableCell className="text-sm">{formatEuro(cierre.contado_esperado)}</TableCell>
+                      <TableCell className="text-sm">{formatEuro(cierre.contado_real)}</TableCell>
+                      <TableCell className={`text-sm ${
+                        cierre.diferencia !== 0 ? 'font-medium text-red-600' : ''
+                      }`}>
+                        {formatEuro(cierre.diferencia)}
+                      </TableCell>
+                      <TableCell className="text-sm">{formatEuro(cierre.total_ventas)}</TableCell>
+                      <TableCell className="text-sm">{formatEuro(cierre.ventas_efectivo)}</TableCell>
+                      <TableCell className="text-sm">{formatEuro(cierre.ventas_tarjeta)}</TableCell>
+                      <TableCell className="text-sm">{formatEuro(cierre.retiradas)}</TableCell>
+                      <TableCell className="text-sm font-medium">{formatEuro(cierre.resultado)}</TableCell>
+                      <TableCell className={`text-sm ${
+                        cierre.incoherencia !== 0 ? 'font-medium text-red-600' : ''
+                      }`}>
+                        {formatEuro(cierre.incoherencia)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Paginación */}
+            {totalPaginas > 1 && (
+              <div className="flex items-center justify-between mt-4">
+                <p className="text-sm text-gray-600">
+                  Mostrando {((paginaActualCierres - 1) * paginacion.por_pagina) + 1} a{' '}
+                  {Math.min(paginaActualCierres * paginacion.por_pagina, cierresFiltrados.length)} de{' '}
+                  {cierresFiltrados.length} registros
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setPaginaActualCierres(prev => Math.max(1, prev - 1))}
+                    disabled={paginaActualCierres === 1}
+                  >
+                    Anterior
+                  </Button>
+                  <div className="flex gap-1">
+                    {Array.from({ length: totalPaginas }, (_, i) => i + 1).map(pagina => (
+                      <Button
+                        key={pagina}
+                        size="sm"
+                        variant={pagina === paginaActualCierres ? 'default' : 'outline'}
+                        className={pagina === paginaActualCierres ? 'bg-teal-600 hover:bg-teal-700' : ''}
+                        onClick={() => setPaginaActualCierres(pagina)}
+                      >
+                        {pagina}
+                      </Button>
+                    ))}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setPaginaActualCierres(prev => Math.min(totalPaginas, prev + 1))}
+                    disabled={paginaActualCierres === totalPaginas}
+                  >
+                    Siguiente
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };

@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    AndroidManifest.xml Template para Udar Edge
+    
+    INSTRUCCIONES:
+    1. Copia este archivo a: android/app/src/main/AndroidManifest.xml
+    2. Reemplaza todos los comentarios <!-- TODO: ... --> con tus valores reales
+    3. Verifica que el package name sea correcto: com.udaredge.app
+    
+    Última actualización: 27 de noviembre de 2024
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.udaredge.app">
+
+    <!-- ========================================== -->
+    <!-- PERMISOS NECESARIOS                        -->
+    <!-- ========================================== -->
+    
+    <!-- Conectividad básica (SIEMPRE NECESARIOS) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    
+    <!-- Haptics / Vibración (para feedback táctil) -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    
+    <!-- Cámara (OCR de gastos, escaneo QR, fotos de productos) -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature 
+        android:name="android.hardware.camera" 
+        android:required="false" />
+    <uses-feature 
+        android:name="android.hardware.camera.autofocus" 
+        android:required="false" />
+    
+    <!-- Geolocalización (Fichaje con geofencing) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Android 10+ para background location -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    
+    <!-- Notificaciones Push (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    
+    <!-- Almacenamiento (documentos, fotos, facturas) -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission 
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
+        android:maxSdkVersion="32" />
+    <!-- Android 13+ usa permisos granulares -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    
+    <!-- Biometría (huella, face unlock) -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <uses-permission android:name="android.permission.USE_FINGERPRINT" />
+    
+    <!-- Foreground Services (sincronización en background) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    
+    <!-- Recibir notificaciones cuando la app esté cerrada -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- ========================================== -->
+    <!-- APPLICATION                                -->
+    <!-- ========================================== -->
+    
+    <application
+        android:name=".MainActivity"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme"
+        android:usesCleartextTraffic="false"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:requestLegacyExternalStorage="true"
+        android:hardwareAccelerated="true"
+        android:largeHeap="true">
+
+        <!-- ========================================== -->
+        <!-- MAIN ACTIVITY (Capacitor)                  -->
+        <!-- ========================================== -->
+        
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
+            android:label="@string/app_name"
+            android:launchMode="singleTask"
+            android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize">
+
+            <!-- ========================================== -->
+            <!-- LAUNCHER (icono en home screen)            -->
+            <!-- ========================================== -->
+            
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- ========================================== -->
+            <!-- DEEP LINKS: udaredge://                    -->
+            <!-- ========================================== -->
+            
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                
+                <!-- Scheme personalizado -->
+                <data android:scheme="udaredge" />
+            </intent-filter>
+
+            <!-- ========================================== -->
+            <!-- APP LINKS: https://app.udaredge.com        -->
+            <!-- ========================================== -->
+            
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                
+                <!-- TODO: Reemplaza con tu dominio real -->
+                <data 
+                    android:scheme="https" 
+                    android:host="app.udaredge.com" 
+                    android:pathPrefix="/" />
+            </intent-filter>
+
+            <!-- ========================================== -->
+            <!-- UNIVERSAL LINKS adicionales                -->
+            <!-- ========================================== -->
+            
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                
+                <!-- Wildcards para subdominios -->
+                <data 
+                    android:scheme="https" 
+                    android:host="*.udaredge.com" 
+                    android:pathPrefix="/app" />
+            </intent-filter>
+
+        </activity>
+
+        <!-- ========================================== -->
+        <!-- FIREBASE MESSAGING SERVICE                 -->
+        <!-- ========================================== -->
+        
+        <service
+            android:name=".FCMService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- ========================================== -->
+        <!-- METADATA DE FIREBASE                       -->
+        <!-- ========================================== -->
+        
+        <!-- Icono de notificación (debe ser monocromo) -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_notification" />
+        
+        <!-- Color de notificación -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_color" />
+        
+        <!-- Canal de notificación por defecto -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="@string/default_notification_channel_id" />
+        
+        <!-- Analytics (opcional - establecer en false si no usas Analytics) -->
+        <meta-data
+            android:name="firebase_analytics_collection_enabled"
+            android:value="true" />
+        
+        <!-- Crashlytics (opcional) -->
+        <meta-data
+            android:name="firebase_crashlytics_collection_enabled"
+            android:value="true" />
+
+        <!-- ========================================== -->
+        <!-- FILE PROVIDER (para compartir archivos)    -->
+        <!-- ========================================== -->
+        
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- ========================================== -->
+        <!-- GEOFENCING BROADCAST RECEIVER              -->
+        <!-- ========================================== -->
+        
+        <receiver
+            android:name=".GeofenceBroadcastReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.udaredge.app.ACTION_GEOFENCE_EVENT" />
+            </intent-filter>
+        </receiver>
+
+        <!-- ========================================== -->
+        <!-- BOOT RECEIVER (para reactivar geofences)   -->
+        <!-- ========================================== -->
+        
+        <receiver
+            android:name=".BootReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.RECEIVE_BOOT_COMPLETED">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+
+</manifest>

@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Generador de Íconos - HOY PECAMOS</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #000;
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 600px;
+      width: 100%;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 12px;
+      padding: 40px;
+    }
+    
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+    
+    .logo-preview {
+      width: 80px;
+      height: 80px;
+      background: #000;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid #333;
+    }
+    
+    h1 {
+      font-size: 28px;
+      margin-bottom: 5px;
+    }
+    
+    .subtitle {
+      color: #888;
+      font-size: 14px;
+    }
+    
+    .info-box {
+      background: #000;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    
+    .info-box h2 {
+      font-size: 16px;
+      margin-bottom: 12px;
+    }
+    
+    .info-box ul {
+      list-style: none;
+      color: #aaa;
+      font-size: 14px;
+      line-height: 1.8;
+    }
+    
+    button {
+      width: 100%;
+      background: #ED1C24;
+      color: white;
+      border: none;
+      padding: 18px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: background 0.2s;
+    }
+    
+    button:hover:not(:disabled) {
+      background: #c71820;
+    }
+    
+    button:disabled {
+      background: #444;
+      cursor: not-allowed;
+    }
+    
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid white;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    .success-box {
+      background: #0d3320;
+      border: 1px solid #1a5c37;
+      border-radius: 8px;
+      padding: 20px;
+      margin-top: 20px;
+      color: #4ade80;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    
+    .success-box strong {
+      color: #86efac;
+    }
+    
+    .success-box code {
+      background: #000;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+    
+    .footer {
+      text-align: center;
+      color: #666;
+      font-size: 12px;
+      margin-top: 20px;
+    }
+    
+    #preview {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo-preview">
+        <svg id="preview" viewBox="0 0 200 220" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 60px; height: 60px;">
+          <defs>
+            <filter id="glow">
+              <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+              <feMerge>
+                <feMergeNode in="coloredBlur"/>
+                <feMergeNode in="SourceGraphic"/>
+              </feMerge>
+            </filter>
+          </defs>
+          <path d="M 60 55 Q 52 40, 48 28 Q 46 20, 48 15 Q 50 10, 55 12 Q 58 14, 60 20 Q 62 30, 64 42 Q 65 50, 60 55 Z" fill="none" stroke="#ED1C24" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+          <path d="M 140 55 Q 148 40, 152 28 Q 154 20, 152 15 Q 150 10, 145 12 Q 142 14, 140 20 Q 138 30, 136 42 Q 135 50, 140 55 Z" fill="none" stroke="#ED1C24" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+          <path d="M 100 175 C 100 175, 65 150, 55 125 C 45 100, 45 85, 55 70 C 60 62, 70 58, 82 62 C 88 64, 94 70, 100 80 C 106 70, 112 64, 118 62 C 130 58, 140 62, 145 70 C 155 85, 155 100, 145 125 C 135 150, 100 175, 100 175 Z" fill="none" stroke="#ED1C24" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+          <g>
+            <path d="M 100 175 Q 110 180, 120 185 Q 128 189, 135 193 Q 140 196, 145 200" fill="none" stroke="#ED1C24" stroke-width="6" stroke-linecap="round" filter="url(#glow)"/>
+            <path d="M 145 196 L 152 200 L 148 205 L 145 203 Z" fill="#ED1C24" stroke="#ED1C24" stroke-width="2" stroke-linejoin="round" filter="url(#glow)"/>
+          </g>
+        </svg>
+      </div>
+      <div>
+        <h1>Generador de Íconos</h1>
+        <p class="subtitle">HOY PECAMOS - App Icons</p>
+      </div>
+    </div>
+
+    <div class="info-box">
+      <h2>📱 Íconos que se generarán:</h2>
+      <ul>
+        <li>• Favicon: 16x16, 32x32</li>
+        <li>• Android: 48, 72, 96, 144, 192, 512</li>
+        <li>• iOS: 1024x1024</li>
+      </ul>
+    </div>
+
+    <div class="info-box">
+      <h2>🎨 Configuración:</h2>
+      <ul>
+        <li>• Fondo: Negro sólido (#000000)</li>
+        <li>• Logo: Rojo con glow (#ED1C24)</li>
+        <li>• Formato: PNG con padding 10%</li>
+      </ul>
+    </div>
+
+    <button id="generateBtn" onclick="generateAllIcons()">
+      <span>⬇️ Generar todos los íconos</span>
+    </button>
+
+    <div id="successMessage" style="display: none;" class="success-box">
+      ✅ ¡Íconos generados correctamente!<br><br>
+      <strong>Siguiente paso:</strong><br>
+      1. Revisa tu carpeta de Descargas<br>
+      2. Copia todos los archivos PNG<br>
+      3. Pégalos en <code>/public/</code> de tu proyecto<br>
+      4. Reemplaza los íconos existentes
+    </div>
+
+    <p class="footer">Los archivos se descargarán automáticamente en secuencia</p>
+  </div>
+
+  <canvas id="canvas" style="display: none;"></canvas>
+
+  <script>
+    const logoSVG = document.getElementById('preview').outerHTML;
+    
+    async function generateIcon(size, filename) {
+      return new Promise((resolve) => {
+        const canvas = document.getElementById('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+
+        // Fondo negro
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, size, size);
+
+        // Crear imagen del SVG
+        const img = new Image();
+        const svgBlob = new Blob([logoSVG], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(svgBlob);
+
+        img.onload = () => {
+          // Calcular dimensiones centradas con padding
+          const padding = size * 0.1;
+          const logoSize = size - (padding * 2);
+          
+          // Centrar el logo
+          const x = padding;
+          const y = padding;
+
+          ctx.drawImage(img, x, y, logoSize, logoSize);
+          URL.revokeObjectURL(url);
+
+          // Descargar
+          canvas.toBlob((blob) => {
+            if (blob) {
+              const link = document.createElement('a');
+              link.href = URL.createObjectURL(blob);
+              link.download = filename;
+              link.click();
+              URL.revokeObjectURL(link.href);
+            }
+            resolve();
+          }, 'image/png');
+        };
+
+        img.src = url;
+      });
+    }
+
+    async function generateAllIcons() {
+      const btn = document.getElementById('generateBtn');
+      const successMsg = document.getElementById('successMessage');
+      
+      btn.disabled = true;
+      btn.innerHTML = '<div class="spinner"></div><span>Generando íconos...</span>';
+      successMsg.style.display = 'none';
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      const sizes = [
+        { size: 16, name: 'favicon-16x16.png' },
+        { size: 32, name: 'favicon-32x32.png' },
+        { size: 48, name: 'icon-48x48.png' },
+        { size: 72, name: 'icon-72x72.png' },
+        { size: 96, name: 'icon-96x96.png' },
+        { size: 144, name: 'icon-144x144.png' },
+        { size: 192, name: 'icon-192x192.png' },
+        { size: 512, name: 'icon-512x512.png' },
+        { size: 1024, name: 'icon-1024x1024.png' },
+      ];
+
+      for (const { size, name } of sizes) {
+        await generateIcon(size, name);
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+
+      btn.disabled = false;
+      btn.innerHTML = '<span>✅ Generado - Volver a generar</span>';
+      successMsg.style.display = 'block';
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,424 @@
+/*
+ * build.gradle Template para Udar Edge
+ * 
+ * INSTRUCCIONES:
+ * 1. Copia este archivo a: android/app/build.gradle
+ * 2. Asegúrate de que android/keystore.properties existe
+ * 3. Verifica que applicationId sea correcto: com.udaredge.app
+ * 4. Incrementa versionCode y versionName con cada release
+ * 
+ * Última actualización: 27 de noviembre de 2024
+ */
+
+apply plugin: 'com.android.application'
+
+// ========================================
+// CARGAR KEYSTORE PROPERTIES
+// ========================================
+
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+def hasKeystore = false
+
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+    hasKeystore = true
+    println "✅ Keystore properties cargadas correctamente"
+} else {
+    println "⚠️  Keystore properties no encontradas. Los builds de release no estarán firmados."
+    println "    Crea el archivo: android/keystore.properties"
+}
+
+android {
+    namespace "com.udaredge.app"
+    compileSdkVersion rootProject.ext.compileSdkVersion
+    
+    // ========================================
+    // DEFAULT CONFIG
+    // ========================================
+    
+    defaultConfig {
+        applicationId "com.udaredge.app"
+        minSdkVersion 22
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        
+        // ⚠️ IMPORTANTE: Incrementar con cada release
+        // versionCode SIEMPRE debe incrementarse (1, 2, 3, 4...)
+        // versionName es la versión visible para usuarios (1.0.0, 1.0.1, 1.1.0...)
+        versionCode 1
+        versionName "1.0.0"
+        
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        
+        // Optimizaciones
+        multiDexEnabled true
+        vectorDrawables.useSupportLibrary = true
+        
+        // Recursos sin comprimir (TensorFlow Lite, etc.)
+        aaptOptions {
+            noCompress "tflite"
+            noCompress "lite"
+        }
+        
+        // Configuración de NDK (si usas código nativo)
+        ndk {
+            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
+        }
+    }
+
+    // ========================================
+    // SIGNING CONFIGS
+    // ========================================
+    
+    signingConfigs {
+        // Configuración para RELEASE (producción)
+        release {
+            if (hasKeystore) {
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+                
+                // v1: Firma JAR (compatibilidad con Android < 7.0)
+                // v2: Firma APK completa (Android 7.0+)
+                // v3: Firma APK con rotación de claves (Android 9.0+)
+                v1SigningEnabled true
+                v2SigningEnabled true
+            } else {
+                // Si no hay keystore, usar debug signing (NO RECOMENDADO PARA PRODUCCIÓN)
+                storeFile file('debug.keystore')
+                storePassword 'android'
+                keyAlias 'androiddebugkey'
+                keyPassword 'android'
+            }
+        }
+        
+        // Configuración para DEBUG (desarrollo)
+        debug {
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
+
+    // ========================================
+    // BUILD TYPES
+    // ========================================
+    
+    buildTypes {
+        // BUILD DE RELEASE (producción)
+        release {
+            // Usar configuración de firma
+            signingConfig signingConfigs.release
+            
+            // Minificación y ofuscación (ProGuard)
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            
+            // Optimizaciones
+            debuggable false
+            jniDebuggable false
+            renderscriptDebuggable false
+            zipAlignEnabled true
+            
+            // Variables de entorno (BuildConfig)
+            buildConfigField "String", "API_URL", "\"https://api.udaredge.com\""
+            buildConfigField "String", "ENVIRONMENT", "\"production\""
+            buildConfigField "boolean", "ENABLE_LOGGING", "false"
+            
+            // Nombre del APK
+            applicationIdSuffix ""
+            versionNameSuffix ""
+        }
+        
+        // BUILD DE DEBUG (desarrollo)
+        debug {
+            signingConfig signingConfigs.debug
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+            debuggable true
+            minifyEnabled false
+            
+            // Variables de entorno para desarrollo
+            buildConfigField "String", "API_URL", "\"https://api-dev.udaredge.com\""
+            buildConfigField "String", "ENVIRONMENT", "\"development\""
+            buildConfigField "boolean", "ENABLE_LOGGING", "true"
+        }
+        
+        // BUILD DE STAGING (opcional - para testing)
+        /*
+        staging {
+            initWith debug
+            applicationIdSuffix ".staging"
+            versionNameSuffix "-staging"
+            
+            buildConfigField "String", "API_URL", "\"https://api-staging.udaredge.com\""
+            buildConfigField "String", "ENVIRONMENT", "\"staging\""
+            buildConfigField "boolean", "ENABLE_LOGGING", "true"
+        }
+        */
+    }
+
+    // ========================================
+    // BUILD FEATURES
+    // ========================================
+    
+    buildFeatures {
+        buildConfig true
+        viewBinding true  // Si usas View Binding
+    }
+
+    // ========================================
+    // COMPILE OPTIONS
+    // ========================================
+    
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+
+    // ========================================
+    // PACKAGING OPTIONS
+    // ========================================
+    
+    packagingOptions {
+        resources {
+            // Excluir archivos duplicados
+            excludes += [
+                'META-INF/DEPENDENCIES',
+                'META-INF/LICENSE',
+                'META-INF/LICENSE.txt',
+                'META-INF/license.txt',
+                'META-INF/NOTICE',
+                'META-INF/NOTICE.txt',
+                'META-INF/notice.txt',
+                'META-INF/ASL2.0',
+                'META-INF/*.kotlin_module',
+                'META-INF/INDEX.LIST',
+                'META-INF/io.netty.versions.properties'
+            ]
+        }
+    }
+
+    // ========================================
+    // LINT OPTIONS
+    // ========================================
+    
+    lintOptions {
+        checkReleaseBuilds true
+        abortOnError false
+        disable 'MissingTranslation'
+        disable 'InvalidPackage'
+        disable 'ExtraTranslation'
+        
+        // Generar reporte HTML
+        htmlReport true
+        htmlOutput file("$project.buildDir/reports/lint/lint.html")
+    }
+
+    // ========================================
+    // DEX OPTIONS (Optimización de compilación)
+    // ========================================
+    
+    dexOptions {
+        javaMaxHeapSize "4g"
+        preDexLibraries = true
+    }
+    
+    // ========================================
+    // SPLITS (para generar APKs por arquitectura)
+    // Descomenta si quieres APKs separados (reduce tamaño)
+    // ========================================
+    
+    /*
+    splits {
+        abi {
+            enable true
+            reset()
+            include 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
+            universalApk true  // También generar APK universal
+        }
+    }
+    */
+}
+
+// ========================================
+// REPOSITORIES
+// ========================================
+
+repositories {
+    google()
+    mavenCentral()
+    flatDir {
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+// ========================================
+// DEPENDENCIES
+// ========================================
+
+dependencies {
+    // ========================================
+    // CORE ANDROID
+    // ========================================
+    
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    
+    // ========================================
+    // CAPACITOR (Núcleo)
+    // ========================================
+    
+    implementation project(':capacitor-android')
+    implementation project(':capacitor-app')
+    implementation project(':capacitor-haptics')
+    implementation project(':capacitor-keyboard')
+    implementation project(':capacitor-status-bar')
+    
+    // ========================================
+    // CAPACITOR PLUGINS
+    // ========================================
+    
+    // Share API
+    implementation project(':capacitor-share')
+    
+    // Network Status
+    implementation project(':capacitor-network')
+    
+    // Geolocalización
+    implementation project(':capacitor-geolocation')
+    implementation 'com.google.android.gms:play-services-location:21.0.1'
+    
+    // Cámara
+    implementation project(':capacitor-camera')
+    
+    // Notificaciones Locales
+    implementation project(':capacitor-local-notifications')
+    
+    // Push Notifications
+    implementation project(':capacitor-push-notifications')
+    
+    // Splash Screen
+    implementation project(':capacitor-splash-screen')
+    
+    // Filesystem
+    implementation project(':capacitor-filesystem')
+    
+    // ========================================
+    // FIREBASE
+    // ========================================
+    
+    // Firebase BOM (Bill of Materials) - gestiona versiones automáticamente
+    implementation platform('com.google.firebase:firebase-bom:32.7.0')
+    
+    // Firebase Analytics
+    implementation 'com.google.firebase:firebase-analytics'
+    
+    // Firebase Cloud Messaging (Push Notifications)
+    implementation 'com.google.firebase:firebase-messaging'
+    
+    // Firebase Crashlytics
+    implementation 'com.google.firebase:firebase-crashlytics'
+    
+    // Firebase Performance Monitoring (opcional)
+    // implementation 'com.google.firebase:firebase-perf'
+    
+    // ========================================
+    // BIOMETRICS
+    // ========================================
+    
+    implementation 'androidx.biometric:biometric:1.2.0-alpha05'
+    
+    // ========================================
+    // MATERIAL DESIGN
+    // ========================================
+    
+    implementation 'com.google.android.material:material:1.11.0'
+    
+    // ========================================
+    // NETWORKING (Opcional si Capacitor no es suficiente)
+    // ========================================
+    
+    // OkHttp (para requests HTTP avanzados)
+    // implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    
+    // Retrofit (para REST APIs)
+    // implementation 'com.squareup.retrofit2:retrofit:2.9.0'
+    // implementation 'com.squareup.retrofit2:converter-gson:2.9.0'
+    
+    // ========================================
+    // IMAGE LOADING (Opcional)
+    // ========================================
+    
+    // Glide (si necesitas cargar imágenes de URLs)
+    // implementation 'com.github.bumptech.glide:glide:4.16.0'
+    // annotationProcessor 'com.github.bumptech.glide:compiler:4.16.0'
+    
+    // ========================================
+    // DATABASE LOCAL (Opcional si usas SQLite)
+    // ========================================
+    
+    // Room (recomendado por Google)
+    // def room_version = "2.6.1"
+    // implementation "androidx.room:room-runtime:$room_version"
+    // annotationProcessor "androidx.room:room-compiler:$room_version"
+    
+    // ========================================
+    // TESTING
+    // ========================================
+    
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+}
+
+// ========================================
+// APPLY PLUGINS (DEBE IR AL FINAL)
+// ========================================
+
+// Google Services (Firebase)
+// Asegúrate de tener google-services.json en android/app/
+apply plugin: 'com.google.gms.google-services'
+
+// Firebase Crashlytics
+apply plugin: 'com.google.firebase.crashlytics'
+
+// ========================================
+// TASKS PERSONALIZADAS (Opcional)
+// ========================================
+
+// Task para limpiar y rebuild
+task cleanBuild(type: Delete) {
+    delete rootProject.buildDir
+    delete "build"
+}
+
+// Task para mostrar información del build
+task buildInfo {
+    doLast {
+        println ""
+        println "=========================================="
+        println "BUILD INFO - UDAR EDGE"
+        println "=========================================="
+        println "App ID: ${android.defaultConfig.applicationId}"
+        println "Version Name: ${android.defaultConfig.versionName}"
+        println "Version Code: ${android.defaultConfig.versionCode}"
+        println "Min SDK: ${android.defaultConfig.minSdkVersion.apiLevel}"
+        println "Target SDK: ${android.defaultConfig.targetSdkVersion.apiLevel}"
+        println "Keystore: ${hasKeystore ? '✅ Configurado' : '❌ No encontrado'}"
+        println "=========================================="
+        println ""
+    }
+}
+
+// Ejecutar buildInfo antes de cada build
+tasks.whenTaskAdded { task ->
+    if (task.name == 'assembleRelease' || task.name == 'bundleRelease') {
+        task.dependsOn buildInfo
+    }
+}

@@ -6,9 +6,11 @@
  * - Vea tareas que requieren reporte
  * - Complete tareas con evidencias
  * - Vea historial de tareas completadas
+ * 
+ * ✅ Conectado al backend mediante tareasApi
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -43,15 +45,7 @@ import {
   ChevronUp,
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
-import {
-  obtenerGuionDelDia,
-  obtenerTareasParaReportar,
-  completarTarea,
-  marcarTareaComoVista,
-  iniciarTarea,
-  type TareaBase,
-} from '../../services/tareas-operativas.service';
-import { obtenerTareasTrabajador } from '../../services/task-management.service';
+import { tareasApi, TareaTrabajador as TareaBase } from '../../services/api';
 
 interface TareasTrabajadorProps {
   trabajadorId: string;
@@ -69,6 +63,7 @@ export function TareasTrabajador({
   const [guionDelDia, setGuionDelDia] = useState<TareaBase[]>([]);
   const [tareasParaReportar, setTareasParaReportar] = useState<TareaBase[]>([]);
   const [tareasCompletadas, setTareasCompletadas] = useState<TareaBase[]>([]);
+  const [cargando, setCargando] = useState(true);
   
   const [modalCompletarAbierto, setModalCompletarAbierto] = useState(false);
   const [tareaSeleccionada, setTareaSeleccionada] = useState<TareaBase | null>(null);
@@ -79,48 +74,65 @@ export function TareasTrabajador({
   const [tiempoEmpleado, setTiempoEmpleado] = useState('');
   const [evidencias, setEvidencias] = useState<string[]>([]);
   
+  const cargarTareas = useCallback(async () => {
+    try {
+      setCargando(true);
+      const empleadoId = parseInt(trabajadorId) || 1;
+      
+      // Obtener todas las tareas del trabajador desde el backend
+      const todasTareas = await tareasApi.getByEmpleadoId(empleadoId);
+      
+      // Guion del día (tareas pendientes de hoy)
+      const guion = todasTareas.filter(t => 
+        t.estado === 'pendiente' && t.tipo === 'operativa'
+      );
+      setGuionDelDia(guion);
+      
+      // Tareas en progreso que requieren reporte
+      const enProgreso = todasTareas.filter(t => 
+        t.estado === 'en_progreso'
+      );
+      setTareasParaReportar(enProgreso);
+      
+      // Tareas completadas
+      const completadas = todasTareas.filter(t => 
+        t.estado === 'completada'
+      );
+      setTareasCompletadas(completadas);
+    } catch (error) {
+      console.error('Error al cargar tareas:', error);
+      toast.error('Error al cargar tareas');
+    } finally {
+      setCargando(false);
+    }
+  }, [trabajadorId]);
+
   useEffect(() => {
     cargarTareas();
-  }, [trabajadorId, puntoVentaId]);
+  }, [cargarTareas]);
   
-  const cargarTareas = () => {
-    // Guion del día (informativas)
-    const guion = obtenerGuionDelDia(trabajadorId, puntoVentaId);
-    setGuionDelDia(guion);
-    
-    // Tareas que requieren reporte
-    const tareas = obtenerTareasParaReportar(trabajadorId, puntoVentaId);
-    setTareasParaReportar(tareas);
-    
-    // Tareas completadas/aprobadas
-    const todas = obtenerTareasTrabajador(trabajadorId);
-    const completadas = todas.filter(t => 
-      t.tipo === 'operativa' && 
-      (t.estado === 'aprobada' || t.estado === 'rechazada')
-    );
-    setTareasCompletadas(completadas);
-  };
-  
-  const handleMarcarVista = (tareaId: string) => {
-    const resultado = marcarTareaComoVista(tareaId, trabajadorId);
-    
-    if (resultado) {
+  const handleMarcarVista = async (tareaId: string) => {
+    try {
+      await tareasApi.update(parseInt(tareaId), { estado: 'en_progreso' });
       toast.success('Tarea marcada como vista', {
         icon: <Eye className="h-4 w-4" />,
       });
       cargarTareas();
+    } catch (error) {
+      toast.error('Error al marcar tarea');
     }
   };
   
-  const handleIniciarTarea = (tareaId: string) => {
-    const resultado = iniciarTarea(tareaId, trabajadorId);
-    
-    if (resultado) {
+  const handleIniciarTarea = async (tareaId: string) => {
+    try {
+      await tareasApi.iniciar(parseInt(tareaId));
       toast.success('Tarea iniciada', {
         description: 'El gerente verá que estás trabajando en ella',
         icon: <Play className="h-4 w-4" />,
       });
       cargarTareas();
+    } catch (error) {
+      toast.error('Error al iniciar tarea');
     }
   };
   
@@ -141,13 +153,7 @@ export function TareasTrabajador({
     }
     
     try {
-      await completarTarea({
-        tareaId: tareaSeleccionada.id,
-        trabajadorId,
-        comentario,
-        tiempoEmpleado: tiempoEmpleado ? parseInt(tiempoEmpleado) : undefined,
-        evidenciaUrls: evidencias.length > 0 ? evidencias : undefined,
-      });
+      await tareasApi.completar(tareaSeleccionada.id);
       
       if (tareaSeleccionada.requiereAprobacion) {
         toast.success('Tarea completada y enviada a revisión', {

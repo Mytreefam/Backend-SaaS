@@ -87,6 +87,9 @@ export const API_CONFIG = {
     
     // Upload
     UPLOAD: '/upload',
+
+    // Caja
+    CIERRE_CAJA: '/caja',
   }
 } as const;
 

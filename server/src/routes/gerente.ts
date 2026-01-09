@@ -16,6 +16,13 @@ import * as horariosController from '../controllers/gerente/horarios.controller'
 import * as operativaController from '../controllers/operativa.controller';
 import * as documentacionController from '../controllers/documentacion.controller';
 
+import * as dashboardExtController from '../controllers/gerente/dashboard-extended.controller';
+import * as finanzasEbitdaController from '../controllers/gerente/finanzas-ebitda.controller';
+import * as integracionesController from '../controllers/gerente/integraciones.controller';
+import * as escandalloController from '../controllers/gerente/escandallo.controller';
+import * as stockExtController from '../controllers/gerente/stock-extendido.controller';
+import * as chatController from '../controllers/gerente/chat.controller';
+
 const router = Router();
 
 // Configuración de multer para subir archivos
@@ -64,6 +71,8 @@ const upload = multer({
 router.get('/dashboard/ventas', dashboardController.obtenerDatosVentas);
 router.get('/dashboard/kpis', dashboardController.obtenerKPIs);
 router.get('/dashboard/alertas', dashboardController.obtenerAlertas);
+router.get('/dashboard/ventas/canales', dashboardExtController.obtenerVentasPorCanal);
+router.put('/dashboard/alertas/:id/resolver', dashboardExtController.resolverAlerta);
 
 // ============================================
 // GESTIÓN DE EMPLEADOS (RRHH)
@@ -71,6 +80,7 @@ router.get('/dashboard/alertas', dashboardController.obtenerAlertas);
 router.get('/empleados', empleadosController.obtenerEmpleados);
 router.get('/empleados/estadisticas', empleadosController.obtenerEstadisticasEquipo);
 router.get('/empleados/fichajes', empleadosController.obtenerTodosFichajes);
+router.post('/empleados/fichajes', empleadosController.crearFichaje);
 router.get('/empleados/:id', empleadosController.obtenerEmpleadoPorId);
 router.post('/empleados', empleadosController.crearEmpleado);
 router.put('/empleados/:id', empleadosController.actualizarEmpleado);
@@ -127,6 +137,22 @@ router.delete('/stock/sesiones-inventario/:id', stockController.eliminarSesionIn
 router.post('/stock/sesiones-inventario/:id/lineas', stockController.agregarLineaInventario);
 router.put('/stock/sesiones-inventario/:id/lineas/:lineaId', stockController.actualizarLineaInventario);
 
+// ⭐ Stock Extendido - Almacenes, Transferencias, Mermas
+router.get('/stock/almacenes', stockExtController.obtenerAlmacenes);
+router.post('/stock/almacenes', stockExtController.crearAlmacen);
+router.put('/stock/almacenes/:id', stockExtController.actualizarAlmacen);
+router.delete('/stock/almacenes/:id', stockExtController.eliminarAlmacen);
+router.get('/stock/transferencias', stockExtController.obtenerTransferencias);
+router.post('/stock/transferencias', stockExtController.crearTransferencia);
+router.put('/stock/transferencias/:id/aprobar', stockExtController.aprobarTransferencia);
+router.put('/stock/transferencias/:id/ejecutar', stockExtController.ejecutarTransferencia);
+router.put('/stock/transferencias/:id/cancelar', stockExtController.cancelarTransferencia);
+router.get('/stock/mermas', stockExtController.obtenerMermas);
+router.post('/stock/mermas', stockExtController.registrarMerma);
+router.post('/stock/entradas', stockExtController.registrarEntrada);
+router.post('/stock/salidas', stockExtController.registrarSalida);
+router.get('/stock/estadisticas', stockExtController.obtenerEstadisticasStock);
+
 // ============================================
 // GESTIÓN DE PRODUCTOS (CATÁLOGO)
 // ============================================
@@ -151,6 +177,20 @@ router.get('/finanzas/impagos', finanzasController.obtenerImpagos);
 router.get('/finanzas/pagos-proveedores', finanzasController.obtenerPagosProveedores);
 router.post('/finanzas/pagos-proveedores', finanzasController.registrarPagoProveedor);
 router.get('/finanzas/prevision', finanzasController.obtenerPrevisionTesoreria);
+// ⭐ EBITDA y métricas avanzadas
+router.get('/finanzas/ebitda', finanzasEbitdaController.obtenerEBITDA);
+router.get('/finanzas/indicadores', finanzasEbitdaController.obtenerIndicadores);
+router.get('/finanzas/ebitda/historico', finanzasEbitdaController.obtenerHistoricoEBITDA);
+
+// ============================================
+// ESCANDALLOS - COSTES Y MÁRGENES
+// ============================================
+router.get('/escandallos', escandalloController.obtenerEscandallos);
+router.get('/escandallos/resumen', escandalloController.obtenerResumenEscandallos);
+router.get('/escandallos/producto/:productoId', escandalloController.obtenerEscandalloPorProducto);
+router.post('/escandallos', escandalloController.guardarEscandallo);
+router.get('/escandallos/costes-proveedor', escandalloController.obtenerCostesPorProveedor);
+router.post('/escandallos/recalcular', escandalloController.recalcularEscandallos);
 
 // ============================================
 // OPERATIVA - TAREAS Y GESTIÓN DE EQUIPO
@@ -215,5 +255,46 @@ router.post('/documentacion/pagos-calendario', documentacionController.crearPago
 router.put('/documentacion/pagos-calendario/:id', documentacionController.actualizarPagoCalendario);
 router.delete('/documentacion/pagos-calendario/:id', documentacionController.eliminarPagoCalendario);
 router.put('/documentacion/pagos-calendario/:id/pagar', documentacionController.marcarPagoPagado);
+
+// ============================================
+// INTEGRACIONES DELIVERY (Glovo, Uber Eats, etc.)
+// ============================================
+router.get('/integraciones/plataformas', integracionesController.obtenerPlataformas);
+router.get('/integraciones/plataformas/:id', integracionesController.obtenerPlataformaPorId);
+router.post('/integraciones/plataformas', integracionesController.crearPlataforma);
+router.put('/integraciones/plataformas/:id', integracionesController.actualizarPlataforma);
+router.delete('/integraciones/plataformas/:id', integracionesController.eliminarPlataforma);
+router.put('/integraciones/plataformas/:id/toggle', integracionesController.togglePlataforma);
+router.post('/integraciones/plataformas/:id/sincronizar', integracionesController.sincronizarProductos);
+router.get('/integraciones/historial', integracionesController.obtenerHistorialSincronizacion);
+router.get('/integraciones/pedidos-externos', integracionesController.obtenerPedidosExternos);
+router.put('/integraciones/pedidos-externos/:id/aceptar', integracionesController.aceptarPedido);
+router.put('/integraciones/pedidos-externos/:id/rechazar', integracionesController.rechazarPedido);
+router.get('/integraciones/estadisticas', integracionesController.obtenerEstadisticasIntegraciones);
+
+// ============================================
+// CHAT Y MENSAJERÍA INTERNA
+// ============================================
+router.get('/chat/conversaciones', chatController.obtenerConversaciones);
+router.get('/chat/conversaciones/:id', chatController.obtenerConversacionPorId);
+router.post('/chat/conversaciones', chatController.crearConversacion);
+router.post('/chat/conversaciones/:conversacionId/mensajes', chatController.enviarMensaje);
+router.put('/chat/conversaciones/:conversacionId/leer', chatController.marcarMensajesLeidos);
+router.delete('/chat/mensajes/:id', chatController.eliminarMensaje);
+
+// ============================================
+// TICKETS DE SOPORTE
+// ============================================
+router.get('/chat/tickets', chatController.obtenerTickets);
+router.post('/chat/tickets', chatController.crearTicket);
+router.post('/chat/tickets/:id/responder', chatController.responderTicket);
+router.put('/chat/tickets/:id', chatController.actualizarEstadoTicket);
+
+// ============================================
+// ANUNCIOS
+// ============================================
+router.get('/chat/anuncios', chatController.obtenerAnuncios);
+router.post('/chat/anuncios', chatController.crearAnuncio);
+router.delete('/chat/anuncios/:id', chatController.eliminarAnuncio);
 
 export default router;

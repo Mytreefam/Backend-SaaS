@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -27,19 +27,58 @@ import { PullToRefreshIndicator } from '../mobile/PullToRefreshIndicator';
 import { useHaptics } from '../../hooks/useHaptics';
 import { useAnalytics } from '../../services/analytics.service';
 import { OnboardingWidget } from '../OnboardingWidget';
+import { fichajesApi, tareasApi, TareaTrabajador } from '../../services/api';
+import { useAuth } from '../../hooks/useAuth';
 
 export function InicioTrabajador() {
-  const [enTurno, setEnTurno] = useState(true);
+  const { user } = useAuth();
+  const empleadoId = user?.id || 1;
+  
+  const [enTurno, setEnTurno] = useState(false);
   const [tiempoFichaje, setTiempoFichaje] = useState(0); // en segundos
   const [pausado, setPausado] = useState(false);
+  const [cargando, setCargando] = useState(true);
+  const [tareas, setTareas] = useState<TareaTrabajador[]>([]);
+  const [proximaTarea, setProximaTarea] = useState<TareaTrabajador | null>(null);
 
   // ✅ Hooks nativos
   const haptics = useHaptics();
   const analyticsHooks = useAnalytics();
 
+  // Cargar estado de fichaje y tareas del backend
+  const cargarDatos = useCallback(async () => {
+    try {
+      setCargando(true);
+      
+      // Cargar estado de fichaje
+      const estadoFichaje = await fichajesApi.getEstadoActual(empleadoId);
+      setEnTurno(estadoFichaje.enTurno);
+      setTiempoFichaje(estadoFichaje.tiempoTrabajado);
+      setPausado(estadoFichaje.pausado);
+      
+      // Cargar tareas del día
+      const tareasHoy = await tareasApi.getTareasHoy(empleadoId);
+      setTareas(tareasHoy);
+      
+      // Obtener próxima tarea (prioridad alta primero)
+      const tareasPendientes = tareasHoy.filter(t => t.estado === 'pendiente');
+      const tareaAlta = tareasPendientes.find(t => t.prioridad === 'alta');
+      setProximaTarea(tareaAlta || tareasPendientes[0] || null);
+      
+    } catch (error) {
+      console.error('Error al cargar datos:', error);
+    } finally {
+      setCargando(false);
+    }
+  }, [empleadoId]);
+
+  useEffect(() => {
+    cargarDatos();
+  }, [cargarDatos]);
+
   // ✅ Pull to Refresh
   const refreshDashboard = async () => {
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await cargarDatos();
     toast.success('Dashboard actualizado');
   };
   const { pullIndicatorRef } = usePullToRefresh(refreshDashboard);
@@ -60,42 +99,69 @@ export function InicioTrabajador() {
     return `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}`;
   };
 
-  const handleFichar = () => {
+  const handleFichar = async () => {
     haptics.heavy(); // ✅ Feedback táctil fuerte para acción importante
     
-    if (enTurno) {
-      setEnTurno(false);
-      setTiempoFichaje(0);
-      analyticsHooks.logFeatureUsed('fichaje_salida', 'inicio_trabajador'); // ✅ Analytics
-      toast.success('Fichaje de salida registrado correctamente');
-    } else {
-      setEnTurno(true);
-      setTiempoFichaje(0);
-      analyticsHooks.logFeatureUsed('fichaje_entrada', 'inicio_trabajador'); // ✅ Analytics
-      toast.success('Fichaje de entrada registrado correctamente');
+    try {
+      if (enTurno) {
+        await fichajesApi.ficharSalida(empleadoId);
+        setEnTurno(false);
+        setTiempoFichaje(0);
+        analyticsHooks.logFeatureUsed('fichaje_salida', 'inicio_trabajador');
+        toast.success('Fichaje de salida registrado correctamente');
+      } else {
+        await fichajesApi.ficharEntrada(empleadoId);
+        setEnTurno(true);
+        setTiempoFichaje(0);
+        analyticsHooks.logFeatureUsed('fichaje_entrada', 'inicio_trabajador');
+        toast.success('Fichaje de entrada registrado correctamente');
+      }
+    } catch (error) {
+      toast.error('Error al registrar fichaje');
     }
   };
 
-  const handlePausarContinuar = () => {
+  const handlePausarContinuar = async () => {
     haptics.medium(); // ✅ Feedback táctil
-    setPausado(!pausado);
-    analyticsHooks.logButtonClick(pausado ? 'reanudar_cronometro' : 'pausar_cronometro', 'inicio_trabajador'); // ✅ Analytics
-    toast.info(pausado ? 'Cronómetro reanudado' : 'Cronómetro pausado');
+    
+    try {
+      if (pausado) {
+        await fichajesApi.reanudar(empleadoId);
+        setPausado(false);
+        analyticsHooks.logButtonClick('reanudar_cronometro', 'inicio_trabajador');
+        toast.info('Cronómetro reanudado');
+      } else {
+        await fichajesApi.pausar(empleadoId);
+        setPausado(true);
+        analyticsHooks.logButtonClick('pausar_cronometro', 'inicio_trabajador');
+        toast.info('Cronómetro pausado');
+      }
+    } catch (error) {
+      toast.error('Error al pausar/reanudar');
+    }
   };
 
-  const handleEmpezarTarea = () => {
-    toast.success('Tarea iniciada');
+  const handleEmpezarTarea = async () => {
+    if (proximaTarea) {
+      try {
+        await tareasApi.iniciar(proximaTarea.id);
+        toast.success('Tarea iniciada');
+        await cargarDatos();
+      } catch (error) {
+        toast.error('Error al iniciar tarea');
+      }
+    }
   };
 
   const handleReanudarCurso = () => {
     toast.info('Reanudando curso...');
   };
 
-  // Datos de ejemplo
-  const tareasHechas = 3;
-  const tareasPendientes = 5;
-  const totalTareas = tareasHechas + tareasPendientes;
-  const progresoTareas = (tareasHechas / totalTareas) * 100;
+  // Calcular estadísticas de tareas
+  const tareasCompletadas = tareas.filter(t => t.estado === 'completada').length;
+  const tareasPendientes = tareas.filter(t => t.estado !== 'completada' && t.estado !== 'cancelada').length;
+  const totalTareas = tareas.length || 1;
+  const progresoTareas = (tareasCompletadas / totalTareas) * 100;
 
   const horasObjetivo = 40;
   const horasReales = 38;
@@ -161,13 +227,18 @@ export function InicioTrabajador() {
             </div>
           </CardHeader>
           <CardContent className="p-3 sm:p-6 pt-0">
-            {tareasPendientes > 0 ? (
+            {proximaTarea ? (
               <>
                 <div className="mb-3 sm:mb-4 p-2.5 sm:p-3 bg-teal-50 rounded-lg">
                   <p className="text-[10px] sm:text-xs text-gray-600 mb-1">Próxima tarea:</p>
-                  <p className="text-xs sm:text-sm mb-1.5 sm:mb-2 line-clamp-2">Limpieza profunda zona cocina</p>
-                  <Badge variant="outline" className="border-orange-300 text-orange-700 text-[10px] sm:text-xs">
-                    🔥 Alta Prioridad
+                  <p className="text-xs sm:text-sm mb-1.5 sm:mb-2 line-clamp-2">{proximaTarea.titulo}</p>
+                  <Badge variant="outline" className={`text-[10px] sm:text-xs ${
+                    proximaTarea.prioridad === 'alta' ? 'border-orange-300 text-orange-700' :
+                    proximaTarea.prioridad === 'media' ? 'border-yellow-300 text-yellow-700' :
+                    'border-green-300 text-green-700'
+                  }`}>
+                    {proximaTarea.prioridad === 'alta' ? '🔥 Alta Prioridad' : 
+                     proximaTarea.prioridad === 'media' ? '⚡ Media Prioridad' : '✓ Baja Prioridad'}
                   </Badge>
                 </div>
                 <Button 
@@ -258,7 +329,7 @@ export function InicioTrabajador() {
               <div className="flex items-center justify-between">
                 <div className="text-center flex-1">
                   <p className="text-3xl font-semibold text-green-600" style={{ fontFamily: 'Poppins, sans-serif' }}>
-                    {tareasHechas}
+                    {tareasCompletadas}
                   </p>
                   <p className="text-xs text-gray-600 mt-1">Completadas</p>
                 </div>

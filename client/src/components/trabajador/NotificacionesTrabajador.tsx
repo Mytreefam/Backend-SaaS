@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -18,6 +18,8 @@ import {
 import { toast } from 'sonner@2.0.3';
 import { format } from 'date-fns@4.1.0';
 import { es } from 'date-fns@4.1.0/locale';
+import { notificacionesApi } from '../../services/api';
+import { useAuth } from '../../hooks/useAuth';
 
 interface Notificacion {
   id: string;
@@ -39,129 +41,111 @@ interface Alerta {
 }
 
 export function NotificacionesTrabajador() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('notificaciones');
+  const [cargando, setCargando] = useState(true);
   
-  const [notificaciones, setNotificaciones] = useState<Notificacion[]>([
-    {
-      id: '1',
-      tipo: 'pedido',
-      titulo: 'Nuevo pedido recibido #P-1245',
-      mensaje: 'Cliente Juan García - Pedido para recoger a las 18:00h. Total: 45,80 €',
-      fecha: new Date(2025, 10, 18, 10, 30),
-      leida: false,
-    },
-    {
-      id: '2',
-      tipo: 'tarea',
-      titulo: 'Nueva tarea asignada',
-      mensaje: 'Reponer croissants en el expositor principal - Prioridad: Alta',
-      fecha: new Date(2025, 10, 18, 9, 15),
-      leida: false,
-    },
-    {
-      id: '3',
-      tipo: 'inventario',
-      titulo: 'Stock bajo: Harina integral',
-      mensaje: 'Quedan solo 5 kg de harina integral. Revisa el stock.',
-      fecha: new Date(2025, 10, 18, 8, 45),
-      leida: false,
-    },
-    {
-      id: '4',
-      tipo: 'turno',
-      titulo: 'Recordatorio de turno',
-      mensaje: 'Tu turno comienza en 30 minutos (11:00 - 19:00)',
-      fecha: new Date(2025, 10, 17, 10, 30),
-      leida: true,
-    },
-    {
-      id: '5',
-      tipo: 'sistema',
-      titulo: 'Actualización completada',
-      mensaje: 'El sistema TPV se ha actualizado correctamente a la versión 2.3.1',
-      fecha: new Date(2025, 10, 16, 20, 0),
-      leida: true,
-    },
-  ]);
+  const [notificaciones, setNotificaciones] = useState<Notificacion[]>([]);
+  const [alertas, setAlertas] = useState<Alerta[]>([]);
 
-  const [alertas, setAlertas] = useState<Alerta[]>([
-    {
-      id: '1',
-      tipo: 'critica',
-      categoria: 'stock',
-      titulo: 'Stock crítico: Pan de molde',
-      mensaje: 'Solo quedan 3 unidades en stock. Se recomienda hornear nuevo lote urgentemente.',
-      fecha: new Date(2025, 10, 18, 11, 0),
-      resuelta: false,
-    },
-    {
-      id: '2',
-      tipo: 'importante',
-      categoria: 'pedido',
-      titulo: 'Pedido retrasado #P-1238',
-      mensaje: 'El pedido debía estar listo hace 15 minutos. Cliente esperando.',
-      fecha: new Date(2025, 10, 18, 10, 45),
-      resuelta: false,
-    },
-    {
-      id: '3',
-      tipo: 'critica',
-      categoria: 'turno',
-      titulo: 'Falta cobertura en turno de tarde',
-      mensaje: 'No hay suficiente personal para el turno de 14:00-18:00. Se necesita confirmar disponibilidad.',
-      fecha: new Date(2025, 10, 18, 9, 30),
-      resuelta: false,
-    },
-    {
-      id: '4',
-      tipo: 'informativa',
-      categoria: 'sistema',
-      titulo: 'Mantenimiento programado',
-      mensaje: 'El sistema estará en mantenimiento mañana de 02:00 a 04:00.',
-      fecha: new Date(2025, 10, 17, 15, 0),
-      resuelta: true,
-    },
-    {
-      id: '5',
-      tipo: 'importante',
-      categoria: 'stock',
-      titulo: 'Revisión de caducidades',
-      mensaje: 'Hay 8 productos que caducan en las próximas 48 horas.',
-      fecha: new Date(2025, 10, 17, 8, 0),
-      resuelta: true,
-    },
-  ]);
+  // Cargar notificaciones del backend
+  const cargarNotificaciones = useCallback(async () => {
+    try {
+      setCargando(true);
+      const data = await notificacionesApi.getByUsuario(user?.id || 0, 'empleado');
+      
+      // Mapear notificaciones del backend a formato local
+      const notifs: Notificacion[] = data.map(n => ({
+        id: n.id.toString(),
+        tipo: (n.tipo as Notificacion['tipo']) || 'sistema',
+        titulo: n.titulo,
+        mensaje: n.mensaje,
+        fecha: new Date(n.fechaCreacion),
+        leida: n.leida,
+      }));
+      
+      setNotificaciones(notifs);
+      
+      // Separar alertas (notificaciones críticas/importantes)
+      const alertasData: Alerta[] = data
+        .filter(n => n.prioridad === 'alta' || n.prioridad === 'urgente')
+        .map(n => ({
+          id: n.id.toString(),
+          tipo: n.prioridad === 'urgente' ? 'critica' : 'importante',
+          categoria: (n.tipo as Alerta['categoria']) || 'sistema',
+          titulo: n.titulo,
+          mensaje: n.mensaje,
+          fecha: new Date(n.fechaCreacion),
+          resuelta: n.leida,
+        }));
+      
+      setAlertas(alertasData);
+    } catch (error) {
+      console.error('Error al cargar notificaciones:', error);
+    } finally {
+      setCargando(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    cargarNotificaciones();
+  }, [cargarNotificaciones]);
 
   const notificacionesNoLeidas = notificaciones.filter(n => !n.leida).length;
   const alertasNoResueltas = alertas.filter(a => !a.resuelta).length;
 
-  const marcarComoLeida = (id: string) => {
-    setNotificaciones(prev => 
-      prev.map(n => n.id === id ? { ...n, leida: true } : n)
-    );
-    toast.success('Notificación marcada como leída');
+  const marcarComoLeida = async (id: string) => {
+    try {
+      await notificacionesApi.marcarLeida(parseInt(id));
+      setNotificaciones(prev => 
+        prev.map(n => n.id === id ? { ...n, leida: true } : n)
+      );
+      toast.success('Notificación marcada como leída');
+    } catch (error) {
+      toast.error('Error al marcar notificación');
+    }
   };
 
-  const marcarTodasComoLeidas = () => {
-    setNotificaciones(prev => prev.map(n => ({ ...n, leida: true })));
-    toast.success('Todas las notificaciones marcadas como leídas');
+  const marcarTodasComoLeidas = async () => {
+    try {
+      await notificacionesApi.marcarTodasLeidas(user?.id || 0, 'empleado');
+      setNotificaciones(prev => prev.map(n => ({ ...n, leida: true })));
+      toast.success('Todas las notificaciones marcadas como leídas');
+    } catch (error) {
+      toast.error('Error al marcar notificaciones');
+    }
   };
 
-  const eliminarNotificacion = (id: string) => {
-    setNotificaciones(prev => prev.filter(n => n.id !== id));
-    toast.success('Notificación eliminada');
+  const eliminarNotificacion = async (id: string) => {
+    try {
+      await notificacionesApi.eliminar(parseInt(id));
+      setNotificaciones(prev => prev.filter(n => n.id !== id));
+      toast.success('Notificación eliminada');
+    } catch (error) {
+      toast.error('Error al eliminar notificación');
+    }
   };
 
-  const marcarAlertaResuelta = (id: string) => {
-    setAlertas(prev => 
-      prev.map(a => a.id === id ? { ...a, resuelta: true } : a)
-    );
-    toast.success('Alerta marcada como resuelta');
+  const marcarAlertaResuelta = async (id: string) => {
+    try {
+      await notificacionesApi.marcarLeida(parseInt(id));
+      setAlertas(prev => 
+        prev.map(a => a.id === id ? { ...a, resuelta: true } : a)
+      );
+      toast.success('Alerta marcada como resuelta');
+    } catch (error) {
+      toast.error('Error al resolver alerta');
+    }
   };
 
-  const eliminarAlerta = (id: string) => {
-    setAlertas(prev => prev.filter(a => a.id !== id));
-    toast.success('Alerta eliminada');
+  const eliminarAlerta = async (id: string) => {
+    try {
+      await notificacionesApi.eliminar(parseInt(id));
+      setAlertas(prev => prev.filter(a => a.id !== id));
+      toast.success('Alerta eliminada');
+    } catch (error) {
+      toast.error('Error al eliminar alerta');
+    }
   };
 
   const getTipoNotificacionIcon = (tipo: string) => {

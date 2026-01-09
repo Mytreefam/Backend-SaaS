@@ -140,9 +140,9 @@ export function PerfilCliente({ isOpen, onOpenChange, user }: PerfilClienteProps
                 </div>
                 <div className="text-center">
                   <h3 className="text-sm sm:text-base text-gray-900" style={{ fontFamily: 'Poppins, sans-serif' }}>
-                    Carlos Martínez López
+                    {user?.name || 'Cliente'}
                   </h3>
-                  <p className="text-xs sm:text-sm text-gray-500">Cliente</p>
+                  <p className="text-xs sm:text-sm text-gray-500">{user?.role || 'Cliente'}</p>
                 </div>
                 <Button 
                   variant="outline" 
@@ -170,7 +170,7 @@ export function PerfilCliente({ isOpen, onOpenChange, user }: PerfilClienteProps
                   <Label htmlFor="nombre">Nombre Completo</Label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <Input id="nombre" defaultValue="Carlos Martínez López" className="pl-10" />
+                    <Input id="nombre" defaultValue={user?.name || ''} className="pl-10" />
                   </div>
                 </div>
                 
@@ -178,7 +178,7 @@ export function PerfilCliente({ isOpen, onOpenChange, user }: PerfilClienteProps
                   <Label htmlFor="email">Email</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <Input id="email" type="email" defaultValue="carlos.martinez@email.com" className="pl-10" />
+                    <Input id="email" type="email" defaultValue={user?.email || ''} className="pl-10" />
                   </div>
                 </div>
 

@@ -21,6 +21,7 @@ import productoRoutes from './routes/producto';
 import turnoRoutes from './routes/turno';
 import gerenteRoutes from './routes/gerente';
 import onboardingRoutes from './routes/onboarding';
+import cajaRoutes from './routes/caja';
 
 const app = express();
 app.use(cors({ origin: true, credentials: true }));
@@ -60,5 +61,6 @@ app.use('/upload', uploadRoutes);
 app.use('/turnos', turnoRoutes);
 app.use('/gerente', gerenteRoutes);
 app.use('/onboarding', onboardingRoutes);
+app.use('/caja', cajaRoutes);
 
 export default app;

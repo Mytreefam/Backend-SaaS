@@ -56,6 +56,7 @@ import { ConfiguracionImpresoras } from './ConfiguracionImpresoras';
 import { PanelCaja } from './PanelCaja';
 import { GestionTurnos } from './GestionTurnos';
 import { PanelEstadosPedidos } from './PanelEstadosPedidos';
+import { pedidosApi } from '../services/api/pedidos.api';
 import { ProductoPersonalizacionModal } from './ProductoPersonalizacionModal';
 import { productosPanaderia } from '../data/productos-panaderia';
 import { usePromocionesTPV } from '../hooks/usePromociones';
@@ -284,37 +285,17 @@ export function TPV360Master({
   const [marcaActivaLocal, setMarcaActivaLocal] = useState<string>(marcaActiva || 'MRC-001'); // ✅ Modomio por defecto
   const [marcasDisponiblesLocal, setMarcasDisponiblesLocal] = useState<string[]>(marcasDisponibles);
   
-  // Estados de pedidos
-  const [pedidos, setPedidos] = useState<Pedido[]>([
-    {
-      id: 'PED001',
-      codigo: 'P001',
-      cliente: { id: 'CLI001', nombre: 'María García', telefono: '678123456', email: 'maria@email.com' },
-      items: [
-        { producto: productosPanaderia[0], cantidad: 2, subtotal: productosPanaderia[0].precio * 2 },
-      ],
-      total: 5.80,
-      estado: 'listo',
-      origenPedido: 'app',
-      metodoPago: 'online',
-      pagado: true,
-      fechaCreacion: new Date(Date.now() - 300000),
-      geolocalizacionValidada: true
-    },
-    {
-      id: 'PED002',
-      codigo: 'P002',
-      cliente: { id: 'CLI002', nombre: 'Carlos Martínez', telefono: '645987321' },
-      items: [
-        { producto: productosPanaderia[1], cantidad: 1, subtotal: productosPanaderia[1].precio },
-      ],
-      total: 3.50,
-      estado: 'en_preparacion',
-      origenPedido: 'presencial',
-      pagado: false,
-      fechaCreacion: new Date(Date.now() - 180000)
-    }
-  ]);
+  // Estados de pedidos (backend)
+  const [pedidos, setPedidos] = useState<Pedido[]>([]);
+  const [loadingPedidos, setLoadingPedidos] = useState(false);
+
+  // Cargar pedidos desde backend al montar
+  useEffect(() => {
+    setLoadingPedidos(true);
+    pedidosApi.getAll()
+      .then(data => setPedidos(data))
+      .finally(() => setLoadingPedidos(false));
+  }, []);
 
   // ⭐ PRODUCTOS SIMULADOS CON MARCAS (temporal - luego se conectará con GestionProductos)
   const PRODUCTOS_TPV_MOCK: Producto[] = [
@@ -843,7 +824,7 @@ export function TPV360Master({
   // FUNCIONES DE PAGO
   // ============================================
 
-  const procesarPago = () => {
+  const procesarPago = async () => {
     if (!permisos.cobrar_pedidos) {
       toast.error('No tienes permisos para cobrar pedidos');
       return;
@@ -931,47 +912,48 @@ export function TPV360Master({
   // FUNCIONES DE ESTADOS DE PEDIDO
   // ============================================
 
-  const marcarComoListo = (pedidoId: string) => {
+  const marcarComoListo = async (pedidoId: string) => {
     if (!permisos.marcar_como_listo) {
       toast.error('No tienes permisos para marcar pedidos como listos');
       return;
     }
-
-    setPedidos(pedidos.map(p => 
-      p.id === pedidoId ? { ...p, estado: 'listo' } : p
-    ));
-    toast.success('Pedido marcado como listo');
+    const pedido = await pedidosApi.update(pedidoId, { estado: 'listo' });
+    if (pedido) {
+      setPedidos(pedidos.map(p => p.id === pedidoId ? pedido : p));
+      toast.success('Pedido marcado como listo');
+    }
   };
 
-  const marcarComoEntregado = (pedidoId: string) => {
-    setPedidos(pedidos.map(p => 
-      p.id === pedidoId ? { ...p, estado: 'entregado' } : p
-    ));
-    toast.success('Pedido entregado');
+  const marcarComoEntregado = async (pedidoId: string) => {
+    const pedido = await pedidosApi.update(pedidoId, { estado: 'entregado' });
+    if (pedido) {
+      setPedidos(pedidos.map(p => p.id === pedidoId ? pedido : p));
+      toast.success('Pedido entregado');
+    }
   };
 
-  const cancelarPedido = (pedidoId: string, motivo: string) => {
+  const cancelarPedido = async (pedidoId: string, motivo: string) => {
     if (!permisos.acceso_operativa) {
       toast.error('No tienes permisos para cancelar pedidos');
       return;
     }
-
-    setPedidos(pedidos.map(p => 
-      p.id === pedidoId ? { ...p, estado: 'cancelado', motivoCancelacion: motivo } : p
-    ));
-    toast.success('Pedido cancelado');
+    const pedido = await pedidosApi.update(pedidoId, { estado: 'cancelado', motivoCancelacion: motivo });
+    if (pedido) {
+      setPedidos(pedidos.map(p => p.id === pedidoId ? pedido : p));
+      toast.success('Pedido cancelado');
+    }
   };
 
-  const devolverPedido = (pedidoId: string, motivo: string) => {
+  const devolverPedido = async (pedidoId: string, motivo: string) => {
     if (!permisos.acceso_operativa) {
       toast.error('No tienes permisos para hacer devoluciones');
       return;
     }
-
-    setPedidos(pedidos.map(p => 
-      p.id === pedidoId ? { ...p, estado: 'devuelto', motivoDevolucion: motivo } : p
-    ));
-    toast.success('Devolución procesada');
+    const pedido = await pedidosApi.update(pedidoId, { estado: 'devuelto', motivoDevolucion: motivo });
+    if (pedido) {
+      setPedidos(pedidos.map(p => p.id === pedidoId ? pedido : p));
+      toast.success('Devolución procesada');
+    }
   };
 
   // ============================================
@@ -1444,7 +1426,6 @@ export function TPV360Master({
                 <TabsTrigger 
                   value="caja" 
                   className="flex flex-col gap-0.5 sm:gap-1 py-2 sm:py-3 px-1 sm:px-2"
-                  disabled={!permisos.cierre_caja && !permisos.arqueo_caja}
                 >
                   <DollarSign className="w-4 h-4 sm:w-5 sm:h-5" />
                   <span className="text-[10px] sm:text-xs leading-tight">Caja</span>
@@ -1839,44 +1820,38 @@ export function TPV360Master({
                                 disabled={!permisos.cobrar_pedidos}
                               >
                                 <CreditCard className="w-4 h-4 mr-2" />
-                                Cobrar Pedido
-                              </Button>
-                              {permisos.marcar_como_listo && (
-                                <Button
-                                  variant="outline"
-                                  className="w-full"
-                                >
-                                  <Check className="w-4 h-4 mr-2" />
-                                  Marcar como Listo
-                                </Button>
-                              )}
-                            </div>
-                          </>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </div>
-                </div>
-              </TabsContent>
-
-              {/* VISTA CAJA RÁPIDA */}
-              <TabsContent value="caja-rapida" className="mt-6">
-                <CajaRapidaMejorada 
-                  pedidos={pedidos}
-                  onMarcarListo={marcarComoListo}
-                  onMarcarEntregado={marcarComoEntregado}
-                  permisos={permisos}
-                />
-              </TabsContent>
-
-              {/* VISTA TURNOS */}
-              <TabsContent value="turnos" className="mt-6">
-                <GestionTurnos 
-                  puntoVentaId={pdvEfectivo?.id || puntoVentaId}
-                />
-              </TabsContent>
-
-              {/* VISTA ESTADOS */}
+                                // Crear pedido en backend
+                                const pedidoData = {
+                                  clienteId: clienteSeleccionado?.id || undefined,
+                                  items: carrito.map(item => ({
+                                    productoId: item.producto.id,
+                                    cantidad: item.cantidad,
+                                    precio: item.producto.precio
+                                  })),
+                                  total: totalFinal,
+                                  estado: 'en_preparacion',
+                                  metodoPago,
+                                };
+                                const nuevoPedido = await pedidosApi.create(pedidoData);
+                                if (nuevoPedido) {
+                                  setPedidos([nuevoPedido, ...pedidos]);
+                                  actualizarStockDespuesDeVenta(carrito);
+                                  if (totalDescuento > 0) {
+                                    toast.success(`Pago procesado - Ahorro: ${totalDescuento.toFixed(2)}€`, {
+                                      description: `Total pagado: ${totalFinal.toFixed(2)}€`
+                                    });
+                                  } else {
+                                    toast.success('Pago procesado correctamente');
+                                  }
+                                  setCarrito([]);
+                                  setShowPagoDialog(false);
+                                  setMetodoPago(null);
+                                  setMontoPagado('');
+                                  setPedidoIniciado(false);
+                                  setClienteSeleccionado(null);
+                                  setTurnoAsignado(null);
+                                  setPedidoPagado(true);
+                                }
               <TabsContent value="estados" className="mt-6">
                 <PanelEstadosPedidos 
                   pedidos={pedidos}

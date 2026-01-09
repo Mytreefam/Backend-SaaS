@@ -195,6 +195,9 @@ export const crearEmpleado = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'El email ya está registrado' });
     }
 
+    // Generar contraseña básica automática
+    const passwordBasica = 'udar2026';
+
     // Crear empleado
     const nuevoEmpleado = await prisma.empleado.create({
       data: {
@@ -210,7 +213,8 @@ export const crearEmpleado = async (req: Request, res: Response) => {
         salarioBase: 1000,
         estado: 'activo',
         desempeno: 0,
-        horasMes: 160
+        horasMes: 160,
+        password: passwordBasica
       }
     });
 
@@ -660,5 +664,61 @@ export const crearRemuneracion = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error al crear remuneración:', error);
     res.status(500).json({ error: 'Error al registrar remuneración' });
+  }
+};
+
+/**
+ * POST /api/gerente/empleados/fichajes
+ * Registrar un nuevo fichaje (entrada, salida, pausa, reanudación)
+ */
+export const crearFichaje = async (req: Request, res: Response) => {
+  try {
+    const { empleadoId, tipo, ubicacion, notas, fecha, hora } = req.body;
+
+    if (!empleadoId || !tipo) {
+      return res.status(400).json({ error: 'empleadoId y tipo son requeridos' });
+    }
+
+    const tiposValidos = ['entrada', 'salida', 'pausa', 'reanudacion'];
+    if (!tiposValidos.includes(tipo)) {
+      return res.status(400).json({ error: 'Tipo de fichaje no válido' });
+    }
+
+    // Crear fichaje en BD
+    const fichaje = await prisma.fichaje.create({
+      data: {
+        empleadoId: parseInt(empleadoId),
+        tipo,
+        fecha: fecha ? new Date(fecha) : new Date(),
+        hora: hora || new Date().toTimeString().split(' ')[0],
+        horaTeorica: hora || new Date().toTimeString().split(' ')[0],
+        diferenciaMinutos: 0,
+        ubicacion: ubicacion || null,
+        observaciones: notas || null,
+        validado: true,
+      },
+      include: {
+        empleado: {
+          select: {
+            id: true,
+            nombre: true,
+          }
+        }
+      }
+    });
+
+    res.status(201).json({
+      id: fichaje.id,
+      empleadoId: fichaje.empleadoId,
+      tipo: fichaje.tipo,
+      fecha: fichaje.fecha.toISOString().split('T')[0],
+      hora: fichaje.hora,
+      ubicacion: fichaje.ubicacion,
+      notas: fichaje.observaciones,
+      empleado: fichaje.empleado,
+    });
+  } catch (error) {
+    console.error('Error al crear fichaje:', error);
+    res.status(500).json({ error: 'Error al registrar fichaje' });
   }
 };

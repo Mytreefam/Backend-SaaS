@@ -2,7 +2,7 @@
  * 📦 VISTA DE PEDIDOS PARA TRABAJADORES
  * 
  * Muestra pedidos del punto de venta donde el trabajador ha fichado.
- * Conectado al servicio central de pedidos (pedidos.service.ts).
+ * Conectado al backend real mediante pedidosApi.
  * 
  * ✨ Características:
  * - Filtrado automático por PDV del trabajador fichado
@@ -13,7 +13,7 @@
  * - Modal de detalle de pedido
  */
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -51,19 +51,13 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import { usePuntoVentaActivo } from '../../hooks/usePuntoVentaActivo';
-import { 
-  obtenerPedidosActivosPDV,
-  marcarEnPreparacion,
-  marcarComoListo,
-  cancelarPedido,
-  type Pedido,
-  type EstadoPedido,
-  type OrigenPedido 
-} from '../../services/pedidos.service';
+import { pedidosApi, type Pedido } from '../../services/api';
 import { ModalDetallePedido } from '../pedidos/ModalDetallePedido';
 import { BotonGenerarPedidosDemo } from '../dev/BotonGenerarPedidosDemo';
 
 type VistaMode = 'tabla' | 'tarjetas';
+type EstadoPedido = 'pendiente' | 'pagado' | 'en_preparacion' | 'listo' | 'entregado' | 'cancelado';
+type OrigenPedido = 'app' | 'tpv' | 'glovo' | 'justeat' | 'ubereats';
 
 // ============================================================================
 // COMPONENTE PRINCIPAL
@@ -78,13 +72,36 @@ export function PedidosTrabajador() {
   const [pedidoSeleccionado, setPedidoSeleccionado] = useState<Pedido | null>(null);
   const [modalDetalle, setModalDetalle] = useState(false);
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
+  const [cargando, setCargando] = useState(false);
+
+  // Cargar pedidos del backend
+  const cargarPedidos = useCallback(async () => {
+    if (!puntoVentaId) return;
+    
+    try {
+      setCargando(true);
+      // Obtener pedidos activos (no entregados ni cancelados) del PDV
+      const todosPedidos = await pedidosApi.getAll();
+      const pedidosActivos = todosPedidos.filter(p => 
+        p.puntoVentaId === puntoVentaId &&
+        p.estado !== 'entregado' && 
+        p.estado !== 'cancelado'
+      );
+      setPedidos(pedidosActivos);
+    } catch (error) {
+      console.error('Error al cargar pedidos:', error);
+      toast.error('Error al cargar pedidos');
+    } finally {
+      setCargando(false);
+    }
+  }, [puntoVentaId]);
 
   // Cargar pedidos cuando cambia el PDV
   useEffect(() => {
     if (puntoVentaId) {
       cargarPedidos();
     }
-  }, [puntoVentaId]);
+  }, [puntoVentaId, cargarPedidos]);
 
   // Auto-refresh cada 30 segundos
   useEffect(() => {
@@ -95,14 +112,7 @@ export function PedidosTrabajador() {
     }, 30000); // 30 segundos
 
     return () => clearInterval(interval);
-  }, [puntoVentaId]);
-
-  const cargarPedidos = () => {
-    if (!puntoVentaId) return;
-    
-    const pedidosActivos = obtenerPedidosActivosPDV(puntoVentaId);
-    setPedidos(pedidosActivos);
-  };
+  }, [puntoVentaId, cargarPedidos]);
 
   // Filtrar pedidos - MOVER ANTES DEL RETURN EARLY
   const pedidosFiltrados = useMemo(() => {

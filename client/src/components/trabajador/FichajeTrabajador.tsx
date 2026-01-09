@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner@2.0.3';
 import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addWeeks, addMonths, subWeeks, subMonths, eachDayOfInterval, isSameDay, getDay } from 'date-fns@4.1.0';
 import { es } from 'date-fns@4.1.0/locale';
@@ -16,6 +16,8 @@ import { Calendar } from '../ui/calendar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { EmptyState } from '../ui/empty-state';
 import { SkeletonList } from '../ui/skeleton-list';
+import { fichajesApi, Fichaje } from '../../services/api';
+import { useAuth } from '../../hooks/useAuth';
 import { 
   Clock, 
   LogIn, 
@@ -96,6 +98,9 @@ interface FichajeTrabajadorProps {
 }
 
 export function FichajeTrabajador({ enTurno: enTurnoExterno, onFicharChange }: FichajeTrabajadorProps = {}) {
+  const { user } = useAuth();
+  const empleadoId = user?.id || 1;
+  
   const [activeTab, setActiveTab] = useState('fichaje');
   const [enTurno, setEnTurno] = useState(enTurnoExterno || false);
   const [pausado, setPausado] = useState(false);
@@ -110,6 +115,36 @@ export function FichajeTrabajador({ enTurno: enTurnoExterno, onFicharChange }: F
   const [filtroConsumos, setFiltroConsumos] = useState<'todos' | 'consumos' | 'gastos' | 'pendientes' | 'aprobados'>('todos');
   const [vistaHorario, setVistaHorario] = useState<'dia' | 'semana' | 'mes'>('semana');
   const [fechaActualHorario, setFechaActualHorario] = useState(new Date());
+  const [cargando, setCargando] = useState(true);
+
+  // Cargar estado de fichaje del backend
+  const cargarEstadoFichaje = useCallback(async () => {
+    try {
+      setCargando(true);
+      const estado = await fichajesApi.getEstadoActual(empleadoId);
+      setEnTurno(estado.enTurno);
+      setTiempoFichaje(estado.tiempoTrabajado);
+      setPausado(estado.pausado);
+      
+      // Cargar fichajes del día
+      const fichajesHoy = await fichajesApi.getFichajesHoy(empleadoId);
+      const registros: RegistroFichaje[] = fichajesHoy.map(f => ({
+        id: f.id.toString(),
+        tipo: f.tipo,
+        hora: f.hora,
+        notas: f.notas,
+      }));
+      setRegistrosHoy(registros);
+    } catch (error) {
+      console.error('Error al cargar estado de fichaje:', error);
+    } finally {
+      setCargando(false);
+    }
+  }, [empleadoId]);
+
+  useEffect(() => {
+    cargarEstadoFichaje();
+  }, [cargarEstadoFichaje]);
 
   // Sincronizar estado externo con interno
   useEffect(() => {
@@ -118,10 +153,8 @@ export function FichajeTrabajador({ enTurno: enTurnoExterno, onFicharChange }: F
     }
   }, [enTurnoExterno]);
 
-  // Datos de ejemplo
-  const [registrosHoy, setRegistrosHoy] = useState<RegistroFichaje[]>([
-    { id: '1', tipo: 'entrada', hora: '09:00', notas: 'Inicio de jornada' },
-  ]);
+  // Datos de fichajes del día (se carga del backend)
+  const [registrosHoy, setRegistrosHoy] = useState<RegistroFichaje[]>([]);
 
   const [solicitudesHorasExtra, setSolicitudesHorasExtra] = useState<SolicitudHoraExtra[]>([
     { id: '1', fecha: '15 Nov 2025', rango: '18:00 - 20:00', motivo: 'Trabajo urgente cliente', estado: 'pendiente' },
@@ -249,68 +282,88 @@ export function FichajeTrabajador({ enTurno: enTurnoExterno, onFicharChange }: F
     return `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}:${segs.toString().padStart(2, '0')}`;
   };
 
-  const handleFichar = () => {
-    if (enTurno) {
-      // Fichar salida
-      const nuevoRegistro: RegistroFichaje = {
-        id: Date.now().toString(),
-        tipo: 'salida',
-        hora: format(new Date(), 'HH:mm'),
-      };
-      setRegistrosHoy([...registrosHoy, nuevoRegistro]);
-      setEnTurno(false);
-      setTiempoFichaje(0);
-      setPausado(false);
-      toast.success('Salida registrada correctamente', {
-        description: `Hora: ${nuevoRegistro.hora}`,
-      });
-      if (onFicharChange) {
-        onFicharChange(false);
+  const handleFichar = async () => {
+    try {
+      if (enTurno) {
+        // Fichar salida
+        const resultado = await fichajesApi.ficharSalida(empleadoId);
+        if (resultado) {
+          const nuevoRegistro: RegistroFichaje = {
+            id: resultado.id.toString(),
+            tipo: 'salida',
+            hora: resultado.hora,
+          };
+          setRegistrosHoy([...registrosHoy, nuevoRegistro]);
+          setEnTurno(false);
+          setTiempoFichaje(0);
+          setPausado(false);
+          toast.success('Salida registrada correctamente', {
+            description: `Hora: ${nuevoRegistro.hora}`,
+          });
+          if (onFicharChange) {
+            onFicharChange(false);
+          }
+        }
+      } else {
+        // Fichar entrada
+        const resultado = await fichajesApi.ficharEntrada(empleadoId);
+        if (resultado) {
+          const nuevoRegistro: RegistroFichaje = {
+            id: resultado.id.toString(),
+            tipo: 'entrada',
+            hora: resultado.hora,
+          };
+          setRegistrosHoy([...registrosHoy, nuevoRegistro]);
+          setEnTurno(true);
+          setTiempoFichaje(0);
+          toast.success('Entrada registrada correctamente', {
+            description: `Hora: ${nuevoRegistro.hora}`,
+          });
+          if (onFicharChange) {
+            onFicharChange(true);
+          }
+        }
       }
-    } else {
-      // Fichar entrada
-      const nuevoRegistro: RegistroFichaje = {
-        id: Date.now().toString(),
-        tipo: 'entrada',
-        hora: format(new Date(), 'HH:mm'),
-      };
-      setRegistrosHoy([...registrosHoy, nuevoRegistro]);
-      setEnTurno(true);
-      setTiempoFichaje(0);
-      toast.success('Entrada registrada correctamente', {
-        description: `Hora: ${nuevoRegistro.hora}`,
-      });
-      if (onFicharChange) {
-        onFicharChange(true);
-      }
+    } catch (error) {
+      toast.error('Error al registrar fichaje');
     }
   };
 
-  const handlePausarContinuar = () => {
-    if (pausado) {
-      // Reanudar
-      const nuevoRegistro: RegistroFichaje = {
-        id: Date.now().toString(),
-        tipo: 'reanudacion',
-        hora: format(new Date(), 'HH:mm'),
-      };
-      setRegistrosHoy([...registrosHoy, nuevoRegistro]);
-      setPausado(false);
-      toast.info('Cronómetro reanudado', {
-        description: `Hora: ${nuevoRegistro.hora}`,
-      });
-    } else {
-      // Pausar
-      const nuevoRegistro: RegistroFichaje = {
-        id: Date.now().toString(),
-        tipo: 'pausa',
-        hora: format(new Date(), 'HH:mm'),
-      };
-      setRegistrosHoy([...registrosHoy, nuevoRegistro]);
-      setPausado(true);
-      toast.info('Pausa registrada', {
-        description: `Hora: ${nuevoRegistro.hora}`,
-      });
+  const handlePausarContinuar = async () => {
+    try {
+      if (pausado) {
+        // Reanudar
+        const resultado = await fichajesApi.reanudar(empleadoId);
+        if (resultado) {
+          const nuevoRegistro: RegistroFichaje = {
+            id: resultado.id.toString(),
+            tipo: 'reanudacion',
+            hora: resultado.hora,
+          };
+          setRegistrosHoy([...registrosHoy, nuevoRegistro]);
+          setPausado(false);
+          toast.info('Cronómetro reanudado', {
+            description: `Hora: ${nuevoRegistro.hora}`,
+          });
+        }
+      } else {
+        // Pausar
+        const resultado = await fichajesApi.pausar(empleadoId);
+        if (resultado) {
+          const nuevoRegistro: RegistroFichaje = {
+            id: resultado.id.toString(),
+            tipo: 'pausa',
+            hora: resultado.hora,
+          };
+          setRegistrosHoy([...registrosHoy, nuevoRegistro]);
+          setPausado(true);
+          toast.info('Pausa registrada', {
+            description: `Hora: ${nuevoRegistro.hora}`,
+          });
+        }
+      }
+    } catch (error) {
+      toast.error('Error al pausar/reanudar');
     }
   };
 

@@ -64,6 +64,11 @@ interface Fichaje {
 export function PersonalRRHH() {
   const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState<string | null>(null);
   const [mostrarTareas, setMostrarTareas] = useState(false);
+  const [mostrarNuevoEmpleado, setMostrarNuevoEmpleado] = useState(false);
+  const [nuevoEmpleado, setNuevoEmpleado] = useState({ nombre: '', email: '', puesto: '', telefono: '' });
+  const [creandoEmpleado, setCreandoEmpleado] = useState(false);
+  const [errorEmpleado, setErrorEmpleado] = useState('');
+  const [empleadoCreado, setEmpleadoCreado] = useState<{nombre: string, email: string, password: string} | null>(null);
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
   const [cargando, setCargando] = useState(true);
   const [estadisticas, setEstadisticas] = useState<any>(null);
@@ -592,7 +597,7 @@ export function PersonalRRHH() {
             Gestión de equipo y desempeño
           </p>
         </div>
-        <Button className="bg-teal-600 hover:bg-teal-700">
+        <Button className="bg-teal-600 hover:bg-teal-700" onClick={() => setMostrarNuevoEmpleado(true)}>
           <Plus className="w-4 h-4 mr-2" />
           Nuevo Empleado
         </Button>
@@ -1381,6 +1386,114 @@ export function PersonalRRHH() {
       </Tabs>
 
       {/* Dialog de Tareas Asignadas */}
+            {/* Modal Nuevo Empleado */}
+            <Dialog open={mostrarNuevoEmpleado} onOpenChange={setMostrarNuevoEmpleado}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle style={{ fontFamily: 'Poppins, sans-serif' }}>
+                    Crear nuevo empleado
+                  </DialogTitle>
+                  <DialogDescription>
+                    Completa los datos para invitar y activar un nuevo empleado. Se enviará una invitación por email.
+                  </DialogDescription>
+                </DialogHeader>
+                {empleadoCreado ? (
+                  <div className="space-y-4 mt-4">
+                    <div className="text-green-700 text-lg font-semibold">¡Empleado creado exitosamente!</div>
+                    <div className="bg-gray-100 rounded p-4">
+                      <div><span className="font-medium">Nombre:</span> {empleadoCreado.nombre}</div>
+                      <div><span className="font-medium">Email:</span> {empleadoCreado.email}</div>
+                      <div><span className="font-medium">Contraseña inicial:</span> <span className="font-mono">{empleadoCreado.password}</span></div>
+                      <div className="text-xs text-gray-500 mt-2">Pide al empleado que cambie su contraseña tras el primer acceso.</div>
+                    </div>
+                    <div className="flex justify-end mt-4">
+                      <Button type="button" className="bg-teal-600 hover:bg-teal-700" onClick={() => { setMostrarNuevoEmpleado(false); setEmpleadoCreado(null); }}>
+                        Cerrar
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <form
+                    className="space-y-4 mt-2"
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      setCreandoEmpleado(true);
+                      setErrorEmpleado('');
+                      try {
+                        // Aquí deberías llamar a la API real
+                        const res = await empleadosApi.crearEmpleado(nuevoEmpleado);
+                        setEmpleadoCreado({
+                          nombre: res.nombre || nuevoEmpleado.nombre,
+                          email: res.email || nuevoEmpleado.email,
+                          password: res.password || 'udar2026'
+                        });
+                        setNuevoEmpleado({ nombre: '', email: '', puesto: '', telefono: '' });
+                      } catch (err) {
+                        setErrorEmpleado('Error al crear empleado. Verifica los datos o intenta de nuevo.');
+                      } finally {
+                        setCreandoEmpleado(false);
+                      }
+                    }}
+                  >
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Nombre</label>
+                      <input
+                        type="text"
+                        required
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
+                        value={nuevoEmpleado.nombre}
+                        onChange={e => setNuevoEmpleado({ ...nuevoEmpleado, nombre: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Email</label>
+                      <input
+                        type="email"
+                        required
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
+                        value={nuevoEmpleado.email}
+                        onChange={e => setNuevoEmpleado({ ...nuevoEmpleado, email: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Puesto</label>
+                      <select
+                        required
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
+                        value={nuevoEmpleado.puesto}
+                        onChange={e => setNuevoEmpleado({ ...nuevoEmpleado, puesto: e.target.value })}
+                      >
+                        <option value="">Selecciona puesto</option>
+                        <option value="Panadero">Panadero</option>
+                        <option value="Cajero">Cajero</option>
+                        <option value="Repartidor">Repartidor</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Teléfono</label>
+                      <input
+                        type="text"
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
+                        value={nuevoEmpleado.telefono}
+                        onChange={e => setNuevoEmpleado({ ...nuevoEmpleado, telefono: e.target.value })}
+                      />
+                    </div>
+                    {errorEmpleado && (
+                      <div className="text-red-600 text-sm">{errorEmpleado}</div>
+                    )}
+                    <div className="flex justify-end gap-2 mt-4">
+                      <Button type="button" variant="outline" onClick={() => setMostrarNuevoEmpleado(false)}>
+                        Cancelar
+                      </Button>
+                      <Button type="submit" className="bg-teal-600 hover:bg-teal-700" disabled={creandoEmpleado}>
+                        {creandoEmpleado ? <Loader2 className="animate-spin w-4 h-4 mr-2" /> : null}
+                        Crear empleado
+                      </Button>
+                    </div>
+                  </form>
+                )}
+              </DialogContent>
+            </Dialog>
       <Dialog open={mostrarTareas} onOpenChange={setMostrarTareas}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>

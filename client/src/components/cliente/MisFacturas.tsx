@@ -27,21 +27,21 @@ import {
   CheckCircle2,
   AlertCircle,
   ExternalLink,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
-import facturacionAutomaticaService from '../../services/facturacion-automatica.service';
-import { FacturaVeriFactu } from '../../types/verifactu.types';
+import { facturasApi, Factura } from '../../services/api/facturas.api';
 
 interface MisFacturasProps {
-  clienteId?: string; // ID del cliente actual
-  clienteNIF?: string; // NIF del cliente actual
+  clienteId?: string;
+  clienteNIF?: string;
 }
 
 export function MisFacturas({ clienteId, clienteNIF }: MisFacturasProps) {
-  const [facturas, setFacturas] = useState<FacturaVeriFactu[]>([]);
-  const [facturasFiltradas, setFacturasFiltradas] = useState<FacturaVeriFactu[]>([]);
+  const [facturas, setFacturas] = useState<Factura[]>([]);
+  const [facturasFiltradas, setFacturasFiltradas] = useState<Factura[]>([]);
   const [busqueda, setBusqueda] = useState('');
-  const [facturaSeleccionada, setFacturaSeleccionada] = useState<FacturaVeriFactu | null>(null);
+  const [facturaSeleccionada, setFacturaSeleccionada] = useState<Factura | null>(null);
   const [dialogDetalles, setDialogDetalles] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -55,31 +55,22 @@ export function MisFacturas({ clienteId, clienteNIF }: MisFacturasProps) {
     filtrarFacturas();
   }, [busqueda, facturas]);
 
-  const cargarFacturas = () => {
+  const cargarFacturas = async () => {
     setLoading(true);
     try {
-      // Obtener todas las facturas
-      const todasFacturas = facturacionAutomaticaService.obtenerTodasLasFacturas();
-
-      // Filtrar las del cliente actual
-      // En producción, esto vendría filtrado del backend
-      const facturasCliente = todasFacturas.filter((f) => {
-        if (clienteNIF && f.receptor?.numeroIdentificador === clienteNIF) {
-          return true;
-        }
-        if (clienteId && f.referenciaExterna?.includes(clienteId)) {
-          return true;
-        }
-        return false;
-      });
-
-      // Ordenar por fecha descendente (más recientes primero)
-      facturasCliente.sort((a, b) => {
-        return new Date(b.fechaExpedicion).getTime() - new Date(a.fechaExpedicion).getTime();
-      });
-
-      setFacturas(facturasCliente);
-      setFacturasFiltradas(facturasCliente);
+      // Obtener facturas del cliente desde el backend
+      if (clienteId) {
+        const facturasCliente = await facturasApi.getByClienteId(Number(clienteId));
+        // Ordenar por fecha descendente
+        facturasCliente.sort((a, b) => {
+          return new Date(b.fecha).getTime() - new Date(a.fecha).getTime();
+        });
+        setFacturas(facturasCliente);
+        setFacturasFiltradas(facturasCliente);
+      } else {
+        setFacturas([]);
+        setFacturasFiltradas([]);
+      }
     } catch (error) {
       toast.error('Error cargando facturas');
       console.error(error);
@@ -97,56 +88,60 @@ export function MisFacturas({ clienteId, clienteNIF }: MisFacturasProps) {
     const busquedaLower = busqueda.toLowerCase();
     const filtradas = facturas.filter(
       (f) =>
-        f.numeroCompleto.toLowerCase().includes(busquedaLower) ||
-        f.referenciaExterna?.toLowerCase().includes(busquedaLower) ||
-        f.fechaExpedicion.toLocaleDateString('es-ES').includes(busquedaLower)
+        f.numero.toLowerCase().includes(busquedaLower) ||
+        f.fecha.includes(busquedaLower)
     );
 
     setFacturasFiltradas(filtradas);
   };
 
-  const verDetalles = (factura: FacturaVeriFactu) => {
+  const verDetalles = (factura: Factura) => {
     setFacturaSeleccionada(factura);
     setDialogDetalles(true);
   };
 
-  const descargarFactura = (factura: FacturaVeriFactu) => {
-    facturacionAutomaticaService.descargarFactura(factura);
+  const descargarFactura = async (factura: Factura) => {
+    if (factura.pdfUrl) {
+      window.open(factura.pdfUrl, '_blank');
+    } else {
+      const blob = await facturasApi.downloadPdf(factura.id);
+      if (blob) {
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Factura-${factura.numero}.pdf`;
+        link.click();
+        window.URL.revokeObjectURL(url);
+        toast.success('Factura descargada');
+      } else {
+        toast.error('Error al descargar factura');
+      }
+    }
   };
 
-  const descargarQR = (factura: FacturaVeriFactu) => {
-    if (!factura.verifactu?.codigoQR) {
+  const descargarQR = (factura: Factura) => {
+    if (!factura.qrCode) {
       toast.error('Código QR no disponible');
       return;
     }
 
     const link = document.createElement('a');
-    link.href = factura.verifactu.codigoQR;
-    link.download = `QR-${factura.numeroCompleto}.png`;
+    link.href = factura.qrCode;
+    link.download = `QR-${factura.numero}.png`;
     link.click();
 
     toast.success('Código QR descargado');
   };
 
-  const verificarFacturaAEAT = (factura: FacturaVeriFactu) => {
-    if (!factura.verifactu?.urlQR) {
-      toast.error('URL de verificación no disponible');
-      return;
-    }
-
-    window.open(factura.verifactu.urlQR, '_blank');
-    toast.info('Abriendo portal de verificación AEAT');
-  };
-
-  const reenviarEmail = (factura: FacturaVeriFactu) => {
+  const reenviarEmail = (factura: Factura) => {
     toast.success('Factura reenviada por email', {
       description: 'Recibirás una copia en tu correo',
     });
   };
 
   // Calcular totales
-  const totalFacturado = facturas.reduce((sum, f) => sum + f.importeTotal, 0);
-  const totalIVA = facturas.reduce((sum, f) => sum + f.cuotaIVATotal, 0);
+  const totalFacturado = facturas.reduce((sum, f) => sum + f.total, 0);
+  const totalIVA = facturas.reduce((sum, f) => sum + (f.iva || 0), 0);
 
   return (
     <div className="space-y-6">

@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Button } from '../ui/button';
-import { MapPin, Check, X } from 'lucide-react';
+import { MapPin, Check, Loader2 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
-import { obtenerPedidosCliente, validarGeolocalizacion } from '../../services/pedidos.service';
-import { crearTurnoSinPedido } from '../../services/turnos-sin-pedido.service';
+import { clientesApi } from '../../services/api/clientes.api';
+import { turnosApi } from '../../services/api/turnos.api';
+import { notificacionesApi } from '../../services/api/notificaciones.api';
 
 interface YaEstoyAquiModalProps {
   isOpen: boolean;
@@ -15,70 +17,62 @@ interface YaEstoyAquiModalProps {
 }
 
 export function YaEstoyAquiModal({ isOpen, onOpenChange, onConfirmar, userId, userName, userPhone }: YaEstoyAquiModalProps) {
-  const handleActivarUbicacion = () => {
-    // DEMO: Simular asignación de turno sin geolocalización real
-    toast.loading('Verificando tu ubicación...', { duration: 1000 });
-    
-    setTimeout(() => {
-      // Marcar pedidos activos del cliente como "cliente presente"
-      const pedidosCliente = obtenerPedidosCliente(userId);
-      const pedidosActivos = pedidosCliente.filter(p => 
-        (p.estado === 'pendiente' || p.estado === 'en_preparacion' || p.estado === 'listo') && 
-        p.origenPedido === 'app'
+  const [procesando, setProcesando] = useState(false);
+
+  const handleActivarUbicacion = async () => {
+    setProcesando(true);
+    toast.loading('Verificando tu ubicación...', { id: 'geo-check' });
+
+    try {
+      // Obtener pedidos activos del cliente desde el backend
+      const pedidosCliente = await clientesApi.getPedidos(userId);
+      const pedidosActivos = pedidosCliente.filter((p: any) =>
+        (p.estado === 'pendiente' || p.estado === 'en_preparacion' || p.estado === 'listo')
       );
 
       if (pedidosActivos.length > 0) {
-        // ✅ CASO 1: Cliente con pedidos activos
-        // Validar geolocalización de todos los pedidos activos
-        pedidosActivos.forEach(pedido => {
-          validarGeolocalizacion(pedido.id);
-        });
-
-        // Crear notificación para el TPV
-        const notificacionTPV = {
-          id: `geo-${Date.now()}`,
-          tipo: 'cliente_presente',
-          clienteNombre: pedidosActivos[0].cliente.nombre,
-          codigoPedido: pedidosActivos[0].codigo,
-          timestamp: new Date().toISOString(),
+        // CASO 1: Cliente con pedidos activos - marcar como presente
+        // Crear notificación en backend
+        await notificacionesApi.create({
+          mensaje: `Cliente ${userName} ha llegado para recoger pedido`,
+          clienteId: parseInt(userId),
           leida: false
-        };
-        
-        const notificacionesTPV = JSON.parse(localStorage.getItem('notificaciones_tpv') || '[]');
-        notificacionesTPV.unshift(notificacionTPV);
-        localStorage.setItem('notificaciones_tpv', JSON.stringify(notificacionesTPV));
-        
+        });
+        toast.dismiss('geo-check');
         toast.success('¡Ubicación confirmada! Tus pedidos están marcados como presentes');
       } else {
-        // ✅ CASO 2: Cliente SIN pedidos activos → Crear turno sin pedido
-        const turno = crearTurnoSinPedido({
-          clienteId: userId,
-          clienteNombre: userName,
-          clienteTelefono: userPhone,
-          motivo: 'otro'
+        // CASO 2: Cliente SIN pedidos activos → Crear turno en backend
+        const turno = await turnosApi.create({
+          numero: `T${Date.now() % 10000}`,
+          estado: 'en_cola',
+          clienteId: parseInt(userId),
+          pedidoId: null
         });
 
-        // Crear notificación para el TPV
-        const notificacionTPV = {
-          id: `turno-${Date.now()}`,
-          tipo: 'turno_sin_pedido',
-          clienteNombre: userName,
-          turnoId: turno.id,
-          timestamp: new Date().toISOString(),
-          leida: false
-        };
-        
-        const notificacionesTPV = JSON.parse(localStorage.getItem('notificaciones_tpv') || '[]');
-        notificacionesTPV.unshift(notificacionTPV);
-        localStorage.setItem('notificaciones_tpv', JSON.stringify(notificacionesTPV));
-
-        toast.success('¡Ubicación confirmada! Te hemos asignado un turno de atención');
+        if (turno) {
+          // Crear notificación en backend
+          await notificacionesApi.create({
+            mensaje: `Nuevo turno asignado a ${userName}`,
+            clienteId: parseInt(userId),
+            leida: false
+          });
+          toast.dismiss('geo-check');
+          toast.success('¡Ubicación confirmada! Te hemos asignado un turno de atención');
+        } else {
+          throw new Error('No se pudo crear el turno');
+        }
       }
-      
+
       // Cerrar modal y confirmar
       onOpenChange(false);
       onConfirmar();
-    }, 1200);
+    } catch (error) {
+      console.error('Error en Ya Estoy Aquí:', error);
+      toast.dismiss('geo-check');
+      toast.error('Error al procesar tu solicitud. Intenta de nuevo.');
+    } finally {
+      setProcesando(false);
+    }
   };
 
   return (
@@ -142,21 +136,26 @@ export function YaEstoyAquiModal({ isOpen, onOpenChange, onConfirmar, userId, us
             </p>
           </div>
 
-          {/* Botones */}
           <div className="flex gap-3 pt-2">
             <Button
               onClick={() => onOpenChange(false)}
               variant="outline"
               className="flex-1"
+              disabled={procesando}
             >
               Cancelar
             </Button>
             <Button
               onClick={handleActivarUbicacion}
               className="flex-1 bg-teal-600 hover:bg-teal-700"
+              disabled={procesando}
             >
-              <MapPin className="w-4 h-4 mr-2" />
-              Activar ubicación
+              {procesando ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <MapPin className="w-4 h-4 mr-2" />
+              )}
+              {procesando ? 'Procesando...' : 'Activar ubicación'}
             </Button>
           </div>
         </div>

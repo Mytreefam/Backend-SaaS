@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { cajaApi, CierreCaja } from '../services/api/caja.api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -35,29 +36,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 
-interface OperacionCaja {
-  id: string;
-  tipo: 'apertura' | 'retirada' | 'consumo_propio' | 'arqueo' | 'cierre' | 'devolucion';
-  monto: number;
-  fecha: Date;
-  usuario: string;
-  notas?: string;
-  pedidoId?: string;
-  metodoPago?: 'efectivo' | 'tarjeta';
-}
-
-interface TurnoCaja {
-  id: string;
-  fechaApertura: Date;
-  fechaCierre?: Date;
-  montoCajaInicial: number;
-  montoCajaFinal?: number;
-  efectivoTeorico: number;
-  efectivoReal?: number;
-  diferencia?: number;
-  usuario: string;
-  abierto: boolean;
-}
+// Usamos CierreCaja del API
 
 interface PanelCajaProps {
   permisos: {
@@ -69,34 +48,9 @@ interface PanelCajaProps {
   nombreUsuario: string;
 }
 
-export function PanelCaja({ permisos, nombreUsuario }: PanelCajaProps) {
-  const [turnoActual, setTurnoActual] = useState<TurnoCaja | null>({
-    id: 'T001',
-    fechaApertura: new Date(),
-    montoCajaInicial: 100.00,
-    efectivoTeorico: 450.00,
-    usuario: nombreUsuario,
-    abierto: true
-  });
-
-  const [operaciones, setOperaciones] = useState<OperacionCaja[]>([
-    {
-      id: 'OP001',
-      tipo: 'apertura',
-      monto: 100.00,
-      fecha: new Date(),
-      usuario: nombreUsuario,
-      notas: 'Apertura de caja del turno mañana'
-    },
-    {
-      id: 'OP002',
-      tipo: 'retirada',
-      monto: 200.00,
-      fecha: new Date(Date.now() - 3600000),
-      usuario: nombreUsuario,
-      notas: 'Retirada intermedia'
-    }
-  ]);
+  const [cierres, setCierres] = useState<CierreCaja[]>([]);
+  const [cargando, setCargando] = useState(false);
+  const [turnoActual, setTurnoActual] = useState<CierreCaja | null>(null);
 
   // Estados para modales
   const [modalApertura, setModalApertura] = useState(false);
@@ -148,71 +102,84 @@ export function PanelCaja({ permisos, nombreUsuario }: PanelCajaProps) {
     }, 0);
   };
 
-  const abrirCaja = () => {
+  // Cargar historial de caja al montar
+  useEffect(() => {
+    setCargando(true);
+    cajaApi.listarCierresCaja()
+      .then(data => {
+        setCierres(data);
+        setTurnoActual(data.find(c => c.estado !== 'cerrado') || null);
+      })
+      .catch(() => toast.error('Error al cargar historial de caja'))
+      .finally(() => setCargando(false));
+  }, []);
+
+  const abrirCaja = async () => {
     const monto = parseFloat(montoApertura);
     if (isNaN(monto) || monto < 0) {
       toast.error('Monto inválido');
       return;
     }
-
-    const nuevoTurno: TurnoCaja = {
-      id: `T${Date.now()}`,
-      fechaApertura: new Date(),
-      montoCajaInicial: monto,
-      efectivoTeorico: monto,
-      usuario: nombreUsuario,
-      abierto: true
-    };
-
-    const nuevaOperacion: OperacionCaja = {
-      id: `OP${Date.now()}`,
-      tipo: 'apertura',
-      monto,
-      fecha: new Date(),
-      usuario: nombreUsuario,
-      notas: 'Apertura de caja'
-    };
-
-    setTurnoActual(nuevoTurno);
-    setOperaciones([nuevaOperacion, ...operaciones]);
-    setModalApertura(false);
-    toast.success(`Caja abierta con ${monto.toFixed(2)}€`);
+    try {
+      const cierre = await cajaApi.crearCierreCaja({
+        puntoVentaId: 'PDV-001', // TODO: obtener real
+        empresaId: 'EMP-001', // TODO: obtener real
+        turno: `TURNO-${Date.now()}`,
+        efectivoInicial: monto,
+        totalVentasEfectivo: 0,
+        totalVentasTarjeta: 0,
+        totalVentasOnline: 0,
+        gastosCaja: 0,
+        efectivoEsperado: monto,
+        efectivoContado: monto,
+        diferencia: 0,
+        estado: 'abierta',
+        observaciones: 'Apertura de caja',
+      });
+      setTurnoActual(cierre);
+      setCierres([cierre, ...cierres]);
+      setModalApertura(false);
+      toast.success(`Caja abierta con ${monto.toFixed(2)}€`);
+    } catch {
+      toast.error('Error al abrir caja');
+    }
   };
 
-  const hacerRetirada = () => {
+  const hacerRetirada = async () => {
     if (!permisos.hacer_retiradas) {
       toast.error('No tienes permisos para hacer retiradas');
       return;
     }
-
     const monto = parseFloat(montoRetirada);
     if (isNaN(monto) || monto <= 0) {
       toast.error('Monto inválido');
       return;
     }
-
-    const nuevaOperacion: OperacionCaja = {
-      id: `OP${Date.now()}`,
-      tipo: 'retirada',
-      monto,
-      fecha: new Date(),
-      usuario: nombreUsuario,
-      notas: notasRetirada
-    };
-
-    setOperaciones([nuevaOperacion, ...operaciones]);
-    
-    if (turnoActual) {
-      setTurnoActual({
-        ...turnoActual,
-        efectivoTeorico: turnoActual.efectivoTeorico - monto
+    try {
+      const cierre = await cajaApi.crearCierreCaja({
+        puntoVentaId: 'PDV-001',
+        empresaId: 'EMP-001',
+        turno: turnoActual?.turno || `TURNO-${Date.now()}`,
+        efectivoInicial: turnoActual?.efectivoInicial || 0,
+        totalVentasEfectivo: 0,
+        totalVentasTarjeta: 0,
+        totalVentasOnline: 0,
+        gastosCaja: monto,
+        efectivoEsperado: (turnoActual?.efectivoEsperado || 0) - monto,
+        efectivoContado: (turnoActual?.efectivoContado || 0) - monto,
+        diferencia: 0,
+        estado: 'abierta',
+        observaciones: notasRetirada || 'Retirada de caja',
       });
+      setTurnoActual(cierre);
+      setCierres([cierre, ...cierres]);
+      setMontoRetirada('');
+      setNotasRetirada('');
+      setModalRetirada(false);
+      toast.success(`Retirada de ${monto.toFixed(2)}€ registrada`);
+    } catch {
+      toast.error('Error al registrar retirada');
     }
-
-    setMontoRetirada('');
-    setNotasRetirada('');
-    setModalRetirada(false);
-    toast.success(`Retirada de ${monto.toFixed(2)}€ registrada`);
   };
 
   const registrarConsumo = () => {
@@ -246,103 +213,100 @@ export function PanelCaja({ permisos, nombreUsuario }: PanelCajaProps) {
     toast.success('Consumo propio registrado');
   };
 
-  const realizarArqueo = () => {
+  const realizarArqueo = async () => {
     if (!permisos.arqueo_caja) {
       toast.error('No tienes permisos para realizar arqueos');
       return;
     }
-
     const totalContado = calcularTotal();
-    const teorico = turnoActual?.efectivoTeorico || 0;
+    const teorico = turnoActual?.efectivoEsperado || 0;
     const diferencia = totalContado - teorico;
-
-    toast.success(`Arqueo realizado: ${totalContado.toFixed(2)}€ (Dif: ${diferencia.toFixed(2)}€)`);
-    
-    const nuevaOperacion: OperacionCaja = {
-      id: `OP${Date.now()}`,
-      tipo: 'arqueo',
-      monto: totalContado,
-      fecha: new Date(),
-      usuario: nombreUsuario,
-      notas: `Diferencia: ${diferencia.toFixed(2)}€`
-    };
-
-    setOperaciones([nuevaOperacion, ...operaciones]);
-    setModalArqueo(false);
+    try {
+      const cierre = await cajaApi.crearCierreCaja({
+        puntoVentaId: 'PDV-001',
+        empresaId: 'EMP-001',
+        turno: turnoActual?.turno || `TURNO-${Date.now()}`,
+        efectivoInicial: turnoActual?.efectivoInicial || 0,
+        totalVentasEfectivo: 0,
+        totalVentasTarjeta: 0,
+        totalVentasOnline: 0,
+        gastosCaja: turnoActual?.gastosCaja || 0,
+        efectivoEsperado: teorico,
+        efectivoContado: totalContado,
+        diferencia,
+        estado: 'abierta',
+        observaciones: `Arqueo. Diferencia: ${diferencia.toFixed(2)}€`,
+      });
+      setTurnoActual(cierre);
+      setCierres([cierre, ...cierres]);
+      setModalArqueo(false);
+      toast.success(`Arqueo realizado: ${totalContado.toFixed(2)}€ (Dif: ${diferencia.toFixed(2)}€)`);
+    } catch {
+      toast.error('Error al realizar arqueo');
+    }
   };
 
-  const cerrarCaja = () => {
+  const cerrarCaja = async () => {
     if (!permisos.cierre_caja) {
       toast.error('No tienes permisos para cerrar la caja');
       return;
     }
-
     if (!turnoActual) {
       toast.error('No hay turno abierto');
       return;
     }
-
     const totalContado = calcularTotal();
-    const diferencia = totalContado - turnoActual.efectivoTeorico;
-
-    const turnoFinalizado: TurnoCaja = {
-      ...turnoActual,
-      fechaCierre: new Date(),
-      montoCajaFinal: totalContado,
-      efectivoReal: totalContado,
-      diferencia,
-      abierto: false
-    };
-
-    const nuevaOperacion: OperacionCaja = {
-      id: `OP${Date.now()}`,
-      tipo: 'cierre',
-      monto: totalContado,
-      fecha: new Date(),
-      usuario: nombreUsuario,
-      notas: `Cierre de caja. Diferencia: ${diferencia.toFixed(2)}€`
-    };
-
-    setOperaciones([nuevaOperacion, ...operaciones]);
-    setTurnoActual(null);
-    setModalCierre(false);
-    
-    toast.success(`Caja cerrada. Total: ${totalContado.toFixed(2)}€`);
+    const diferencia = totalContado - (turnoActual.efectivoEsperado || 0);
+    try {
+      const cierre = await cajaApi.crearCierreCaja({
+        ...turnoActual,
+        efectivoContado: totalContado,
+        diferencia,
+        estado: 'cerrado',
+        observaciones: `Cierre de caja. Diferencia: ${diferencia.toFixed(2)}€`,
+      });
+      setTurnoActual(null);
+      setCierres([cierre, ...cierres]);
+      setModalCierre(false);
+      toast.success(`Caja cerrada. Total: ${totalContado.toFixed(2)}€`);
+    } catch {
+      toast.error('Error al cerrar caja');
+    }
   };
 
-  const registrarDevolucion = () => {
+  const registrarDevolucion = async () => {
     const monto = parseFloat(montoDevolucion);
     if (isNaN(monto) || monto <= 0) {
       toast.error('Monto inválido');
       return;
     }
-
-    const nuevaOperacion: OperacionCaja = {
-      id: `OP${Date.now()}`,
-      tipo: 'devolucion',
-      monto,
-      fecha: new Date(),
-      usuario: nombreUsuario,
-      notas: motivoDevolucion,
-      pedidoId: pedidoIdDevolucion,
-      metodoPago: metodoPagoDevolucion
-    };
-
-    setOperaciones([nuevaOperacion, ...operaciones]);
-    
-    if (turnoActual) {
-      setTurnoActual({
-        ...turnoActual,
-        efectivoTeorico: turnoActual.efectivoTeorico + monto
+    try {
+      const cierre = await cajaApi.crearCierreCaja({
+        puntoVentaId: 'PDV-001',
+        empresaId: 'EMP-001',
+        turno: turnoActual?.turno || `TURNO-${Date.now()}`,
+        efectivoInicial: turnoActual?.efectivoInicial || 0,
+        totalVentasEfectivo: 0,
+        totalVentasTarjeta: 0,
+        totalVentasOnline: 0,
+        gastosCaja: turnoActual?.gastosCaja || 0,
+        efectivoEsperado: (turnoActual?.efectivoEsperado || 0) + monto,
+        efectivoContado: (turnoActual?.efectivoContado || 0) + monto,
+        diferencia: 0,
+        estado: 'abierta',
+        observaciones: motivoDevolucion || 'Devolución',
       });
+      setTurnoActual(cierre);
+      setCierres([cierre, ...cierres]);
+      setMontoDevolucion('');
+      setMotivoDevolucion('');
+      setPedidoIdDevolucion('');
+      setMetodoPagoDevolucion('efectivo');
+      setModalDevolucion(false);
+      toast.success('Devolución registrada');
+    } catch {
+      toast.error('Error al registrar devolución');
     }
-
-    setMontoDevolucion('');
-    setMotivoDevolucion('');
-    setPedidoIdDevolucion('');
-    setMetodoPagoDevolucion('efectivo');
-    setModalDevolucion(false);
-    toast.success('Devolución registrada');
   };
 
   const getTipoOperacionBadge = (tipo: string) => {
@@ -389,7 +353,7 @@ export function PanelCaja({ permisos, nombreUsuario }: PanelCajaProps) {
                 <DollarSign className="w-8 h-8 mx-auto mb-2 text-blue-600" />
                 <p className="text-sm text-gray-700 mb-1">Caja Inicial</p>
                 <p className="text-xl text-blue-700" style={{ fontFamily: 'Poppins, sans-serif' }}>
-                  {turnoActual.montoCajaInicial.toFixed(2)}€
+                  {turnoActual.efectivoInicial?.toFixed(2)}€
                 </p>
               </CardContent>
             </Card>
@@ -399,7 +363,7 @@ export function PanelCaja({ permisos, nombreUsuario }: PanelCajaProps) {
                 <TrendingUp className="w-8 h-8 mx-auto mb-2 text-teal-600" />
                 <p className="text-sm text-gray-700 mb-1">Efectivo Teórico</p>
                 <p className="text-xl text-teal-700" style={{ fontFamily: 'Poppins, sans-serif' }}>
-                  {turnoActual.efectivoTeorico.toFixed(2)}€
+                  {turnoActual.efectivoEsperado?.toFixed(2)}€
                 </p>
               </CardContent>
             </Card>
@@ -407,12 +371,9 @@ export function PanelCaja({ permisos, nombreUsuario }: PanelCajaProps) {
             <Card className="bg-purple-50 border-2 border-purple-200">
               <CardContent className="p-4 text-center">
                 <Clock className="w-8 h-8 mx-auto mb-2 text-purple-600" />
-                <p className="text-sm text-gray-700 mb-1">Turno Abierto</p>
+                <p className="text-sm text-gray-700 mb-1">Turno</p>
                 <p className="text-sm text-purple-700" style={{ fontFamily: 'Poppins, sans-serif' }}>
-                  {turnoActual.fechaApertura.toLocaleTimeString('es-ES', { 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                  })}
+                  {turnoActual.turno}
                 </p>
               </CardContent>
             </Card>
@@ -490,53 +451,51 @@ export function PanelCaja({ permisos, nombreUsuario }: PanelCajaProps) {
         </CardContent>
       </Card>
 
-      {/* Historial del turno */}
+      {/* Historial de caja */}
       <Card>
         <CardHeader>
           <CardTitle style={{ fontFamily: 'Poppins, sans-serif' }}>
-            Historial del Turno
+            Historial de Caja
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <Table>
-            <TableHeader>
-              <TableRow className="bg-gray-50">
-                <TableHead>Hora</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Usuario</TableHead>
-                <TableHead className="text-right">Monto</TableHead>
-                <TableHead>Notas</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {operaciones.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-gray-500 py-8">
-                    No hay operaciones registradas
-                  </TableCell>
+              <TableHeader>
+                <TableRow className="bg-gray-50">
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Turno</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead className="text-right">Efectivo Inicial</TableHead>
+                  <TableHead className="text-right">Efectivo Contado</TableHead>
+                  <TableHead className="text-right">Diferencia</TableHead>
+                  <TableHead>Observaciones</TableHead>
                 </TableRow>
-              ) : (
-                operaciones.map(op => (
-                  <TableRow key={op.id}>
-                    <TableCell className="text-sm">
-                      {op.fecha.toLocaleTimeString('es-ES', {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
+              </TableHeader>
+              <TableBody>
+                {cierres.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center text-gray-500 py-8">
+                      No hay operaciones registradas
                     </TableCell>
-                    <TableCell>{getTipoOperacionBadge(op.tipo)}</TableCell>
-                    <TableCell className="text-sm">{op.usuario}</TableCell>
-                    <TableCell className="text-right font-medium">
-                      {op.tipo === 'retirada' || op.tipo === 'consumo_propio' || op.tipo === 'devolucion' ? '-' : ''}
-                      {op.monto.toFixed(2)}€
-                    </TableCell>
-                    <TableCell className="text-sm text-gray-600">{op.notas || '-'}</TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : (
+                  cierres.map(cierre => (
+                    <TableRow key={cierre.id}>
+                      <TableCell className="text-sm">
+                        {cierre.fecha ? new Date(cierre.fecha).toLocaleString('es-ES') : '-'}
+                      </TableCell>
+                      <TableCell>{cierre.turno}</TableCell>
+                      <TableCell>{cierre.estado}</TableCell>
+                      <TableCell className="text-right font-medium">{cierre.efectivoInicial?.toFixed(2)}€</TableCell>
+                      <TableCell className="text-right font-medium">{cierre.efectivoContado?.toFixed(2)}€</TableCell>
+                      <TableCell className="text-right font-medium">{cierre.diferencia?.toFixed(2)}€</TableCell>
+                      <TableCell className="text-sm text-gray-600">{cierre.observaciones || '-'}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
           </div>
         </CardContent>
       </Card>

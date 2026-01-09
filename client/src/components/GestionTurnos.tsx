@@ -1,24 +1,12 @@
 import { useState, useEffect } from 'react';
+import { turnosApi, Turno as TurnoApi } from '../services/api/turnos.api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Clock, User, MapPin, Check, X, RefreshCw } from 'lucide-react';
 
-interface Turno {
-  id: string;
-  codigo: string; // P001-P999
-  cliente: {
-    nombre: string;
-    telefono?: string;
-  };
-  estado: 'en_cola' | 'llamado' | 'atendido' | 'cancelado';
-  origenPedido: 'presencial' | 'app';
-  geolocalizacionValidada?: boolean;
-  horaAsignacion: Date;
-  horaLlamada?: Date;
-  puntoVentaId: string;
-}
+// Usamos el tipo TurnoApi del servicio real
 
 interface GestionTurnosProps {
   puntoVentaId: string;
@@ -26,116 +14,69 @@ interface GestionTurnosProps {
 }
 
 export function GestionTurnos({ puntoVentaId, onLlamarTurno }: GestionTurnosProps) {
-  const [turnos, setTurnos] = useState<Turno[]>([
-    {
-      id: 'T001',
-      codigo: 'P001',
-      cliente: { nombre: 'María García', telefono: '678123456' },
-      estado: 'en_cola',
-      origenPedido: 'app',
-      geolocalizacionValidada: true,
-      horaAsignacion: new Date(Date.now() - 600000),
-      puntoVentaId
-    },
-    {
-      id: 'T002',
-      codigo: 'P002',
-      cliente: { nombre: 'Carlos Martínez' },
-      estado: 'en_cola',
-      origenPedido: 'presencial',
-      horaAsignacion: new Date(Date.now() - 300000),
-      puntoVentaId
-    },
-    {
-      id: 'T003',
-      codigo: 'P003',
-      cliente: { nombre: 'Ana López', telefono: '645987321' },
-      estado: 'llamado',
-      origenPedido: 'app',
-      geolocalizacionValidada: true,
-      horaAsignacion: new Date(Date.now() - 120000),
-      horaLlamada: new Date(Date.now() - 60000),
-      puntoVentaId
-    },
-  ]);
+  const [turnos, setTurnos] = useState<TurnoApi[]>([]);
+  const [loading, setLoading] = useState(false);
+  // Cargar turnos desde backend al montar
+  useEffect(() => {
+    setLoading(true);
+    turnosApi.getAll()
+      .then(data => setTurnos(data))
+      .finally(() => setLoading(false));
+  }, []);
 
   const [contadorTurnos, setContadorTurnos] = useState(4);
   const [busqueda, setBusqueda] = useState('');
 
-  // Generar nuevo código de turno
-  const generarCodigoTurno = (): string => {
-    const numero = contadorTurnos.toString().padStart(3, '0');
-    return `P${numero}`;
-  };
-
-  // Asignar turno presencial
-  const asignarTurnoPresencial = (nombreCliente: string) => {
-    const nuevoTurno: Turno = {
-      id: `T${Date.now()}`,
-      codigo: generarCodigoTurno(),
-      cliente: { nombre: nombreCliente || 'Cliente sin nombre' },
+  // Asignar turno presencial (crear en backend)
+  const asignarTurnoPresencial = async (nombreCliente: string) => {
+    // Aquí deberías obtener clienteId y pedidoId reales
+    const clienteId = 1; // TODO: obtener real
+    const pedidoId = 1; // TODO: obtener real o null
+    const nuevoTurno = await turnosApi.create({
+      numero: `P${Date.now() % 1000}`,
       estado: 'en_cola',
-      origenPedido: 'presencial',
-      horaAsignacion: new Date(),
-      puntoVentaId
-    };
-
-    setTurnos([...turnos, nuevoTurno]);
-    setContadorTurnos(contadorTurnos + 1);
+      clienteId,
+      pedidoId
+    });
+    if (nuevoTurno) setTurnos([...turnos, nuevoTurno]);
   };
 
-  // Simular cliente llegando con geolocalización (desde app)
-  const simularClienteApp = () => {
-    const nuevoTurno: Turno = {
-      id: `T${Date.now()}`,
-      codigo: generarCodigoTurno(),
-      cliente: { 
-        nombre: `Cliente App ${contadorTurnos}`,
-        telefono: `6${Math.floor(Math.random() * 100000000)}`
-      },
+  // Simular cliente app (crear en backend)
+  const simularClienteApp = async () => {
+    const clienteId = 2; // TODO: obtener real
+    const pedidoId = 2; // TODO: obtener real o null
+    const nuevoTurno = await turnosApi.create({
+      numero: `P${Date.now() % 1000}`,
       estado: 'en_cola',
-      origenPedido: 'app',
-      geolocalizacionValidada: true,
-      horaAsignacion: new Date(),
-      puntoVentaId
-    };
-
-    setTurnos([...turnos, nuevoTurno]);
-    setContadorTurnos(contadorTurnos + 1);
+      clienteId,
+      pedidoId
+    });
+    if (nuevoTurno) setTurnos([...turnos, nuevoTurno]);
   };
 
-  // Llamar turno
-  const llamarTurno = (turno: Turno) => {
-    setTurnos(turnos.map(t => 
-      t.id === turno.id 
-        ? { ...t, estado: 'llamado', horaLlamada: new Date() }
-        : t
-    ));
-
-    if (onLlamarTurno) {
-      onLlamarTurno(turno);
-    }
+  // Llamar turno (update en backend)
+  const llamarTurno = async (turno: TurnoApi) => {
+    const actualizado = await turnosApi.update(turno.id, { estado: 'llamado' });
+    if (actualizado) setTurnos(turnos.map(t => t.id === turno.id ? actualizado : t));
+    if (onLlamarTurno) onLlamarTurno(turno);
   };
 
-  // Marcar como atendido
-  const marcarAtendido = (turnoId: string) => {
-    setTurnos(turnos.map(t => 
-      t.id === turnoId ? { ...t, estado: 'atendido' } : t
-    ));
+  // Marcar como atendido (update en backend)
+  const marcarAtendido = async (turnoId: number) => {
+    const actualizado = await turnosApi.update(turnoId, { estado: 'atendido' });
+    if (actualizado) setTurnos(turnos.map(t => t.id === turnoId ? actualizado : t));
   };
 
-  // Cancelar turno
-  const cancelarTurno = (turnoId: string) => {
-    setTurnos(turnos.map(t => 
-      t.id === turnoId ? { ...t, estado: 'cancelado' } : t
-    ));
+  // Cancelar turno (update en backend)
+  const cancelarTurno = async (turnoId: number) => {
+    const actualizado = await turnosApi.update(turnoId, { estado: 'cancelado' });
+    if (actualizado) setTurnos(turnos.map(t => t.id === turnoId ? actualizado : t));
   };
 
   // Filtrar turnos por búsqueda
-  const turnosFiltrados = turnos.filter(t => 
-    t.codigo.toLowerCase().includes(busqueda.toLowerCase()) ||
-    t.cliente.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-    t.cliente.telefono?.includes(busqueda)
+  const turnosFiltrados = turnos.filter(t =>
+    t.numero.toLowerCase().includes(busqueda.toLowerCase()) ||
+    t.cliente?.nombre?.toLowerCase().includes(busqueda.toLowerCase())
   );
 
   // Separar por estado
@@ -158,7 +99,9 @@ export function GestionTurnos({ puntoVentaId, onLlamarTurno }: GestionTurnosProp
     }
   };
 
-  const formatearTiempoEspera = (fecha: Date): string => {
+  const formatearTiempoEspera = (fechaStr?: string): string => {
+    if (!fechaStr) return '-';
+    const fecha = new Date(fechaStr);
     const minutos = Math.floor((Date.now() - fecha.getTime()) / 60000);
     if (minutos < 1) return 'Ahora';
     if (minutos === 1) return '1 min';
@@ -265,7 +208,7 @@ export function GestionTurnos({ puntoVentaId, onLlamarTurno }: GestionTurnosProp
                   <CardContent className="p-4">
                     <div className="text-center mb-3">
                       <p className="text-3xl text-blue-700 mb-1" style={{ fontFamily: 'Poppins, sans-serif' }}>
-                        {turno.codigo}
+                        {turno.numero}
                       </p>
                       <Badge className="bg-blue-500 text-white text-xs">
                         {turno.origenPedido === 'app' ? 'APP' : 'PRESENCIAL'}
@@ -275,7 +218,7 @@ export function GestionTurnos({ puntoVentaId, onLlamarTurno }: GestionTurnosProp
                     <div className="space-y-2 mb-3">
                       <div className="flex items-center gap-2 text-sm">
                         <User className="w-4 h-4 text-gray-500" />
-                        <span>{turno.cliente.nombre}</span>
+                        <span>{turno.cliente?.nombre}</span>
                       </div>
                       {turno.origenPedido === 'app' && turno.geolocalizacionValidada && (
                         <div className="flex items-center gap-2 text-xs text-green-600">
@@ -285,7 +228,7 @@ export function GestionTurnos({ puntoVentaId, onLlamarTurno }: GestionTurnosProp
                       )}
                       <div className="flex items-center gap-2 text-xs text-gray-600">
                         <Clock className="w-3 h-3" />
-                        <span>Esperando {formatearTiempoEspera(turno.horaAsignacion)}</span>
+                        <span>Esperando {formatearTiempoEspera(turno.createdAt)}</span>
                       </div>
                     </div>
 
@@ -330,7 +273,7 @@ export function GestionTurnos({ puntoVentaId, onLlamarTurno }: GestionTurnosProp
                   <CardContent className="p-4">
                     <div className="text-center mb-3">
                       <p className="text-3xl text-orange-700 mb-1" style={{ fontFamily: 'Poppins, sans-serif' }}>
-                        {turno.codigo}
+                        {turno.numero}
                       </p>
                       <Badge className="bg-orange-500 text-white text-xs">
                         LLAMADO
@@ -340,13 +283,14 @@ export function GestionTurnos({ puntoVentaId, onLlamarTurno }: GestionTurnosProp
                     <div className="space-y-2 mb-3">
                       <div className="flex items-center gap-2 text-sm">
                         <User className="w-4 h-4 text-gray-500" />
-                        <span>{turno.cliente.nombre}</span>
+                        <span>{turno.cliente?.nombre}</span>
                       </div>
                       {turno.horaLlamada && (
                         <div className="flex items-center gap-2 text-xs text-gray-600">
                           <Clock className="w-3 h-3" />
                           <span>
-                            Llamado hace {formatearTiempoEspera(turno.horaLlamada)}
+                            {/* Llamado hace X min (si hay updatedAt o similar) */}
+                            {/* {formatearTiempoEspera(turno.updatedAt)} */}
                           </span>
                         </div>
                       )}

@@ -48,6 +48,8 @@ interface PanelCajaProps {
   nombreUsuario: string;
 }
 
+
+export default function PanelCaja(props: PanelCajaProps) {
   const [cierres, setCierres] = useState<CierreCaja[]>([]);
   const [cargando, setCargando] = useState(false);
   const [turnoActual, setTurnoActual] = useState<CierreCaja | null>(null);

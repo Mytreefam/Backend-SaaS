@@ -52,12 +52,10 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import { 
-  obtenerPedidosFiltrados,
-  type Pedido,
   type EstadoPedido,
-  type OrigenPedido,
-  type FiltrosPedidos
+  type OrigenPedido
 } from '../../services/pedidos.service';
+import { pedidosApi } from '../../services/api/pedidos.api';
 import { ModalDetallePedido } from '../pedidos/ModalDetallePedido';
 import { BotonGenerarPedidosDemo } from '../dev/BotonGenerarPedidosDemo';
 import { EMPRESAS, MARCAS, PUNTOS_VENTA } from '../../constants/empresaConfig';
@@ -79,7 +77,7 @@ export function PedidosGerente() {
   const [vistaMode, setVistaMode] = useState<VistaMode>('tabla');
   const [pedidoSeleccionado, setPedidoSeleccionado] = useState<Pedido | null>(null);
   const [modalDetalle, setModalDetalle] = useState(false);
-  const [pedidos, setPedidos] = useState<Pedido[]>([]);
+  const [pedidos, setPedidos] = useState<any[]>([]);
   const [ultimaActualizacion, setUltimaActualizacion] = useState<Date>(new Date());
 
   // Cargar pedidos al montar el componente
@@ -96,30 +94,27 @@ export function PedidosGerente() {
     return () => clearInterval(interval);
   }, [filtroEmpresa, filtroMarca, filtroPDV]);
 
-  const cargarPedidos = (silent = false) => {
+  const cargarPedidos = async (silent = false) => {
     try {
-      // Construir filtros
-      const filtros: FiltrosPedidos = {};
-      
-      if (filtroEmpresa !== 'todas') {
-        filtros.empresaIds = [filtroEmpresa];
-      }
-      
-      if (filtroMarca !== 'todas') {
-        filtros.marcaIds = [filtroMarca];
-      }
-      
-      if (filtroPDV !== 'todos') {
-        filtros.puntoVentaIds = [filtroPDV];
-      }
-
-      const pedidosCargados = obtenerPedidosFiltrados(filtros);
-      setPedidos(pedidosCargados);
+      const pedidosApiRes = await pedidosApi.getAll();
+      // Adaptar los campos para que coincidan con la UI (empresa, marca, pdv, etc)
+      const pedidosAdaptados = pedidosApiRes.map((p: any) => ({
+        ...p,
+        numero: p.numero || p.id || '',
+        empresaNombre: p.empresaNombre || p.empresa || '',
+        marcaNombre: p.marcaNombre || p.marca || '',
+        puntoVentaNombre: p.puntoVentaNombre || p.pdv || '',
+        origenPedido: p.origenPedido || p.origen || '',
+        cliente: p.cliente || { nombre: '', telefono: '' },
+        fecha: p.fecha || p.fechaCreacion || p.createdAt || '',
+        total: p.total || 0,
+        estado: p.estado || '',
+      }));
+      setPedidos(pedidosAdaptados);
       setUltimaActualizacion(new Date());
-      
       if (!silent) {
         toast.success('Pedidos actualizados', {
-          description: `${pedidosCargados.length} pedidos encontrados`
+          description: `${pedidosAdaptados.length} pedidos encontrados`
         });
       }
     } catch (error) {

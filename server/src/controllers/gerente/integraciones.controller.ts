@@ -1,3 +1,64 @@
+// STUB: Obtener plataforma por ID
+export const obtenerPlataformaPorId = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    // Simula búsqueda en PLATAFORMAS_BASE
+    const plataforma = PLATAFORMAS_BASE.find(p => p.id === parseInt(id));
+    if (!plataforma) return res.status(404).json({ error: 'Plataforma no encontrada' });
+    res.json({ ...plataforma, activa: true, conectada: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener plataforma' });
+  }
+};
+
+// STUB: Crear plataforma
+export const crearPlataforma = async (req: Request, res: Response) => {
+  try {
+    // Simula creación
+    res.status(201).json({ ...req.body, id: Date.now() });
+  } catch (error) {
+    res.status(500).json({ error: 'Error al crear plataforma' });
+  }
+};
+
+// STUB: Actualizar plataforma
+export const actualizarPlataforma = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    res.json({ id: parseInt(id), ...req.body });
+  } catch (error) {
+    res.status(500).json({ error: 'Error al actualizar plataforma' });
+  }
+};
+
+// STUB: Eliminar plataforma
+export const eliminarPlataforma = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    res.json({ id: parseInt(id), eliminado: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Error al eliminar plataforma' });
+  }
+};
+
+// STUB: Obtener historial de sincronización
+export const obtenerHistorialSincronizacion = async (req: Request, res: Response) => {
+  try {
+    // Reutiliza historial simulado
+    res.json([{ id: 1, plataforma: 'Glovo', accion: 'sync', fecha: new Date().toISOString() }]);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener historial' });
+  }
+};
+
+// STUB: Obtener estadísticas de integraciones
+export const obtenerEstadisticasIntegraciones = async (req: Request, res: Response) => {
+  try {
+    res.json({ plataformasActivas: 2, plataformasTotales: 4, tasaExitoSync: 95 });
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener estadísticas' });
+  }
+};
 /**
  * CONTROLADOR: Integraciones Delivery
  * Endpoints para gestión de plataformas externas (Glovo, Uber Eats, etc.)

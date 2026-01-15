@@ -213,8 +213,7 @@ export const crearEmpleado = async (req: Request, res: Response) => {
         salarioBase: 1000,
         estado: 'activo',
         desempeno: 0,
-        horasMes: 160,
-        password: passwordBasica
+        horasMes: 160
       }
     });
 
@@ -673,7 +672,7 @@ export const crearRemuneracion = async (req: Request, res: Response) => {
  */
 export const crearFichaje = async (req: Request, res: Response) => {
   try {
-    const { empleadoId, tipo, ubicacion, notas, fecha, hora } = req.body;
+    const { empleadoId, tipo, ubicacion, notas, fecha, hora, puntoVentaId } = req.body;
 
     if (!empleadoId || !tipo) {
       return res.status(400).json({ error: 'empleadoId y tipo son requeridos' });
@@ -693,9 +692,9 @@ export const crearFichaje = async (req: Request, res: Response) => {
         hora: hora || new Date().toTimeString().split(' ')[0],
         horaTeorica: hora || new Date().toTimeString().split(' ')[0],
         diferenciaMinutos: 0,
-        ubicacion: ubicacion || null,
         observaciones: notas || null,
         validado: true,
+        puntoVentaId: puntoVentaId ? puntoVentaId.toString() : 'PDV001',
       },
       include: {
         empleado: {
@@ -713,9 +712,7 @@ export const crearFichaje = async (req: Request, res: Response) => {
       tipo: fichaje.tipo,
       fecha: fichaje.fecha.toISOString().split('T')[0],
       hora: fichaje.hora,
-      ubicacion: fichaje.ubicacion,
       notas: fichaje.observaciones,
-      empleado: fichaje.empleado,
     });
   } catch (error) {
     console.error('Error al crear fichaje:', error);

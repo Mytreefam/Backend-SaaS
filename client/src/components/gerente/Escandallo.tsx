@@ -3,15 +3,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import { Checkbox } from '../ui/checkbox';
 import { 
   EMPRESAS_ARRAY,
   MARCAS_ARRAY,
   getNombreEmpresa,
-  getNombreMarca,
-  EMPRESAS,
-  MARCAS
+  getNombreMarca
 } from '../../constants/empresaConfig';
+import { escandalloApi } from '../../services/api';
 import {
   Dialog,
   DialogContent,
@@ -146,9 +144,9 @@ const PRODUCTOS_VENTA_MOCK: ProductoVenta[] = [
     pvp: 2.50, 
     categoria: 'Bollería', 
     activo: true,
-    empresa_id: EMPRESAS.DISARMINK,
+    empresa_id: 'EMP-001',
     empresa_nombre: 'Disarmink SL - Hoy Pecamos',
-    marcas_ids: [MARCAS.MODOMIO],
+    marcas_ids: ['MRC-001'],
     marcas_nombres: ['Modomio']
   },
   { 
@@ -157,9 +155,9 @@ const PRODUCTOS_VENTA_MOCK: ProductoVenta[] = [
     pvp: 3.20, 
     categoria: 'Pan', 
     activo: true,
-    empresa_id: EMPRESAS.DISARMINK,
+    empresa_id: 'EMP-001',
     empresa_nombre: 'Disarmink SL - Hoy Pecamos',
-    marcas_ids: [MARCAS.MODOMIO],
+    marcas_ids: ['MRC-001'],
     marcas_nombres: ['Modomio']
   },
   { 
@@ -168,9 +166,9 @@ const PRODUCTOS_VENTA_MOCK: ProductoVenta[] = [
     pvp: 18.50, 
     categoria: 'Tartas', 
     activo: true,
-    empresa_id: EMPRESAS.DISARMINK,
+    empresa_id: 'EMP-001',
     empresa_nombre: 'Disarmink SL - Hoy Pecamos',
-    marcas_ids: [MARCAS.MODOMIO],
+    marcas_ids: ['MRC-001'],
     marcas_nombres: ['Modomio']
   },
   { 
@@ -179,9 +177,9 @@ const PRODUCTOS_VENTA_MOCK: ProductoVenta[] = [
     pvp: 5.50, 
     categoria: 'Bocadillos', 
     activo: false,
-    empresa_id: EMPRESAS.DISARMINK,
+    empresa_id: 'EMP-001',
     empresa_nombre: 'Disarmink SL - Hoy Pecamos',
-    marcas_ids: [MARCAS.BLACKBURGUER],
+    marcas_ids: ['MRC-002'],
     marcas_nombres: ['Blackburguer']
   },
   { 
@@ -190,9 +188,9 @@ const PRODUCTOS_VENTA_MOCK: ProductoVenta[] = [
     pvp: 1.80, 
     categoria: 'Bebidas', 
     activo: true,
-    empresa_id: EMPRESAS.DISARMINK,
+    empresa_id: 'EMP-001',
     empresa_nombre: 'Disarmink SL - Hoy Pecamos',
-    marcas_ids: [MARCAS.MODOMIO, MARCAS.BLACKBURGUER], // ⭐ En ambas marcas
+    marcas_ids: ['MRC-001', 'MRC-002'],
     marcas_nombres: ['Modomio', 'Blackburguer']
   },
   { 
@@ -201,9 +199,9 @@ const PRODUCTOS_VENTA_MOCK: ProductoVenta[] = [
     pvp: 3.80, 
     categoria: 'Empanadas', 
     activo: false,
-    empresa_id: EMPRESAS.DISARMINK,
+    empresa_id: 'EMP-001',
     empresa_nombre: 'Disarmink SL - Hoy Pecamos',
-    marcas_ids: [MARCAS.BLACKBURGUER],
+    marcas_ids: ['MRC-002'],
     marcas_nombres: ['Blackburguer']
   },
   { 
@@ -212,16 +210,16 @@ const PRODUCTOS_VENTA_MOCK: ProductoVenta[] = [
     pvp: 2.80, 
     categoria: 'Bollería', 
     activo: false,
-    empresa_id: EMPRESAS.DISARMINK,
+    empresa_id: 'EMP-001',
     empresa_nombre: 'Disarmink SL - Hoy Pecamos',
-    marcas_ids: [MARCAS.MODOMIO],
+    marcas_ids: ['MRC-001'],
     marcas_nombres: ['Modomio']
   },
 ];
 
 export function Escandallo() {
   const [modalEscandalloAbierto, setModalEscandalloAbierto] = useState(false);
-  const [modalDetalleAbierto, setModalDetalleAbierto] = useState(false);
+  const [_modalDetalleAbierto, _setModalDetalleAbierto] = useState(false);
   const [productoSeleccionado, setProductoSeleccionado] = useState<string>('');
   const [nombreProducto, setNombreProducto] = useState('');
   const [pvpProducto, setPvpProducto] = useState('');
@@ -231,6 +229,10 @@ export function Escandallo() {
   // ⭐ NUEVOS FILTROS: Empresa y Marca
   const [empresaFiltro, setEmpresaFiltro] = useState<string>('todos');
   const [marcaFiltro, setMarcaFiltro] = useState<string>('todos');
+  
+  // Estado de carga desde API
+  const [_cargandoAPI, setCargandoAPI] = useState(true);
+  const [usandoMock, setUsandoMock] = useState(false);
   
   // Estado para ingredientes del modal
   const [ingredientes, setIngredientes] = useState<Array<{
@@ -376,9 +378,51 @@ export function Escandallo() {
 
   const [resumenProductos, setResumenProductos] = useState<EscandalloResumen[]>([]);
 
+  // ⭐ CARGA DE DATOS DESDE API (con fallback a MOCK)
   useEffect(() => {
-    setResumenProductos(calcularResumen());
-  }, [escandallosDB]);
+    const cargarDatosAPI = async () => {
+      setCargandoAPI(true);
+      try {
+        const escandallosAPI = await escandalloApi.getAll();
+        if (escandallosAPI && escandallosAPI.length > 0) {
+          // Transformar datos de API al formato local
+          const resumenes: EscandalloResumen[] = escandallosAPI.map(esc => ({
+            producto_id: String(esc.productoId),
+            nombre_producto: esc.productoNombre,
+            pvp: esc.pvp,
+            coste_total: esc.costeUnitario,
+            margen_bruto_pct: esc.margenPorcentaje,
+            estado: esc.rentable ? 'rentable' : (esc.margenPorcentaje >= 40 ? 'guardado' : 'revisar'),
+            empresa_id: 'EMP-001',
+            empresa_nombre: 'Disarmink SL',
+            marcas_ids: ['MRC-001'],
+            marcas_nombres: ['Modomio']
+          }));
+          setResumenProductos(resumenes);
+          setUsandoMock(false);
+        } else {
+          // Sin datos de API, usar MOCK
+          setResumenProductos(calcularResumen());
+          setUsandoMock(true);
+        }
+      } catch (error) {
+        console.warn('Error cargando escandallos desde API, usando datos mock:', error);
+        setResumenProductos(calcularResumen());
+        setUsandoMock(true);
+      } finally {
+        setCargandoAPI(false);
+      }
+    };
+    
+    cargarDatosAPI();
+  }, []);
+
+  // Recalcular cuando cambian los datos locales (solo si usamos mock)
+  useEffect(() => {
+    if (usandoMock) {
+      setResumenProductos(calcularResumen());
+    }
+  }, [escandallosDB, usandoMock]);
 
   // ⭐ FILTRADO DE RESÚMENES POR EMPRESA Y MARCA
   const resumenFiltrado = useMemo(() => {
@@ -393,7 +437,7 @@ export function Escandallo() {
   // ESTADÍSTICAS CALCULADAS DINÁMICAMENTE
   // ============================================
 
-  const estadisticas = useMemo(() => {
+  const _estadisticas = useMemo(() => {
     // GRUPO 1: Totales básicos
     const totalProductos = PRODUCTOS_VENTA_MOCK.length;
     const productosActivos = PRODUCTOS_VENTA_MOCK.filter(p => p.activo).length;
@@ -557,7 +601,11 @@ export function Escandallo() {
         nombre: nombreProducto,
         pvp: parseFloat(pvpProducto),
         categoria: 'General',
-        activo: true
+        activo: true,
+        empresa_id: 'EMP-001',
+        empresa_nombre: 'Disarmink SL - Hoy Pecamos',
+        marcas_ids: ['MRC-001'],
+        marcas_nombres: ['Modomio']
       });
     }
 
@@ -788,7 +836,7 @@ export function Escandallo() {
                                 <TableCell>
                                   <Popover 
                                     open={openCombobox[`articulo_${ingrediente.id}`] || false} 
-                                    onOpenChange={(open) => setOpenCombobox({ ...openCombobox, [`articulo_${ingrediente.id}`]: open })}
+                                    onOpenChange={(open: boolean) => setOpenCombobox({ ...openCombobox, [`articulo_${ingrediente.id}`]: open })}
                                   >
                                     <PopoverTrigger 
                                       className="w-full h-9 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 text-left text-sm disabled:opacity-50 disabled:cursor-not-allowed"
@@ -824,7 +872,7 @@ export function Escandallo() {
                                 <TableCell>
                                   <Popover 
                                     open={openCombobox[`producto_${ingrediente.id}`] || false} 
-                                    onOpenChange={(open) => setOpenCombobox({ ...openCombobox, [`producto_${ingrediente.id}`]: open })}
+                                    onOpenChange={(open: boolean) => setOpenCombobox({ ...openCombobox, [`producto_${ingrediente.id}`]: open })}
                                   >
                                     <PopoverTrigger 
                                       className="w-full h-9 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 text-left text-sm disabled:opacity-50 disabled:cursor-not-allowed"
@@ -870,7 +918,7 @@ export function Escandallo() {
                                 <TableCell>
                                   <Select
                                     value={ingrediente.unidad}
-                                    onValueChange={(value) => actualizarIngrediente(ingrediente.id, 'unidad', value)}
+                                    onValueChange={(value: string) => actualizarIngrediente(ingrediente.id, 'unidad', value)}
                                   >
                                     <SelectTrigger className="h-9">
                                       <SelectValue />

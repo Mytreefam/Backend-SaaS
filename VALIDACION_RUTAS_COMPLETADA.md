@@ -116,3 +116,29 @@ Todos los archivos API del frontend ahora están correctamente conectados con la
 - ✅ Todas las rutas verificadas
 - ✅ Métodos HTTP correctos (GET, POST, PUT, DELETE)
 - ✅ Headers de autenticación incluidos
+
+---
+
+## 🔗 VINCULACIÓN VISTAS ↔ APIs
+
+### Componentes Conectados Correctamente ✅
+
+| Componente | API Usada | Estado |
+|------------|-----------|--------|
+| `Dashboard360.tsx` | `dashboardGerenteApi`, `stockApi`, `finanzasApi` | ✅ Conectado |
+| `CuentaResultados.tsx` | `dashboardGerenteApi` | ✅ Conectado |
+| `IntegracionesDelivery.tsx` | `integracionesApi` | ✅ Conectado |
+| `ChatInterno.tsx` | `chatApi` | ✅ Conectado |
+| `FichajesTab.tsx` | `fichajesApi` | ✅ Conectado |
+| `CajaTab.tsx` | `cajaApi` | ✅ Conectado |
+| `TareasTab.tsx` | `tareasApi` | ✅ Conectado |
+| `PedidosManager.tsx` | `pedidosApi` | ✅ Conectado |
+| `StockTab.tsx` | `stockApi` | ✅ Conectado |
+| `ProveedoresTab.tsx` | `proveedoresApi` | ✅ Conectado |
+
+### Componentes Actualizados (MOCK → API) ✅
+
+| Componente | API Vinculada | Cambio Realizado |
+|------------|---------------|------------------|
+| `Escandallo.tsx` | `escandalloApi` | ✅ Agregado import y carga desde API con fallback mock |
+| `EBITDAInteractivo.tsx` | `ebitdaApi` | ✅ Agregado import y carga desde API con fallback mock |

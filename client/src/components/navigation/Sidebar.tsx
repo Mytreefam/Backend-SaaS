@@ -220,7 +220,8 @@ export function Sidebar({
                     <p className="text-gray-900 truncate text-sm" style={{ fontFamily: 'Poppins, sans-serif' }}>
                       {user.name}
                     </p>
-                    <p className="text-gray-500 text-xs truncate">{roleLabel}</p>
+                    <p className="text-gray-500 text-xs truncate">{user.email}</p>
+                    <p className="text-gray-400 text-xs truncate">{roleLabel}</p>
                   </div>
                 )}
               </button>

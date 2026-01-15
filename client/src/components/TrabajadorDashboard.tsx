@@ -351,7 +351,7 @@ export function TrabajadorDashboard({ user, onLogout, onCambiarRol }: Trabajador
     <div className="min-h-screen bg-gray-50 flex overflow-x-hidden">
       {/* Sidebar - Desktop & Tablet */}
       <Sidebar
-        user={{ ...user, name: 'Juan Pérez' }}
+        user={user}
         menuItems={menuItems}
         activeSection={activeSection}
         onSectionChange={setActiveSection}

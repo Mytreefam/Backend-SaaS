@@ -8,7 +8,7 @@
  * - Exportación avanzada
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -22,9 +22,7 @@ import {
 } from '../ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import {
-  LineChart,
   Line,
-  BarChart,
   Bar,
   XAxis,
   YAxis,
@@ -38,17 +36,15 @@ import {
 } from 'recharts';
 import {
   TrendingUp,
-  TrendingDown,
   DollarSign,
   Download,
-  Filter,
   Calendar,
   FileSpreadsheet,
   Target,
-  Activity,
-  Calculator
+  Activity
 } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
+import { ebitdaApi } from '../../services/api';
 
 // Datos mock - En producción vendrían del backend
 const datosEBITDA = {
@@ -96,8 +92,46 @@ const datosEBITDA = {
 export function EBITDAInteractivo() {
   const [periodoSeleccionado, setPeriodoSeleccionado] = useState<'mes' | 'trimestre' | 'año'>('mes');
   const [vistaActiva, setVistaActiva] = useState<'resumen' | 'tendencia' | 'desglose'>('resumen');
+  const [_cargando, setCargando] = useState(true);
+  const [_usandoMock, setUsandoMock] = useState(false);
+  const [datos, setDatos] = useState(datosEBITDA);
 
-  const { mesActual, mesAnterior, historico, desglose } = datosEBITDA;
+  // Cargar datos desde API
+  useEffect(() => {
+    const cargarDatos = async () => {
+      setCargando(true);
+      try {
+        const cuentaResultados = await ebitdaApi.getCuentaResultados();
+        
+        if (cuentaResultados) {
+          // Actualizar datos con respuesta de API
+          setDatos(prev => ({
+            ...prev,
+            mesActual: {
+              ingresos: cuentaResultados.ingresosNetos || prev.mesActual.ingresos,
+              costesDirectos: cuentaResultados.costeVentas || prev.mesActual.costesDirectos,
+              margenBruto: cuentaResultados.margenBruto || prev.mesActual.margenBruto,
+              gastosOperativos: cuentaResultados.gastosOperativos || prev.mesActual.gastosOperativos,
+              ebitda: cuentaResultados.ebitda || prev.mesActual.ebitda,
+              ebitdaMargen: cuentaResultados.margenEbitda || prev.mesActual.ebitdaMargen
+            }
+          }));
+          setUsandoMock(false);
+        } else {
+          setUsandoMock(true);
+        }
+      } catch (error) {
+        console.warn('Error cargando EBITDA desde API, usando datos mock:', error);
+        setUsandoMock(true);
+      } finally {
+        setCargando(false);
+      }
+    };
+    
+    cargarDatos();
+  }, [periodoSeleccionado]);
+
+  const { mesActual, mesAnterior, historico, desglose } = datos;
 
   // Cálculos de variación
   const variacionIngresos = ((mesActual.ingresos - mesAnterior.ingresos) / mesAnterior.ingresos) * 100;

@@ -225,65 +225,25 @@ export const eliminarMensaje = async (req: Request, res: Response) => {
 // ============================================
 export const obtenerTickets = async (req: Request, res: Response) => {
   try {
-    const { estado, prioridad, empresaId } = req.query;
+    const { estado, prioridad, categoria } = req.query;
+    const where: any = {};
+    if (estado) where.estado = estado;
+    if (prioridad) where.prioridad = prioridad;
+    if (categoria) where.categoria = categoria;
 
-    const tickets = [
-      {
-        id: 1,
-        asunto: 'Error en cierre de caja',
-        descripcion: 'No puedo cerrar la caja, aparece error de conexión',
-        estado: 'abierto',
-        prioridad: 'alta',
-        categoria: 'técnico',
-        creadoPor: 'María García',
-        creadoPorId: 2,
-        asignadoA: 'Soporte Técnico',
-        fechaCreacion: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-        fechaActualizacion: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-        respuestas: 1,
-      },
-      {
-        id: 2,
-        asunto: 'Solicitud de vacaciones',
-        descripcion: 'Quiero solicitar vacaciones del 15 al 25 de agosto',
-        estado: 'pendiente',
-        prioridad: 'media',
-        categoria: 'rrhh',
-        creadoPor: 'Pedro López',
-        creadoPorId: 3,
-        asignadoA: 'RRHH',
-        fechaCreacion: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-        fechaActualizacion: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-        respuestas: 0,
-      },
-      {
-        id: 3,
-        asunto: 'Problema con impresora tickets',
-        descripcion: 'La impresora no imprime correctamente los tickets',
-        estado: 'resuelto',
-        prioridad: 'baja',
-        categoria: 'técnico',
-        creadoPor: 'Ana Martín',
-        creadoPorId: 4,
-        asignadoA: 'Soporte Técnico',
-        fechaCreacion: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
-        fechaActualizacion: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-        respuestas: 3,
-      },
-    ];
-
-    let filtrados = tickets;
-    if (estado) filtrados = filtrados.filter(t => t.estado === estado);
-    if (prioridad) filtrados = filtrados.filter(t => t.prioridad === prioridad);
+    const tickets = await prisma.ticket.findMany({
+      where,
+      orderBy: { fechaCreacion: 'desc' },
+    });
 
     res.json({
       success: true,
-      data: filtrados,
-      total: filtrados.length,
+      data: tickets,
+      total: tickets.length,
       resumen: {
-        abiertos: tickets.filter(t => t.estado === 'abierto').length,
-        pendientes: tickets.filter(t => t.estado === 'pendiente').length,
-        resueltos: tickets.filter(t => t.estado === 'resuelto').length,
+        abiertos: await prisma.ticket.count({ where: { estado: 'abierto' } }),
+        pendientes: await prisma.ticket.count({ where: { estado: 'pendiente' } }),
+        resueltos: await prisma.ticket.count({ where: { estado: 'resuelto' } }),
       },
     });
   } catch (error: any) {
@@ -294,24 +254,21 @@ export const obtenerTickets = async (req: Request, res: Response) => {
 
 export const crearTicket = async (req: Request, res: Response) => {
   try {
-    const { asunto, descripcion, categoria, prioridad, adjuntos } = req.body;
-
-    const nuevoTicket = {
-      id: Date.now(),
-      asunto,
-      descripcion,
-      categoria,
-      prioridad: prioridad || 'media',
-      estado: 'abierto',
-      adjuntos: adjuntos || [],
-      creadoPor: 'Usuario actual',
-      creadoPorId: 1,
-      fechaCreacion: new Date().toISOString(),
-    };
-
+    const { asunto, descripcion, categoria, prioridad, creadoPor, asignadoA } = req.body;
+    const ticket = await prisma.ticket.create({
+      data: {
+        asunto,
+        descripcion,
+        categoria: categoria || 'general',
+        prioridad: prioridad || 'media',
+        estado: 'abierto',
+        creadoPor: creadoPor || 'Usuario actual',
+        asignadoA: asignadoA || null,
+      },
+    });
     res.status(201).json({
       success: true,
-      data: nuevoTicket,
+      data: ticket,
       message: 'Ticket creado correctamente',
     });
   } catch (error: any) {

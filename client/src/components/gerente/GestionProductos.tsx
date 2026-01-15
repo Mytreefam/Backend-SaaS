@@ -1329,6 +1329,25 @@ export function GestionProductos() {
                   <Select 
                     value={formData.escandallo_id || 'sin-escandallo'} 
                     onValueChange={(value) => {
+                {/* Campo para seleccionar la marca */}
+                <div>
+                  <Label htmlFor="marcaId">Marca *</Label>
+                  <Select
+                    value={formData.marcaId || ''}
+                    onValueChange={(v) => setFormData({ ...formData, marcaId: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona marca" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MARCAS_ARRAY.map(marca => (
+                        <SelectItem key={marca.id} value={marca.id}>
+                          {getNombreMarca(marca.id)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                       if (value === 'sin-escandallo') {
                         setFormData({ ...formData, escandallo_id: undefined });
                       } else {

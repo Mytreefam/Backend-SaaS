@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { getTicketsSoporte, createTicketSoporte } from '../../services/api/gerente.api';
+import { buildUrl, getAuthToken, API_CONFIG } from '../../config/api.config';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -13,20 +15,18 @@ import {
   UserCheck,
   ExternalLink,
   Plus,
-  Search,
   Send,
   Clock,
   CheckCircle2,
   AlertCircle,
   XCircle,
   Paperclip,
-  MoreVertical,
   ArrowLeft,
   Upload
 } from 'lucide-react';
-import { format } from 'date-fns@4.1.0';
-import { es } from 'date-fns@4.1.0/locale';
-import { toast } from 'sonner@2.0.3';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { toast } from 'sonner';
 
 interface Chat {
   id: string;
@@ -54,7 +54,7 @@ export function AyudaGerente() {
   const [activeFilter, setActiveFilter] = useState<'todos' | 'clientes' | 'empleados' | 'externos'>('todos');
   const [chatSeleccionado, setChatSeleccionado] = useState<Chat | null>(null);
   const [nuevoMensaje, setNuevoMensaje] = useState('');
-  const [busqueda, setBusqueda] = useState('');
+  const [busqueda] = useState(''); // setBusqueda is unused, keep busqueda for filter logic
   const [vistaCompleta, setVistaCompleta] = useState(false);
   const [dialogNuevoTicket, setDialogNuevoTicket] = useState(false);
   const [archivoAdjunto, setArchivoAdjunto] = useState<string | null>(null);
@@ -79,274 +79,17 @@ export function AyudaGerente() {
     { id: '5', nombre: 'Laura Sánchez' }
   ];
 
-  const chats: Chat[] = [
-    {
-      id: 'TKT-001',
-      titulo: 'Problema con pedido de pan integral',
-      descripcion: 'El cliente reporta que el pan integral llegó en mal estado',
-      categoria: 'clientes',
-      estado: 'abierto',
-      prioridad: 'alta',
-      creador: 'María González (Cliente)',
-      asignadoA: 'Ana Rodríguez',
-      fechaCreacion: '2025-11-18T09:30:00',
-      fechaActualizacion: '2025-11-18T10:15:00',
-      mensajes: [
-        {
-          id: 'MSG-001',
-          autor: 'María González (Cliente)',
-          mensaje: 'El pan integral llegó en mal estado',
-          fecha: '2025-11-18T09:30:00',
-          esGerente: false
-        },
-        {
-          id: 'MSG-002',
-          autor: 'Ana Rodríguez',
-          mensaje: 'Hemos recibido tu consulta. Estamos trabajando en ello.',
-          fecha: '2025-11-18T10:15:00',
-          esGerente: true
-        }
-      ]
-    },
-    {
-      id: 'TKT-002',
-      titulo: 'Consulta sobre horarios de trabajo',
-      descripcion: 'Solicitud de cambio de turno para próxima semana',
-      categoria: 'empleados',
-      estado: 'en-proceso',
-      prioridad: 'media',
-      creador: 'Carlos Méndez (Empleado)',
-      asignadoA: 'Gerente',
-      fechaCreacion: '2025-11-18T08:00:00',
-      fechaActualizacion: '2025-11-18T11:30:00',
-      mensajes: [
-        {
-          id: 'MSG-003',
-          autor: 'Carlos Méndez (Empleado)',
-          mensaje: 'Solicito cambio de turno para próxima semana',
-          fecha: '2025-11-18T08:00:00',
-          esGerente: false
-        },
-        {
-          id: 'MSG-004',
-          autor: 'Gerente',
-          mensaje: 'Revisaremos tu solicitud y te contactaremos.',
-          fecha: '2025-11-18T11:30:00',
-          esGerente: true
-        }
-      ]
-    },
-    {
-      id: 'TKT-003',
-      titulo: 'Pedido especial para evento corporativo',
-      descripcion: 'Empresa solicita 200 unidades de bollería variada para el viernes',
-      categoria: 'clientes',
-      estado: 'en-proceso',
-      prioridad: 'urgente',
-      creador: 'Roberto Sánchez (Cliente)',
-      asignadoA: 'María González',
-      fechaCreacion: '2025-11-17T14:20:00',
-      fechaActualizacion: '2025-11-18T09:00:00',
-      mensajes: [
-        {
-          id: 'MSG-005',
-          autor: 'Roberto Sánchez (Cliente)',
-          mensaje: 'Necesitamos 200 unidades de bollería variada para el viernes',
-          fecha: '2025-11-17T14:20:00',
-          esGerente: false
-        },
-        {
-          id: 'MSG-006',
-          autor: 'María González',
-          mensaje: 'Confirmamos el pedido. Se enviará el viernes.',
-          fecha: '2025-11-18T09:00:00',
-          esGerente: true
-        }
-      ]
-    },
-    {
-      id: 'TKT-004',
-      titulo: 'Consulta proveedores de harina',
-      descripcion: 'Solicitud de información sobre nuevos proveedores de harina integral',
-      categoria: 'externos',
-      estado: 'abierto',
-      prioridad: 'media',
-      creador: 'Proveedores S.L.',
-      fechaCreacion: '2025-11-17T16:45:00',
-      fechaActualizacion: '2025-11-17T16:45:00',
-      mensajes: [
-        {
-          id: 'MSG-007',
-          autor: 'Proveedores S.L.',
-          mensaje: '¿Tienen información sobre nuevos proveedores de harina integral?',
-          fecha: '2025-11-17T16:45:00',
-          esGerente: false
-        }
-      ]
-    },
-    {
-      id: 'TKT-005',
-      titulo: 'Solicitud de vacaciones',
-      descripcion: 'Solicitud de vacaciones para periodo navideño',
-      categoria: 'empleados',
-      estado: 'resuelto',
-      prioridad: 'baja',
-      creador: 'Laura Martínez (Empleada)',
-      asignadoA: 'Gerente',
-      fechaCreacion: '2025-11-15T10:00:00',
-      fechaActualizacion: '2025-11-16T12:00:00',
-      mensajes: [
-        {
-          id: 'MSG-008',
-          autor: 'Laura Martínez (Empleada)',
-          mensaje: 'Solicito vacaciones para el periodo navideño',
-          fecha: '2025-11-15T10:00:00',
-          esGerente: false
-        },
-        {
-          id: 'MSG-009',
-          autor: 'Gerente',
-          mensaje: 'Vacaciones aprobadas para el periodo navideño.',
-          fecha: '2025-11-16T12:00:00',
-          esGerente: true
-        }
-      ]
-    },
-    {
-      id: 'TKT-006',
-      titulo: 'Devolución por producto defectuoso',
-      descripcion: 'Cliente solicita devolución de croissants por problemas de calidad',
-      categoria: 'clientes',
-      estado: 'cerrado',
-      prioridad: 'alta',
-      creador: 'Ana García (Cliente)',
-      asignadoA: 'Ana Rodríguez',
-      fechaCreacion: '2025-11-14T11:30:00',
-      fechaActualizacion: '2025-11-15T09:00:00',
-      mensajes: [
-        {
-          id: 'MSG-010',
-          autor: 'Ana García (Cliente)',
-          mensaje: 'Solicito devolución de croissants por problemas de calidad',
-          fecha: '2025-11-14T11:30:00',
-          esGerente: false
-        },
-        {
-          id: 'MSG-011',
-          autor: 'Ana Rodríguez',
-          mensaje: 'Hemos recibido tu solicitud. Se procesará la devolución.',
-          fecha: '2025-11-15T09:00:00',
-          esGerente: true
-        }
-      ]
-    },
-    {
-      id: 'TKT-007',
-      titulo: 'Propuesta comercial mayorista',
-      descripcion: 'Cadena de hoteles interesada en compra mayorista semanal',
-      categoria: 'externos',
-      estado: 'en-proceso',
-      prioridad: 'alta',
-      creador: 'Hoteles Costa S.A.',
-      asignadoA: 'Gerente',
-      fechaCreacion: '2025-11-16T09:00:00',
-      fechaActualizacion: '2025-11-17T15:30:00',
-      mensajes: [
-        {
-          id: 'MSG-012',
-          autor: 'Hoteles Costa S.A.',
-          mensaje: 'Estamos interesados en una propuesta comercial mayorista semanal',
-          fecha: '2025-11-16T09:00:00',
-          esGerente: false
-        },
-        {
-          id: 'MSG-013',
-          autor: 'Gerente',
-          mensaje: 'Prepararemos una propuesta comercial para ti.',
-          fecha: '2025-11-17T15:30:00',
-          esGerente: true
-        }
-      ]
-    },
-    {
-      id: 'TKT-008',
-      titulo: 'Problema con equipo de amasado',
-      descripcion: 'La amasadora principal presenta fallos intermitentes',
-      categoria: 'empleados',
-      estado: 'abierto',
-      prioridad: 'urgente',
-      creador: 'Javier Torres (Empleado)',
-      asignadoA: 'Gerente',
-      fechaCreacion: '2025-11-18T06:00:00',
-      fechaActualizacion: '2025-11-18T06:30:00',
-      mensajes: [
-        {
-          id: 'MSG-014',
-          autor: 'Javier Torres (Empleado)',
-          mensaje: 'La amasadora principal presenta fallos intermitentes',
-          fecha: '2025-11-18T06:00:00',
-          esGerente: false
-        },
-        {
-          id: 'MSG-015',
-          autor: 'Gerente',
-          mensaje: 'Revisaremos el equipo y te contactaremos.',
-          fecha: '2025-11-18T06:30:00',
-          esGerente: true
-        }
-      ]
-    },
-    {
-      id: 'TKT-009',
-      titulo: 'Consulta sobre precios mayoristas',
-      descripcion: 'Restaurante consulta tarifas para pedidos recurrentes',
-      categoria: 'clientes',
-      estado: 'abierto',
-      prioridad: 'media',
-      creador: 'Restaurante El Fogón',
-      fechaCreacion: '2025-11-17T12:00:00',
-      fechaActualizacion: '2025-11-17T12:00:00',
-      mensajes: [
-        {
-          id: 'MSG-016',
-          autor: 'Restaurante El Fogón',
-          mensaje: '¿Tienen tarifas para pedidos recurrentes?',
-          fecha: '2025-11-17T12:00:00',
-          esGerente: false
-        }
-      ]
-    },
-    {
-      id: 'TKT-010',
-      titulo: 'Solicitud de certificado de calidad',
-      descripcion: 'Auditoría externa solicita certificados de calidad alimentaria',
-      categoria: 'externos',
-      estado: 'en-proceso',
-      prioridad: 'alta',
-      creador: 'SGS Auditores',
-      asignadoA: 'Gerente',
-      fechaCreacion: '2025-11-16T14:00:00',
-      fechaActualizacion: '2025-11-17T10:00:00',
-      mensajes: [
-        {
-          id: 'MSG-017',
-          autor: 'SGS Auditores',
-          mensaje: 'Solicitamos certificados de calidad alimentaria',
-          fecha: '2025-11-16T14:00:00',
-          esGerente: false
-        },
-        {
-          id: 'MSG-018',
-          autor: 'Gerente',
-          mensaje: 'Prepararemos los certificados para ti.',
-          fecha: '2025-11-17T10:00:00',
-          esGerente: true
-        }
-      ]
-    }
-  ];
 
-  const chatsFiltrados = chats.filter(chat => {
+  // Estado de chats
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [, setLoadingChats] = useState(false); // loadingChats is unused
+
+  // Estado de tickets
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [loadingTickets, setLoadingTickets] = useState(false);
+
+  // Filtro de chats
+  const chatsFiltrados = chats.filter((chat: Chat) => {
     const matchCategoria = activeFilter === 'todos' || chat.categoria === activeFilter;
     const matchBusqueda = chat.titulo.toLowerCase().includes(busqueda.toLowerCase()) ||
                          chat.descripcion.toLowerCase().includes(busqueda.toLowerCase()) ||
@@ -386,10 +129,93 @@ export function AyudaGerente() {
     return icons[estado as keyof typeof icons];
   };
 
-  const handleEnviarMensaje = () => {
-    if (nuevoMensaje.trim()) {
+  useEffect(() => {
+    setLoadingChats(true);
+    fetch(buildUrl('/chats'), {
+      headers: {
+        ...API_CONFIG.HEADERS,
+        'Authorization': `Bearer ${getAuthToken()}`,
+      },
+    })
+      .then(res => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setChats(data.map((chat) => ({
+            id: chat.id?.toString() ?? '',
+            titulo: chat.asunto || chat.titulo || '',
+            descripcion: chat.descripcion || chat.asunto || '',
+            categoria: chat.categoria || 'clientes',
+            estado: chat.estado || 'abierto',
+            prioridad: chat.prioridad || 'media',
+            creador: chat.cliente?.nombre || chat.creador || '',
+            asignadoA: chat.asignadoA || '',
+            fechaCreacion: chat.creadoEn || chat.fechaCreacion || '',
+            fechaActualizacion: chat.actualizadoEn || chat.fechaActualizacion || chat.creadoEn || '',
+            mensajes: (chat.mensajes || []).map((msg: any) => ({
+              id: msg.id?.toString() ?? '',
+              autor: msg.autor || '',
+              mensaje: msg.texto || msg.mensaje || '',
+              fecha: msg.fecha || '',
+              esGerente: msg.esGerente || false,
+            })),
+          })));
+        } else {
+          setChats([]);
+        }
+      })
+      .catch(() => setChats([]))
+      .finally(() => setLoadingChats(false));
+  }, []);
+
+  // Fetch tickets reales
+  useEffect(() => {
+    setLoadingTickets(true);
+    getTicketsSoporte()
+      .then((data) => {
+        setTickets(Array.isArray(data) ? data : []);
+      })
+      .catch(() => setTickets([]))
+      .finally(() => setLoadingTickets(false));
+  }, []);
+  const handleEnviarMensaje = async () => {
+    if (!nuevoMensaje.trim() || !chatSeleccionado) return;
+    try {
+      const res = await fetch(buildUrl(`/chats/${chatSeleccionado.id}/mensajes`), {
+        method: 'POST',
+        headers: {
+          ...API_CONFIG.HEADERS,
+          'Authorization': `Bearer ${getAuthToken()}`,
+        },
+        body: JSON.stringify({
+          autor: 'Gerente',
+          texto: nuevoMensaje,
+        }),
+      });
+      if (!res.ok) throw new Error('Error al enviar mensaje');
       toast.success('Mensaje enviado correctamente');
       setNuevoMensaje('');
+      // Refrescar mensajes del chat seleccionado
+      const chatRes = await fetch(buildUrl(`/chats/${chatSeleccionado.id}`), {
+        headers: {
+          ...API_CONFIG.HEADERS,
+          'Authorization': `Bearer ${getAuthToken()}`,
+        },
+      });
+      if (chatRes.ok) {
+        const chatData = await chatRes.json();
+        setChatSeleccionado((prev) => prev ? {
+          ...prev,
+          mensajes: (chatData.mensajes || []).map((msg: any) => ({
+            id: msg.id?.toString() ?? '',
+            autor: msg.autor || '',
+            mensaje: msg.texto || msg.mensaje || '',
+            fecha: msg.fecha || '',
+            esGerente: msg.esGerente || false,
+          })),
+        } : prev);
+      }
+    } catch (e) {
+      toast.error('No se pudo enviar el mensaje');
     }
   };
 
@@ -409,27 +235,41 @@ export function AyudaGerente() {
     toast.success('Archivo adjuntado correctamente');
   };
 
-  const handleCrearTicket = () => {
+  const handleCrearTicket = async () => {
     if (!nuevoTicket.titulo || !nuevoTicket.descripcion || !nuevoTicket.creador) {
       toast.error('Por favor completa los campos obligatorios');
       return;
     }
 
-    toast.success('Ticket creado exitosamente');
-    setDialogNuevoTicket(false);
-    setNuevoTicket({
-      titulo: '',
-      categoria: 'empleados',
-      descripcion: '',
-      prioridad: 'media',
-      asignadoA: '',
-      creador: '',
-      fechaVencimiento: '',
-      etiquetas: '',
-      mensajeInicial: ''
-    });
-    setArchivoAdjunto(null);
+    try {
+      await createTicketSoporte({
+        asunto: nuevoTicket.titulo,
+        descripcion: nuevoTicket.descripcion,
+        categoria: nuevoTicket.categoria,
+        prioridad: nuevoTicket.prioridad,
+        // Puedes agregar más campos si la API los soporta
+      });
+      toast.success('Ticket creado exitosamente');
+      setDialogNuevoTicket(false);
+      setNuevoTicket({
+        titulo: '',
+        categoria: 'empleados',
+        descripcion: '',
+        prioridad: 'media',
+        asignadoA: '',
+        creador: '',
+        fechaVencimiento: '',
+        etiquetas: '',
+        mensajeInicial: ''
+      });
+      setArchivoAdjunto(null);
+      // Refrescar la lista de tickets
+      getTicketsSoporte().then(data => setTickets(Array.isArray(data) ? data : []));
+    } catch (error) {
+      toast.error('Error al crear el ticket');
+    }
   };
+
 
   const contadores = {
     todos: chats.length,
@@ -448,7 +288,6 @@ export function AyudaGerente() {
             <Button 
               variant="outline" 
               onClick={handleCerrarVistaCompleta}
-              className="flex items-center gap-2"
             >
               <ArrowLeft className="w-4 h-4" />
               Volver
@@ -609,19 +448,19 @@ export function AyudaGerente() {
           <Card>
             <CardHeader>
               <CardTitle style={{ fontFamily: 'Poppins, sans-serif' }}>
-                Tickets {activeFilter !== 'todos' && `- ${activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1)}`}
+                Chats {activeFilter !== 'todos' && `- ${activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1)}`}
               </CardTitle>
               <p className="text-sm text-gray-600">
-                {chatsFiltrados.length} {chatsFiltrados.length === 1 ? 'ticket encontrado' : 'tickets encontrados'}
+                {chatsFiltrados.length} {chatsFiltrados.length === 1 ? 'chat encontrado' : 'chats encontrados'}
               </p>
             </CardHeader>
             <CardContent>
               {chatsFiltrados.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
                   <MessageSquare className="w-12 h-12 mx-auto mb-2 opacity-30" />
-                  <p>No hay tickets que mostrar</p>
+                  <p>No hay chats que mostrar</p>
                   <p className="text-sm mt-1">
-                    Ajusta los filtros o crea un nuevo ticket
+                    Ajusta los filtros o crea un nuevo chat
                   </p>
                 </div>
               ) : (
@@ -679,6 +518,60 @@ export function AyudaGerente() {
               )}
             </CardContent>
           </Card>
+
+          {/* Tickets reales debajo de los chats */}
+          <div className="mt-8">
+            <Card>
+              <CardHeader>
+                <CardTitle style={{ fontFamily: 'Poppins, sans-serif' }}>
+                  Tickets de Soporte (API Real)
+                </CardTitle>
+                <p className="text-sm text-gray-600">
+                  {loadingTickets ? 'Cargando tickets...' : `${tickets.length} ${tickets.length === 1 ? 'ticket encontrado' : 'tickets encontrados'}`}
+                </p>
+              </CardHeader>
+              <CardContent>
+                {loadingTickets ? (
+                  <div className="text-center py-12 text-gray-500">
+                    <MessageSquare className="w-12 h-12 mx-auto mb-2 opacity-30" />
+                    <p>Cargando tickets...</p>
+                  </div>
+                ) : tickets.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500">
+                    <MessageSquare className="w-12 h-12 mx-auto mb-2 opacity-30" />
+                    <p>No hay tickets de soporte que mostrar</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {tickets.map((ticket: any) => (
+                      <div key={ticket.id || ticket._id} className="p-4 border rounded-lg bg-orange-50 border-orange-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h3 className="font-medium text-orange-900">{ticket.asunto || ticket.titulo || 'Sin asunto'}</h3>
+                          <span className="text-xs text-gray-500">{ticket.id || ticket._id}</span>
+                        </div>
+                        <p className="text-sm text-gray-700 mb-2">
+                          {ticket.descripcion || 'Sin descripción'}
+                        </p>
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
+                          <Badge className="bg-orange-500 text-white">{ticket.estado || 'Abierto'}</Badge>
+                          <Badge variant="outline" className="border-orange-500 text-orange-700">
+                            {ticket.categoria || 'General'}
+                          </Badge>
+                          <Badge variant="outline" className="border-red-500 text-red-700">
+                            {ticket.prioridad || 'Media'}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center justify-between text-xs text-gray-500">
+                          <span>Por: {ticket.creador || ticket.reportadoPor || 'Desconocido'}</span>
+                          <span>{ticket.creadoEn ? format(new Date(ticket.creadoEn), 'dd/MM/yy HH:mm') : ''}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </>
       )}
 
@@ -776,7 +669,7 @@ export function AyudaGerente() {
               <Label htmlFor="asignar">Asignar a</Label>
               <Select
                 value={nuevoTicket.asignadoA}
-                onValueChange={(value) => setNuevoTicket({ ...nuevoTicket, asignadoA: value })}
+                onValueChange={(value: string) => setNuevoTicket({ ...nuevoTicket, asignadoA: value })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Sin asignar" />

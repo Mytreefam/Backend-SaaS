@@ -1,3 +1,21 @@
+
+// ============================================
+// MODELO DE TICKETS DE SOPORTE
+// ============================================
+model Ticket {
+  id                Int      @id @default(autoincrement())
+  asunto            String
+  descripcion       String
+  estado            String   @default("abierto") // abierto, pendiente, resuelto, cerrado
+  prioridad         String   @default("media")   // baja, media, alta, urgente
+  categoria         String   @default("general") // técnico, rrhh, etc
+  creadoPor         String
+  creadoPorId       Int?
+  asignadoA         String?
+  fechaCreacion     DateTime @default(now())
+  fechaActualizacion DateTime @updatedAt
+  respuestas        Int      @default(0)
+}
 generator client {
   provider = "prisma-client-js"
 }
@@ -95,6 +113,7 @@ model Producto {
   precio      Float
   stock       Int
   imagen      String?
+  marcaId     String?     // ID de la marca a la que pertenece el producto (opcional)
   pedidoItems PedidoItem[]
 }
 

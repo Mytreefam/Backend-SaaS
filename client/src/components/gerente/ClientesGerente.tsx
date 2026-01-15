@@ -2329,7 +2329,7 @@ export function ClientesGerente() {
             <CardContent className="p-4 sm:p-6">
               {/* Vista móvil - Cards */}
               <div className="sm:hidden space-y-3">
-                {clientesFiltrados.map((cliente) => (
+                {clientesFiltrados.filter(cliente => cliente.role === 'cliente').map((cliente) => (
                   <div key={cliente.id} className="border rounded-lg p-3 bg-white hover:bg-gray-50">
                     <div className="flex items-start gap-3 mb-3">
                       <Avatar className="w-12 h-12 shrink-0">

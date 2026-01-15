@@ -1,3 +1,35 @@
+// Obtener tickets de soporte
+export async function getTicketsSoporte() {
+  const res = await fetch(buildUrl('/gerente/chat/tickets'), {
+    headers: {
+      ...API_CONFIG.HEADERS,
+      'Authorization': `Bearer ${getAuthToken()}`,
+    },
+  });
+  if (!res.ok) throw new Error('No se pudo obtener la lista de tickets');
+  const data = await res.json();
+  return data.data || [];
+}
+import { buildUrl, getAuthToken, API_CONFIG } from '../../config/api.config';
+// Crear ticket de soporte
+export async function createTicketSoporte(ticket: {
+  asunto: string;
+  descripcion: string;
+  categoria?: string;
+  prioridad?: string;
+  adjuntos?: any[];
+}) {
+  const res = await fetch(buildUrl('/gerente/chat/tickets'), {
+    method: 'POST',
+    headers: {
+      ...API_CONFIG.HEADERS,
+      'Authorization': `Bearer ${getAuthToken()}`,
+    },
+    body: JSON.stringify(ticket),
+  });
+  if (!res.ok) throw new Error('No se pudo crear el ticket');
+  return res.json();
+}
 /**
  * API CLIENT: Módulo Gerente
  * Servicios para conectar frontend con backend de gerente
@@ -489,7 +521,7 @@ export const empleadosApi = {
     observaciones?: string;
   }): Promise<any> {
     try {
-      const response = await apiService.post(`/gerente/fichajes/registrar`, datos);
+      const response = await apiService.post(`/gerente/empleados/fichajes`, datos);
       if (!response.success) throw new Error(response.message || 'Error desconocido');
       toast.success(`Fichaje de ${datos.tipo} registrado correctamente`);
       return response.data;

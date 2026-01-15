@@ -165,6 +165,8 @@ export const crearProducto = async (req: Request, res: Response) => {
       tipo_producto,
       empresa_id,
       marcas_ids,
+      marcaId,
+      marca_id,
       precio,
       precio_compra,
       stock_inicial,
@@ -188,7 +190,8 @@ export const crearProducto = async (req: Request, res: Response) => {
         descripcion: descripcion || '',
         precio: parseFloat(precio),
         stock: stock_inicial || 0,
-        imagen: imagen || null
+        imagen: imagen || null,
+        marcaId: marcaId || marca_id || null
       }
     });
 

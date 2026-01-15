@@ -57,7 +57,7 @@ import {
 } from 'lucide-react';
 
 // ⚡ Lazy Loading de componentes pesados (TPV y modales)
-const TPV360Master = lazy(() => import('./TPV360Master').then(m => ({ default: m.TPV360Master })));
+const TPV360Master = lazy(() => import('./TPV360Master').then(m => ({ default: m.TPV360Master || m.default })));
 const ModalSeleccionTPV = lazy(() => import('./gerente/ModalSeleccionTPV').then(m => ({ default: m.ModalSeleccionTPV })));
 const GestionCitas = lazy(() => import('./gerente/GestionCitas').then(m => ({ default: m.GestionCitas })));
 

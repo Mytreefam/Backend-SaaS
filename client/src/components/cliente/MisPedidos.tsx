@@ -271,33 +271,36 @@ export function MisPedidos({ clienteId }: MisPedidosProps) {
         />
       ) : (
         <div className="space-y-3 sm:space-y-4">
-          {pedidosFiltrados.map((pedido) => (
-            <Card key={pedido.id} className="hover:shadow-md transition-all active:scale-[0.99]">
-              <CardContent className="p-3 sm:p-4 md:p-6">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
-                  {/* Info principal */}
-                  <div className="flex-1 space-y-2 sm:space-y-3">
-                    {/* Header del pedido */}
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5 sm:mb-1 flex-wrap">
-                          <h3 className="text-sm sm:text-base truncate" style={{ fontFamily: 'Poppins, sans-serif' }}>
-                            Pedido {pedido.numero}
-                          </h3>
-                          {getEstadoBadge(pedido.estado)}
+          {pedidosFiltrados
+            .slice() // Copia para no mutar el original
+            .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
+            .map((pedido) => (
+              <Card key={pedido.id} className="hover:shadow-md transition-all active:scale-[0.99]">
+                <CardContent className="p-3 sm:p-4 md:p-6">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
+                    {/* Info principal */}
+                    <div className="flex-1 space-y-2 sm:space-y-3">
+                      {/* Header del pedido */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5 sm:mb-1 flex-wrap">
+                            <h3 className="text-sm sm:text-base truncate" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                              Pedido {pedido.numero}
+                            </h3>
+                            {getEstadoBadge(pedido.estado)}
+                          </div>
+                          <p className="text-xs sm:text-sm text-gray-600 flex items-center gap-1">
+                            <Clock className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{formatFecha(pedido.fecha)}</span>
+                          </p>
                         </div>
-                        <p className="text-xs sm:text-sm text-gray-600 flex items-center gap-1">
-                          <Clock className="w-3 h-3 shrink-0" />
-                          <span className="truncate">{formatFecha(pedido.fecha)}</span>
-                        </p>
                       </div>
-                    </div>
 
-                    {/* Items del pedido */}
-                    <div className="text-xs sm:text-sm text-gray-600">
-                      <p className="mb-1 text-[11px] sm:text-sm">Productos:</p>
-                      <div className="space-y-0.5 sm:space-y-1">
-                        {pedido.items.slice(0, 2).map((item, idx) => (
+                      {/* Items del pedido */}
+                      <div className="text-xs sm:text-sm text-gray-600">
+                        <p className="mb-1 text-[11px] sm:text-sm">Productos:</p>
+                        <div className="space-y-0.5 sm:space-y-1">
+                          {pedido.items.slice(0, 2).map((item, idx) => (
                           <p key={idx} className="text-[11px] sm:text-sm truncate">
                             • {item.nombre} × {item.cantidad}
                           </p>

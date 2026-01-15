@@ -39,6 +39,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import { useProductos } from '../contexts/ProductosContext';
+import { pedidosApi } from '../services/api/pedidos.api';
+import { integracionesApi } from '../services/api/integraciones.api';
 
 // Importar componentes modulares
 import { ModalOperacionesTPV } from './ModalOperacionesTPV';
@@ -53,10 +55,9 @@ import { CajaRapidaMejorada } from './CajaRapidaMejorada';
 import { TicketCocinaV2 } from './TicketCocinaV2';
 import { PanelOperativaAvanzado } from './PanelOperativaAvanzado';
 import { ConfiguracionImpresoras } from './ConfiguracionImpresoras';
-import { PanelCaja } from './PanelCaja';
+import PanelCaja from './PanelCaja';
 import { GestionTurnos } from './GestionTurnos';
 import { PanelEstadosPedidos } from './PanelEstadosPedidos';
-import { pedidosApi } from '../services/api/pedidos.api';
 import { ProductoPersonalizacionModal } from './ProductoPersonalizacionModal';
 import { productosPanaderia } from '../data/productos-panaderia';
 import { usePromocionesTPV } from '../hooks/usePromociones';
@@ -148,7 +149,7 @@ export interface Pedido {
   totalDescuento?: number;
   promocionesAplicadas?: PromocionDisponible[];
   estado: 'en_preparacion' | 'listo' | 'entregado' | 'cancelado' | 'devuelto';
-  origenPedido: 'presencial' | 'app' | 'web';
+  origenPedido: 'presencial' | 'app' | 'web' | string;
   metodoPago?: 'efectivo' | 'tarjeta' | 'mixto' | 'online';
   pagado: boolean;
   fechaCreacion: Date;
@@ -156,6 +157,10 @@ export interface Pedido {
   fechaGeolocalizacion?: string;
   motivoCancelacion?: string;
   motivoDevolucion?: string;
+  // Multicanal fields for filtering and display
+  empresa?: string;
+  marca?: string;
+  pdv?: string;
 }
 
 interface TPV360MasterProps {
@@ -285,17 +290,69 @@ export function TPV360Master({
   const [marcaActivaLocal, setMarcaActivaLocal] = useState<string>(marcaActiva || 'MRC-001'); // ✅ Modomio por defecto
   const [marcasDisponiblesLocal, setMarcasDisponiblesLocal] = useState<string[]>(marcasDisponibles);
   
-  // Estados de pedidos (backend)
+  // Estados de pedidos
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
-  const [loadingPedidos, setLoadingPedidos] = useState(false);
+  const [pedidosFiltrados, setPedidosFiltrados] = useState<Pedido[]>([]);
+  const [filtroEmpresa, setFiltroEmpresa] = useState<string>('');
+  const [filtroMarca, setFiltroMarca] = useState<string>('');
+  const [filtroPDV, setFiltroPDV] = useState<string>('');
+  const [filtroEstado, setFiltroEstado] = useState<string>('');
+  const [filtroOrigen, setFiltroOrigen] = useState<string>('');
+  const [filtroBusqueda, setFiltroBusqueda] = useState<string>('');
 
-  // Cargar pedidos desde backend al montar
+  // Cargar pedidos multicanal reales (internos y externos)
   useEffect(() => {
-    setLoadingPedidos(true);
-    pedidosApi.getAll()
-      .then(data => setPedidos(data))
-      .finally(() => setLoadingPedidos(false));
+    const cargarPedidos = async () => {
+      try {
+        const pedidosInternos = await pedidosApi.getAll();
+        const pedidosExternos = await integracionesApi.getPedidosExternos();
+        const pedidosExternosAdaptados = pedidosExternos.map((p: any) => ({
+          ...p,
+          id: p.pedidoExternoId || p.id,
+          codigo: p.codigo || p.pedidoExternoId || p.id,
+          cliente: p.cliente || { id: '', nombre: p.nombreCliente || '', telefono: p.telefonoCliente || '' },
+          items: p.items || [],
+          total: p.total || 0,
+          estado: p.estado || 'en_preparacion',
+          origenPedido: p.origen || p.plataforma || 'externo',
+          metodoPago: p.metodoPago || undefined,
+          pagado: p.pagado || false,
+          fechaCreacion: p.fechaPedido ? new Date(p.fechaPedido) : new Date(),
+          empresa: p.empresa || '',
+          marca: p.marca || '',
+          pdv: p.pdv || '',
+        }));
+        setPedidos([
+          ...pedidosInternos,
+          ...pedidosExternosAdaptados
+        ]);
+      } catch (error) {
+        toast.error('Error al cargar pedidos multicanal');
+      }
+    };
+    cargarPedidos();
   }, []);
+
+  // Filtros multicanal
+  useEffect(() => {
+    let filtrados = [...pedidos];
+    if (filtroEmpresa) filtrados = filtrados.filter(p => (p.empresa || '').toLowerCase().includes(filtroEmpresa.toLowerCase()));
+    if (filtroMarca) filtrados = filtrados.filter(p => (p.marca || '').toLowerCase().includes(filtroMarca.toLowerCase()));
+    if (filtroPDV) filtrados = filtrados.filter(p => (p.pdv || '').toLowerCase().includes(filtroPDV.toLowerCase()));
+    if (filtroEstado) filtrados = filtrados.filter(p => (p.estado || '').toLowerCase() === filtroEstado.toLowerCase());
+    if (filtroOrigen) filtrados = filtrados.filter(p => (p.origenPedido || '').toLowerCase() === filtroOrigen.toLowerCase());
+    if (filtroBusqueda) {
+      const q = filtroBusqueda.toLowerCase();
+      filtrados = filtrados.filter(p =>
+        (p.codigo && p.codigo.toLowerCase().includes(q)) ||
+        (p.cliente && (
+          (p.cliente.nombre && p.cliente.nombre.toLowerCase().includes(q)) ||
+          (p.cliente.telefono && p.cliente.telefono.toLowerCase().includes(q))
+        ))
+      );
+    }
+    setPedidosFiltrados(filtrados);
+  }, [pedidos, filtroEmpresa, filtroMarca, filtroPDV, filtroEstado, filtroOrigen, filtroBusqueda]);
 
   // ⭐ PRODUCTOS SIMULADOS CON MARCAS (temporal - luego se conectará con GestionProductos)
   const PRODUCTOS_TPV_MOCK: Producto[] = [
@@ -824,7 +881,7 @@ export function TPV360Master({
   // FUNCIONES DE PAGO
   // ============================================
 
-  const procesarPago = async () => {
+  const procesarPago = () => {
     if (!permisos.cobrar_pedidos) {
       toast.error('No tienes permisos para cobrar pedidos');
       return;
@@ -861,7 +918,14 @@ export function TPV360Master({
       }
     }
 
-    // Crear nuevo pedido
+    // Obtener info de PDV y empresa
+    const pdv = PUNTOS_VENTA[pdvEfectivo?.id || puntoVentaId];
+    const marcaId = marcaActiva || (pdv?.marcasDisponibles?.[0] ?? '');
+    const marca = MARCAS[marcaId];
+    const empresaId = marca?.empresaId || pdv?.empresaId || '';
+    const empresa = EMPRESAS[empresaId];
+
+    // Crear nuevo pedido con datos reales de empresa y ubicación
     const nuevoPedido: Pedido = {
       id: `PED-${Date.now()}`,
       codigo: turnoAsignado || generarCodigoTurno(),
@@ -875,7 +939,14 @@ export function TPV360Master({
       origenPedido: 'presencial',
       metodoPago,
       pagado: true,
-      fechaCreacion: new Date()
+      fechaCreacion: new Date(),
+      empresa: empresa?.nombreComercial || empresaId,
+      marca: marca?.nombre || marcaId,
+      pdv: pdv?.nombre || pdv?.id || puntoVentaId,
+      // Ubicación
+      direccion: pdv?.direccion,
+      latitud: pdv?.coordenadas?.latitud,
+      longitud: pdv?.coordenadas?.longitud
     };
 
     setPedidos([nuevoPedido, ...pedidos]);
@@ -912,48 +983,47 @@ export function TPV360Master({
   // FUNCIONES DE ESTADOS DE PEDIDO
   // ============================================
 
-  const marcarComoListo = async (pedidoId: string) => {
+  const marcarComoListo = (pedidoId: string) => {
     if (!permisos.marcar_como_listo) {
       toast.error('No tienes permisos para marcar pedidos como listos');
       return;
     }
-    const pedido = await pedidosApi.update(pedidoId, { estado: 'listo' });
-    if (pedido) {
-      setPedidos(pedidos.map(p => p.id === pedidoId ? pedido : p));
-      toast.success('Pedido marcado como listo');
-    }
+
+    setPedidos(pedidos.map(p => 
+      p.id === pedidoId ? { ...p, estado: 'listo' } : p
+    ));
+    toast.success('Pedido marcado como listo');
   };
 
-  const marcarComoEntregado = async (pedidoId: string) => {
-    const pedido = await pedidosApi.update(pedidoId, { estado: 'entregado' });
-    if (pedido) {
-      setPedidos(pedidos.map(p => p.id === pedidoId ? pedido : p));
-      toast.success('Pedido entregado');
-    }
+  const marcarComoEntregado = (pedidoId: string) => {
+    setPedidos(pedidos.map(p => 
+      p.id === pedidoId ? { ...p, estado: 'entregado' } : p
+    ));
+    toast.success('Pedido entregado');
   };
 
-  const cancelarPedido = async (pedidoId: string, motivo: string) => {
+  const cancelarPedido = (pedidoId: string, motivo: string) => {
     if (!permisos.acceso_operativa) {
       toast.error('No tienes permisos para cancelar pedidos');
       return;
     }
-    const pedido = await pedidosApi.update(pedidoId, { estado: 'cancelado', motivoCancelacion: motivo });
-    if (pedido) {
-      setPedidos(pedidos.map(p => p.id === pedidoId ? pedido : p));
-      toast.success('Pedido cancelado');
-    }
+
+    setPedidos(pedidos.map(p => 
+      p.id === pedidoId ? { ...p, estado: 'cancelado', motivoCancelacion: motivo } : p
+    ));
+    toast.success('Pedido cancelado');
   };
 
-  const devolverPedido = async (pedidoId: string, motivo: string) => {
+  const devolverPedido = (pedidoId: string, motivo: string) => {
     if (!permisos.acceso_operativa) {
       toast.error('No tienes permisos para hacer devoluciones');
       return;
     }
-    const pedido = await pedidosApi.update(pedidoId, { estado: 'devuelto', motivoDevolucion: motivo });
-    if (pedido) {
-      setPedidos(pedidos.map(p => p.id === pedidoId ? pedido : p));
-      toast.success('Devolución procesada');
-    }
+
+    setPedidos(pedidos.map(p => 
+      p.id === pedidoId ? { ...p, estado: 'devuelto', motivoDevolucion: motivo } : p
+    ));
+    toast.success('Devolución procesada');
   };
 
   // ============================================
@@ -1426,6 +1496,7 @@ export function TPV360Master({
                 <TabsTrigger 
                   value="caja" 
                   className="flex flex-col gap-0.5 sm:gap-1 py-2 sm:py-3 px-1 sm:px-2"
+                  disabled={!permisos.cierre_caja && !permisos.arqueo_caja}
                 >
                   <DollarSign className="w-4 h-4 sm:w-5 sm:h-5" />
                   <span className="text-[10px] sm:text-xs leading-tight">Caja</span>
@@ -1456,7 +1527,112 @@ export function TPV360Master({
                     </div>
                   </div>
                 )}
-                
+
+                {/* Filtros Multicanal Pedidos */}
+                <div className="mb-4 flex flex-wrap gap-2 items-end bg-white p-3 rounded-lg shadow-sm border border-gray-200">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Empresa</label>
+                    <select className="border rounded px-2 py-1 text-xs" value={filtroEmpresa} onChange={e => setFiltroEmpresa(e.target.value)}>
+                      <option value="">Todas</option>
+                      {Array.from(new Set(pedidos.map(p => p.empresa).filter(Boolean))).map(emp => (
+                        <option key={emp} value={emp}>{emp}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Marca</label>
+                    <select className="border rounded px-2 py-1 text-xs" value={filtroMarca} onChange={e => setFiltroMarca(e.target.value)}>
+                      <option value="">Todas</option>
+                      {Array.from(new Set(pedidos.map(p => p.marca).filter(Boolean))).map(marca => (
+                        <option key={marca} value={marca}>{marca}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">PDV</label>
+                    <select className="border rounded px-2 py-1 text-xs" value={filtroPDV} onChange={e => setFiltroPDV(e.target.value)}>
+                      <option value="">Todos</option>
+                      {Array.from(new Set(pedidos.map(p => p.pdv).filter(Boolean))).map(pdv => (
+                        <option key={pdv} value={pdv}>{pdv}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Estado</label>
+                    <select className="border rounded px-2 py-1 text-xs" value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}>
+                      <option value="">Todos</option>
+                      {Array.from(new Set(pedidos.map(p => p.estado).filter(Boolean))).map(estado => (
+                        <option key={estado} value={estado}>{estado}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Origen</label>
+                    <select className="border rounded px-2 py-1 text-xs" value={filtroOrigen} onChange={e => setFiltroOrigen(e.target.value)}>
+                      <option value="">Todos</option>
+                      {Array.from(new Set(pedidos.map(p => p.origenPedido).filter(Boolean))).map(origen => (
+                        <option key={origen} value={origen}>{origen}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex flex-col">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Búsqueda</label>
+                    <input
+                      className="border rounded px-2 py-1 text-xs"
+                      type="text"
+                      placeholder="Buscar código, cliente..."
+                      value={filtroBusqueda}
+                      onChange={e => setFiltroBusqueda(e.target.value)}
+                    />
+                  </div>
+                  <button
+                    className="ml-2 px-3 py-1 text-xs rounded bg-gray-100 border border-gray-300 hover:bg-gray-200"
+                    onClick={() => {
+                      setFiltroEmpresa(''); setFiltroMarca(''); setFiltroPDV(''); setFiltroEstado(''); setFiltroOrigen(''); setFiltroBusqueda('');
+                    }}
+                  >Limpiar</button>
+                </div>
+
+                {/* Tabla de Pedidos Multicanal */}
+                <div className="overflow-x-auto bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+                  <table className="min-w-full text-xs">
+                    <thead className="bg-gray-100">
+                      <tr>
+                        <th className="px-2 py-2 text-left">Código</th>
+                        <th className="px-2 py-2 text-left">Cliente</th>
+                        <th className="px-2 py-2 text-left">Empresa</th>
+                        <th className="px-2 py-2 text-left">Marca</th>
+                        <th className="px-2 py-2 text-left">PDV</th>
+                        <th className="px-2 py-2 text-left">Estado</th>
+                        <th className="px-2 py-2 text-left">Origen</th>
+                        <th className="px-2 py-2 text-left">Fecha</th>
+                        <th className="px-2 py-2 text-left">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pedidosFiltrados.length === 0 ? (
+                        <tr>
+                          <td colSpan={9} className="text-center text-gray-400 py-6">No hay pedidos para los filtros seleccionados</td>
+                        </tr>
+                      ) : (
+                        pedidosFiltrados.map(p => (
+                          <tr key={p.id} className="border-b hover:bg-gray-50">
+                            <td className="px-2 py-1 font-semibold">{p.codigo}</td>
+                            <td className="px-2 py-1">{p.cliente?.nombre || ''}</td>
+                            <td className="px-2 py-1">{p.empresa}</td>
+                            <td className="px-2 py-1">{p.marca}</td>
+                            <td className="px-2 py-1">{p.pdv}</td>
+                            <td className="px-2 py-1">{p.estado}</td>
+                            <td className="px-2 py-1">{p.origenPedido}</td>
+                            <td className="px-2 py-1">{p.fechaCreacion ? new Date(p.fechaCreacion).toLocaleString() : ''}</td>
+                            <td className="px-2 py-1">{p.total?.toFixed(2)}€</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
                   {/* Panel de Productos */}
                   <div className="lg:col-span-2 space-y-3 sm:space-y-4">
@@ -1820,38 +1996,44 @@ export function TPV360Master({
                                 disabled={!permisos.cobrar_pedidos}
                               >
                                 <CreditCard className="w-4 h-4 mr-2" />
-                                // Crear pedido en backend
-                                const pedidoData = {
-                                  clienteId: clienteSeleccionado?.id || undefined,
-                                  items: carrito.map(item => ({
-                                    productoId: item.producto.id,
-                                    cantidad: item.cantidad,
-                                    precio: item.producto.precio
-                                  })),
-                                  total: totalFinal,
-                                  estado: 'en_preparacion',
-                                  metodoPago,
-                                };
-                                const nuevoPedido = await pedidosApi.create(pedidoData);
-                                if (nuevoPedido) {
-                                  setPedidos([nuevoPedido, ...pedidos]);
-                                  actualizarStockDespuesDeVenta(carrito);
-                                  if (totalDescuento > 0) {
-                                    toast.success(`Pago procesado - Ahorro: ${totalDescuento.toFixed(2)}€`, {
-                                      description: `Total pagado: ${totalFinal.toFixed(2)}€`
-                                    });
-                                  } else {
-                                    toast.success('Pago procesado correctamente');
-                                  }
-                                  setCarrito([]);
-                                  setShowPagoDialog(false);
-                                  setMetodoPago(null);
-                                  setMontoPagado('');
-                                  setPedidoIniciado(false);
-                                  setClienteSeleccionado(null);
-                                  setTurnoAsignado(null);
-                                  setPedidoPagado(true);
-                                }
+                                Cobrar Pedido
+                              </Button>
+                              {permisos.marcar_como_listo && (
+                                <Button
+                                  variant="outline"
+                                  className="w-full"
+                                >
+                                  <Check className="w-4 h-4 mr-2" />
+                                  Marcar como Listo
+                                </Button>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* VISTA CAJA RÁPIDA */}
+              <TabsContent value="caja-rapida" className="mt-6">
+                <CajaRapidaMejorada 
+                  pedidos={pedidos}
+                  onMarcarListo={marcarComoListo}
+                  onMarcarEntregado={marcarComoEntregado}
+                  permisos={permisos}
+                />
+              </TabsContent>
+
+              {/* VISTA TURNOS */}
+              <TabsContent value="turnos" className="mt-6">
+                <GestionTurnos 
+                  puntoVentaId={pdvEfectivo?.id || puntoVentaId}
+                />
+              </TabsContent>
+
+              {/* VISTA ESTADOS */}
               <TabsContent value="estados" className="mt-6">
                 <PanelEstadosPedidos 
                   pedidos={pedidos}

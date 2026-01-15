@@ -318,83 +318,94 @@ export const FichajeColaborador = forwardRef<FichajeColaboradorRef, FichajeColab
       return;
     }
 
-    const ahora = new Date();
-    const nuevoFichaje: FichajeActivo = {
-      id: `FICH-${Date.now()}`,
-      trabajadorId: 'TRAB-001', // En producción vendría del usuario logueado
-      puntoVentaId: pdvSeleccionado,
-      puntoVentaNombre: pdvData.nombre,
-      fechaEntrada: ahora,
-      horaEntrada: ahora.toLocaleTimeString('es-ES', { 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      }),
-      geolocalizacion: geolocalizacion || undefined,
-      enPausa: false,
-    };
+    // Simulación: el ID del empleado debería venir del usuario autenticado
+    const empleadoId = 1; // TODO: Reemplazar por el ID real del usuario logueado
 
-    setFichadoActivo(nuevoFichaje);
-    setModalFichajeOpen(false);
-    
-    // Guardar el fichaje en localStorage
-    localStorage.setItem('fichaje_activo', JSON.stringify(nuevoFichaje));
-    
-    // TODO: Aquí se guardará el fichaje en la base de datos con Supabase
-    // Datos a guardar: trabajadorId, puntoVentaId, fechaEntrada, horaEntrada, geolocalizacion
-    console.log('[FICHAJE] Registro de ENTRADA para guardar en BBDD:', {
-      trabajadorId: nuevoFichaje.trabajadorId,
-      puntoVentaId: nuevoFichaje.puntoVentaId,
-      puntoVentaNombre: nuevoFichaje.puntoVentaNombre,
-      fechaEntrada: nuevoFichaje.fechaEntrada,
-      horaEntrada: nuevoFichaje.horaEntrada,
-      geolocalizacion: nuevoFichaje.geolocalizacion
-    });
-    
-    // Notificar al padre que hay fichaje activo
-    onFichajeChange?.(true);
-    
-    toast.success('Fichaje de entrada registrado', {
-      description: `PDV: ${pdvData.nombre}${geolocalizacion ? ' | Ubicación registrada' : ''}`,
-    });
+    // Construir la ubicación como string si hay geolocalización
+    let ubicacion = undefined;
+    if (geolocalizacion) {
+      ubicacion = `${geolocalizacion.latitud},${geolocalizacion.longitud} (±${geolocalizacion.precision}m)`;
+    }
+
+    // Llamar a la API para registrar el fichaje
+    fichajesApi.registrar({
+      empleadoId,
+      tipo: 'entrada',
+      ubicacion,
+      notas: undefined,
+    })
+      .then((fichaje) => {
+        if (fichaje) {
+          // Guardar el fichaje activo en el estado y localStorage
+          const ahora = new Date();
+          const nuevoFichaje: FichajeActivo = {
+            id: `FICH-${Date.now()}`,
+            trabajadorId: String(empleadoId),
+            puntoVentaId: pdvSeleccionado,
+            puntoVentaNombre: pdvData.nombre,
+            fechaEntrada: ahora,
+            horaEntrada: ahora.toLocaleTimeString('es-ES', {
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+            geolocalizacion: geolocalizacion || undefined,
+            enPausa: false,
+          };
+          setFichadoActivo(nuevoFichaje);
+          setModalFichajeOpen(false);
+          localStorage.setItem('fichaje_activo', JSON.stringify(nuevoFichaje));
+          onFichajeChange?.(true);
+          toast.success('Fichaje de entrada registrado', {
+            description: `PDV: ${pdvData.nombre}${geolocalizacion ? ' | Ubicación registrada' : ''}`,
+          });
+        } else {
+          toast.error('No se pudo registrar el fichaje en el servidor');
+        }
+      })
+      .catch((error) => {
+        toast.error('Error al registrar fichaje', {
+          description: error?.message || 'Error desconocido',
+        });
+      });
   };
 
   const handleFicharSalida = () => {
     if (!fichadoActivo) return;
 
-    const horaSalida = new Date().toLocaleTimeString('es-ES', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-    
-    const fechaSalida = new Date();
-    
-    // TODO: Aquí se actualizará el registro de fichaje en la base de datos con Supabase
-    // Se actualiza el registro con: fechaSalida, horaSalida
-    console.log('[FICHAJE] Registro de SALIDA para actualizar en BBDD:', {
-      fichajeId: fichadoActivo.id,
-      trabajadorId: fichadoActivo.trabajadorId,
-      puntoVentaId: fichadoActivo.puntoVentaId,
-      fechaEntrada: fichadoActivo.fechaEntrada,
-      horaEntrada: fichadoActivo.horaEntrada,
-      fechaSalida: fechaSalida,
-      horaSalida: horaSalida,
-      tiempoTotal: tiempoActual
-    });
+    // Simulación: el ID del empleado debería venir del usuario autenticado
+    const empleadoId = 1; // TODO: Reemplazar por el ID real del usuario logueado
 
-    setFichadoActivo(null);
-    setEnPausa(false);
-    setTiempoActual('00:00:00');
-    
-    // Eliminar el fichaje de localStorage
-    localStorage.removeItem('fichaje_activo');
-    
-    // Notificar al padre que no hay fichaje activo
-    onFichajeChange?.(false);
-    
-    toast.success('Fichaje de salida registrado', {
-      description: `PDV: ${fichadoActivo.puntoVentaNombre} | Tiempo total: ${tiempoActual}`,
-    });
+    // Construir la ubicación como string si hay geolocalización
+    let ubicacion = undefined;
+    if (fichadoActivo.geolocalizacion) {
+      ubicacion = `${fichadoActivo.geolocalizacion.latitud},${fichadoActivo.geolocalizacion.longitud} (±${fichadoActivo.geolocalizacion.precision}m)`;
+    }
+
+    fichajesApi.registrar({
+      empleadoId,
+      tipo: 'salida',
+      ubicacion,
+      notas: undefined,
+    })
+      .then((fichaje) => {
+        if (fichaje) {
+          setFichadoActivo(null);
+          setEnPausa(false);
+          setTiempoActual('00:00:00');
+          localStorage.removeItem('fichaje_activo');
+          onFichajeChange?.(false);
+          toast.success('Fichaje de salida registrado', {
+            description: `PDV: ${fichadoActivo.puntoVentaNombre} | Tiempo total: ${tiempoActual}`,
+          });
+        } else {
+          toast.error('No se pudo registrar la salida en el servidor');
+        }
+      })
+      .catch((error) => {
+        toast.error('Error al registrar salida', {
+          description: error?.message || 'Error desconocido',
+        });
+      });
   };
 
   const handlePausa = () => {

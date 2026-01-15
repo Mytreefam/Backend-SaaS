@@ -120,11 +120,11 @@ export const downloadPdf = async (req: any, res: any) => {
       <div class="factura-info">
         <p><strong>Fecha:</strong> ${factura.fecha}</p>
         <p><strong>Cliente ID:</strong> ${factura.clienteId}</p>
-        <p><strong>Estado:</strong> ${factura.estado}</p>
+        <p><strong>Estado:</strong> ${factura.estadoVerifactu}</p>
       </div>
       <div class="totales">
         <p>Subtotal: €${factura.subtotal?.toFixed(2) || '0.00'}</p>
-        <p>IVA: €${factura.iva?.toFixed(2) || '0.00'}</p>
+        <p>IVA: €${factura.impuestos?.toFixed(2) || '0.00'}</p>
         <p class="total">TOTAL: €${factura.total?.toFixed(2) || '0.00'}</p>
       </div>
     </body>

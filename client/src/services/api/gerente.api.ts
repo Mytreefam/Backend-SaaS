@@ -1814,8 +1814,8 @@ export const documentacionApi = {
     try {
       const formData = new FormData();
       formData.append('archivo', archivo);
-      
-      const response = await fetch('http://localhost:4000/gerente/documentacion/upload', {
+      https://mytreefam.com/sass/api
+      const response = await fetch(' https://mytreefam.com/sass/api/gerente/documentacion/upload', {
         method: 'POST',
         body: formData,
       });

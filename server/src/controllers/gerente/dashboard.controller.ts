@@ -4,9 +4,7 @@
  */
 
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../../prisma/client';
 
 /**
  * @swagger
@@ -123,19 +121,19 @@ export const obtenerDatosVentas = async (req: Request, res: Response) => {
     });
 
     // Calcular KPIs
-    const ventas_periodo = pedidos.reduce((sum, p) => sum + p.total, 0);
+    const ventas_periodo = pedidos.reduce((sum: number, p: any) => sum + p.total, 0);
     const pedidos_periodo = pedidos.length;
-    const productos_vendidos = pedidos.reduce((sum, p) => 
-      sum + p.items.reduce((itemSum, item) => itemSum + item.cantidad, 0), 0
+    const productos_vendidos = pedidos.reduce((sum: number, p: any) => 
+      sum + p.items.reduce((itemSum: number, item: any) => itemSum + item.cantidad, 0), 0
     );
     const ticket_medio_pedido = pedidos_periodo > 0 ? ventas_periodo / pedidos_periodo : 0;
     const ticket_medio_producto = productos_vendidos > 0 ? ventas_periodo / productos_vendidos : 0;
 
     // Calcular ventas por canal (basado en metadata o campo específico)
     // TODO: Agregar campo 'canal' a Pedido en schema
-    const ventas_mostrador = pedidos.filter(p => p.estado === 'completado').reduce((sum, p) => sum + p.total * 0.6, 0);
-    const ventas_app_web = pedidos.filter(p => p.estado === 'completado').reduce((sum, p) => sum + p.total * 0.3, 0);
-    const ventas_terceros = pedidos.filter(p => p.estado === 'completado').reduce((sum, p) => sum + p.total * 0.1, 0);
+    const ventas_mostrador = pedidos.filter((p: any) => p.estado === 'completado').reduce((sum: number, p: any) => sum + p.total * 0.6, 0);
+    const ventas_app_web = pedidos.filter((p: any) => p.estado === 'completado').reduce((sum: number, p: any) => sum + p.total * 0.3, 0);
+    const ventas_terceros = pedidos.filter((p: any) => p.estado === 'completado').reduce((sum: number, p: any) => sum + p.total * 0.1, 0);
 
     // Calcular variaciones (comparar con periodo anterior)
     const periodoAnteriorStart = new Date(startDate);
@@ -152,7 +150,7 @@ export const obtenerDatosVentas = async (req: Request, res: Response) => {
       }
     });
 
-    const ventasAnterior = pedidosAnterior.reduce((sum, p) => sum + p.total, 0);
+    const ventasAnterior = pedidosAnterior.reduce((sum: number, p: any) => sum + p.total, 0);
     const variacion_ventas_periodo = ventasAnterior > 0 
       ? ((ventas_periodo - ventasAnterior) / ventasAnterior) * 100 
       : 0;
@@ -173,7 +171,7 @@ export const obtenerDatosVentas = async (req: Request, res: Response) => {
         }
       });
       
-      const ventasMes = pedidosMes.reduce((sum, p) => sum + p.total, 0);
+      const ventasMes = pedidosMes.reduce((sum: number, p: any) => sum + p.total, 0);
       
       labels_ultimos_5_meses.push(mesDate.toLocaleDateString('es-ES', { month: 'short' }));
       ingresos_ultimos_5_meses.push(ventasMes);
@@ -269,9 +267,9 @@ export const obtenerKPIs = async (req: Request, res: Response) => {
       }
     });
 
-    const totalVentas = pedidos.reduce((sum, p) => sum + p.total, 0);
+    const totalVentas = pedidos.reduce((sum: number, p: any) => sum + p.total, 0);
     const totalPedidos = pedidos.length;
-    const clientesUnicos = new Set(pedidos.map(p => p.clienteId)).size;
+    const clientesUnicos = new Set(pedidos.map((p: any) => p.clienteId)).size;
 
     // Calcular margen (mock - se calculará con costes reales)
     const margen = 34.5;

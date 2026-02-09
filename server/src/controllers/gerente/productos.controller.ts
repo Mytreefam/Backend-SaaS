@@ -4,9 +4,7 @@
  */
 
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../../prisma/client';
 
 /**
  * @swagger
@@ -75,7 +73,7 @@ export const obtenerProductos = async (req: Request, res: Response) => {
     });
 
     // Transformar a formato esperado por frontend
-    const productosTransformados = productos.map(p => ({
+    const productosTransformados = productos.map((p: any) => ({
       id: p.id.toString(),
       sku: `PRD-${p.id.toString().padStart(3, '0')}`,
       nombre: p.nombre,

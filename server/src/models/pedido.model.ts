@@ -1,5 +1,5 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import prisma from '../prisma/client';
+import { coercePedidoEstado } from '../domain/pedido-estado';
 
 export const PedidoModel = {
   async findAll() {
@@ -51,6 +51,7 @@ export const PedidoModel = {
       return prisma.pedido.create({
         data: {
           ...rest,
+          estado: coercePedidoEstado(rest.estado),
           clienteId, // SIEMPRE el valor correcto aquí
           items: { create: items }
         },
@@ -58,7 +59,11 @@ export const PedidoModel = {
       });
   },
   async update(id: number, data: any) {
-    return prisma.pedido.update({ where: { id }, data });
+    const payload = { ...data };
+    if (payload.estado !== undefined) {
+      payload.estado = coercePedidoEstado(payload.estado);
+    }
+    return prisma.pedido.update({ where: { id }, data: payload });
   },
   async delete(id: number) {
     return prisma.pedido.delete({ where: { id } });

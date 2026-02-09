@@ -4,9 +4,7 @@
  */
 
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../../prisma/client';
 
 // ============================================
 // ARTÍCULOS DE STOCK
@@ -187,58 +185,76 @@ export const ajustarStock = async (req: Request, res: Response) => {
     const { id } = req.params;
     const { tipo, cantidad, motivo, observaciones, usuario_id, usuarioNombre } = req.body;
 
-    if (!tipo || !cantidad) {
+    const articuloId = parseInt(id, 10);
+    const qty = typeof cantidad === 'string' ? Number(cantidad) : cantidad;
+
+    if (!tipo || !qty) {
       return res.status(400).json({ success: false, error: 'Faltan datos del ajuste' });
     }
+    if (!Number.isFinite(articuloId) || articuloId <= 0) {
+      return res.status(400).json({ success: false, error: 'ID inválido' });
+    }
+    if (!Number.isFinite(qty) || qty <= 0) {
+      return res.status(400).json({ success: false, error: 'Cantidad inválida' });
+    }
 
-    // Obtener artículo actual
-    const articulo = await prisma.articuloStock.findUnique({
-      where: { id: parseInt(id) }
+    const result = await prisma.$transaction(async (tx: any) => {
+      // Obtener artículo actual
+      const articulo = await tx.articuloStock.findUnique({
+        where: { id: articuloId },
+      });
+
+      if (!articulo) {
+        return { kind: 'not_found' as const };
+      }
+
+      // Calcular nuevo stock
+      let nuevoStock = articulo.stockActual;
+      if (tipo === 'entrada') {
+        nuevoStock += qty;
+      } else if (tipo === 'salida') {
+        nuevoStock -= qty;
+        if (nuevoStock < 0) {
+          return { kind: 'insufficient' as const };
+        }
+      } else if (tipo === 'ajuste' || tipo === 'merma') {
+        nuevoStock = qty;
+      }
+
+      const articuloActualizado = await tx.articuloStock.update({
+        where: { id: articuloId },
+        data: {
+          stockActual: nuevoStock,
+          alertaStockBajo: nuevoStock <= articulo.stockMinimo,
+          modificadoEn: new Date(),
+        },
+      });
+
+      const movimiento = await tx.movimientoStock.create({
+        data: {
+          articuloId,
+          tipo,
+          cantidad: qty,
+          stockAnterior: articulo.stockActual,
+          stockPosterior: nuevoStock,
+          motivo: motivo || tipo,
+          observaciones,
+          usuarioId: usuario_id ? parseInt(usuario_id, 10) : null,
+          usuarioNombre: usuarioNombre || 'Sistema',
+        },
+      });
+
+      return { kind: 'ok' as const, articulo: articuloActualizado, movimiento };
     });
 
-    if (!articulo) {
+    if (result.kind === 'not_found') {
       return res.status(404).json({ success: false, error: 'Artículo no encontrado' });
     }
-
-    // Calcular nuevo stock
-    let nuevoStock = articulo.stockActual;
-    if (tipo === 'entrada') {
-      nuevoStock += cantidad;
-    } else if (tipo === 'salida') {
-      nuevoStock -= cantidad;
-      if (nuevoStock < 0) {
-        return res.status(400).json({ success: false, error: 'Stock insuficiente' });
-      }
-    } else if (tipo === 'ajuste' || tipo === 'merma') {
-      nuevoStock = cantidad;
+    if (result.kind === 'insufficient') {
+      return res.status(400).json({ success: false, error: 'Stock insuficiente' });
     }
 
-    // Actualizar artículo
-    const articuloActualizado = await prisma.articuloStock.update({
-      where: { id: parseInt(id) },
-      data: {
-        stockActual: nuevoStock,
-        alertaStockBajo: nuevoStock <= articulo.stockMinimo,
-        modificadoEn: new Date()
-      }
-    });
-
-    // Registrar movimiento
-    const movimiento = await prisma.movimientoStock.create({
-      data: {
-        articuloId: parseInt(id),
-        tipo,
-        cantidad,
-        stockAnterior: articulo.stockActual,
-        stockPosterior: nuevoStock,
-        motivo: motivo || tipo,
-        observaciones,
-        usuarioId: usuario_id ? parseInt(usuario_id) : null,
-        usuarioNombre: usuarioNombre || 'Sistema'
-      }
-    });
-
-    res.json({ success: true, data: { articulo: articuloActualizado, movimiento } });
+    res.json({ success: true, data: { articulo: result.articulo, movimiento: result.movimiento } });
   } catch (error) {
     console.error('Error al ajustar stock:', error);
     res.status(500).json({ success: false, error: 'Error al ajustar stock' });

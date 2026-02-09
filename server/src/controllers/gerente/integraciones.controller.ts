@@ -1,73 +1,13 @@
-// STUB: Obtener plataforma por ID
-export const obtenerPlataformaPorId = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    // Simula búsqueda en PLATAFORMAS_BASE
-    const plataforma = PLATAFORMAS_BASE.find(p => p.id === parseInt(id));
-    if (!plataforma) return res.status(404).json({ error: 'Plataforma no encontrada' });
-    res.json({ ...plataforma, activa: true, conectada: true });
-  } catch (error) {
-    res.status(500).json({ error: 'Error al obtener plataforma' });
-  }
-};
-
-// STUB: Crear plataforma
-export const crearPlataforma = async (req: Request, res: Response) => {
-  try {
-    // Simula creación
-    res.status(201).json({ ...req.body, id: Date.now() });
-  } catch (error) {
-    res.status(500).json({ error: 'Error al crear plataforma' });
-  }
-};
-
-// STUB: Actualizar plataforma
-export const actualizarPlataforma = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    res.json({ id: parseInt(id), ...req.body });
-  } catch (error) {
-    res.status(500).json({ error: 'Error al actualizar plataforma' });
-  }
-};
-
-// STUB: Eliminar plataforma
-export const eliminarPlataforma = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    res.json({ id: parseInt(id), eliminado: true });
-  } catch (error) {
-    res.status(500).json({ error: 'Error al eliminar plataforma' });
-  }
-};
-
-// STUB: Obtener historial de sincronización
-export const obtenerHistorialSincronizacion = async (req: Request, res: Response) => {
-  try {
-    // Reutiliza historial simulado
-    res.json([{ id: 1, plataforma: 'Glovo', accion: 'sync', fecha: new Date().toISOString() }]);
-  } catch (error) {
-    res.status(500).json({ error: 'Error al obtener historial' });
-  }
-};
-
-// STUB: Obtener estadísticas de integraciones
-export const obtenerEstadisticasIntegraciones = async (req: Request, res: Response) => {
-  try {
-    res.json({ plataformasActivas: 2, plataformasTotales: 4, tasaExitoSync: 95 });
-  } catch (error) {
-    res.status(500).json({ error: 'Error al obtener estadísticas' });
-  }
-};
 /**
  * CONTROLADOR: Integraciones Delivery
  * Endpoints para gestión de plataformas externas (Glovo, Uber Eats, etc.)
+ *
+ * Nota: Este archivo estaba con imports a mitad de fichero (inválido en TS).
+ * Se reordenó únicamente para mantener el mismo comportamiento y permitir build.
  */
 
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../../prisma/client';
 
 // Datos de plataformas disponibles (configuración base)
 const PLATAFORMAS_BASE = [
@@ -75,7 +15,7 @@ const PLATAFORMAS_BASE = [
   { id: 2, codigo: 'uber_eats', nombre: 'Uber Eats', logo: '/logos/ubereats.png' },
   { id: 3, codigo: 'just_eat', nombre: 'Just Eat', logo: '/logos/justeat.png' },
   { id: 4, codigo: 'deliveroo', nombre: 'Deliveroo', logo: '/logos/deliveroo.png' },
-];
+] as const;
 
 /**
  * GET /api/gerente/integraciones/plataformas
@@ -101,6 +41,67 @@ export const obtenerPlataformas = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error al obtener plataformas:', error);
     res.status(500).json({ error: 'Error al obtener plataformas' });
+  }
+};
+
+export const obtenerPlataformaPorId = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const plataforma = PLATAFORMAS_BASE.find((p) => p.id === parseInt(id, 10));
+    if (!plataforma) return res.status(404).json({ error: 'Plataforma no encontrada' });
+    res.json({ ...plataforma, activa: true, conectada: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener plataforma' });
+  }
+};
+
+export const crearPlataforma = async (req: Request, res: Response) => {
+  try {
+    // Simula creación
+    res.status(201).json({ ...req.body, id: Date.now() });
+  } catch (error) {
+    res.status(500).json({ error: 'Error al crear plataforma' });
+  }
+};
+
+export const actualizarPlataforma = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    res.json({ id: parseInt(id, 10), ...req.body });
+  } catch (error) {
+    res.status(500).json({ error: 'Error al actualizar plataforma' });
+  }
+};
+
+export const eliminarPlataforma = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    res.json({ id: parseInt(id, 10), eliminado: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Error al eliminar plataforma' });
+  }
+};
+
+/**
+ * Alias usado por rutas: GET /gerente/integraciones/historial
+ */
+export const obtenerHistorialSincronizacion = async (req: Request, res: Response) => {
+  try {
+    // Reutiliza historial simulado
+    res.json([{ id: 1, plataforma: 'Glovo', accion: 'sync', fecha: new Date().toISOString() }]);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener historial' });
+  }
+};
+
+/**
+ * Alias usado por rutas: GET /gerente/integraciones/estadisticas
+ */
+export const obtenerEstadisticasIntegraciones = async (req: Request, res: Response) => {
+  try {
+    res.json({ plataformasActivas: 2, plataformasTotales: 4, tasaExitoSync: 95 });
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener estadísticas' });
   }
 };
 
@@ -266,7 +267,7 @@ export const obtenerPedidosExternos = async (req: Request, res: Response) => {
       take: 50,
     });
 
-    const pedidosFormateados = pedidos.map(p => ({
+    const pedidosFormateados = pedidos.map((p: any) => ({
       id: p.id,
       plataformaId: 1, // Plataforma genérica
       plataformaNombre: 'Delivery',

@@ -2,8 +2,9 @@ import dotenv from "dotenv";
 dotenv.config(); // <--- CARGA EL .ENV
 
 import app from "./app";
+import prisma from './prisma/client';
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 4000;
 
 // Capturar errores no manejados
 process.on('uncaughtException', (error) => {
@@ -35,17 +36,25 @@ server.on('error', (error: any) => {
 // Manejo de señales de terminación
 process.on('SIGTERM', () => {
   console.log('⚠️  SIGTERM recibido, cerrando servidor...');
-  server.close(() => {
-    console.log('✅ Servidor cerrado');
-    process.exit(0);
+  server.close(async () => {
+    try {
+      await prisma.$disconnect();
+    } finally {
+      console.log('✅ Servidor cerrado');
+      process.exit(0);
+    }
   });
 });
 
 process.on('SIGINT', () => {
   console.log('\n⚠️  SIGINT recibido (Ctrl+C), cerrando servidor...');
-  server.close(() => {
-    console.log('✅ Servidor cerrado');
-    process.exit(0);
+  server.close(async () => {
+    try {
+      await prisma.$disconnect();
+    } finally {
+      console.log('✅ Servidor cerrado');
+      process.exit(0);
+    }
   });
 });
 

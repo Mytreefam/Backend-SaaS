@@ -1,5 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import prisma from '../prisma/client';
 
 export const getAllCitas = async () => prisma.cita.findMany();
 export const getCitaById = async (id: number) => prisma.cita.findUnique({ where: { id } });

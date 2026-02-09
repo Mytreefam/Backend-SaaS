@@ -1,17 +1,28 @@
 import { Router } from 'express';
 import * as clienteController from '../controllers/cliente.controller';
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import prisma from '../prisma/client';
+import { requireAuth, requireOwnershipOrRole, requireRole } from '../middleware/auth.middleware';
 
 const router = Router();
-router.get('/', clienteController.getAllClientes);
-router.get('/:id', clienteController.getClienteById);
+
+// Public: registration
 router.post('/', clienteController.createCliente);
-router.put('/:id', clienteController.updateCliente);
-router.delete('/:id', clienteController.deleteCliente);
+
+// All other client routes require authentication
+router.use(requireAuth);
+
+// Admin/manager: list all clients
+router.get('/', requireRole('gerente'), clienteController.getAllClientes);
+
+// Ownership-protected
+const requireClientOwnership = requireOwnershipOrRole({ param: 'id', rolesAllowed: ['gerente'] });
+
+router.get('/:id', requireClientOwnership, clienteController.getClienteById);
+router.put('/:id', requireClientOwnership, clienteController.updateCliente);
+router.delete('/:id', requireClientOwnership, clienteController.deleteCliente);
 
 // Obtener promociones de un cliente específico
-router.get('/:id/promociones', async (req, res) => {
+router.get('/:id/promociones', requireClientOwnership, async (req, res) => {
 	const clienteId = Number(req.params.id);
 	// Si tienes promos asociadas al cliente, ajusta el query. Aquí se devuelven todas.
 	const promociones = await prisma.promocion.findMany();
@@ -19,7 +30,7 @@ router.get('/:id/promociones', async (req, res) => {
 });
 
 // Obtener pedidos de un cliente específico
-router.get('/:id/pedidos', async (req, res) => {
+router.get('/:id/pedidos', requireClientOwnership, async (req, res) => {
 	const clienteId = Number(req.params.id);
 	const pedidos = await prisma.pedido.findMany({
 		where: { clienteId },
@@ -41,10 +52,22 @@ router.get('/:id/pedidos', async (req, res) => {
 		{ estado: 'completado', label: 'Completado' }
 	];
 
-	const pedidosConTimeline = pedidos.map(pedido => {
+	const pedidosConTimeline = pedidos.map((pedido: any) => {
+		const estadoMap: Record<string, string> = {
+			pendiente: 'recibido',
+			nuevo: 'recibido',
+			aceptado: 'recibido',
+			en_preparacion: 'preparacion',
+			listo: 'enviado',
+			entregado: 'completado',
+			cancelado: 'completado'
+		};
+
+		const estadoTimeline = estadoMap[pedido.estado] || pedido.estado;
+		const currentIndex = Math.max(0, estados.findIndex(e => e.estado === estadoTimeline));
 		// Genera el timeline hasta el estado actual
 		const timeline = estados.map((step, idx) => {
-			const completado = idx <= estados.findIndex(e => e.estado === pedido.estado);
+			const completado = idx <= currentIndex;
 			return {
 				estado: step.estado,
 				label: step.label,
@@ -64,14 +87,14 @@ router.get('/:id/pedidos', async (req, res) => {
 });
 
 // Obtener notificaciones de un cliente específico
-router.get('/:id/notificaciones', async (req, res) => {
+router.get('/:id/notificaciones', requireClientOwnership, async (req, res) => {
 	const clienteId = Number(req.params.id);
 	const notificaciones = await prisma.notificacion.findMany({ where: { clienteId } });
 	res.json(notificaciones);
 });
 
 // Obtener turno activo de un cliente específico
-router.get('/:id/turno-activo', async (req, res) => {
+router.get('/:id/turno-activo', requireClientOwnership, async (req, res) => {
 	const clienteId = Number(req.params.id);
 	try {
 		const turno = await prisma.turno.findFirst({
@@ -86,7 +109,7 @@ router.get('/:id/turno-activo', async (req, res) => {
 		});
 		res.json(turno || {});
 	} catch (err) {
-		res.status(500).json({ error: 'Error consultando turno', details: err });
+		res.status(500).json({ error: 'Error consultando turno' });
 	}
 });
 

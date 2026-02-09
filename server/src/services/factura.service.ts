@@ -1,5 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import prisma from '../prisma/client';
 
 export const getAllFacturas = async () => prisma.factura.findMany();
 export const getFacturaById = async (id: number) => prisma.factura.findUnique({ where: { id } });

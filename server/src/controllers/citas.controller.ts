@@ -1,7 +1,5 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../prisma/client';
 
 export const CitasController = {
   // Obtener todas las citas con opciones de filtrado
@@ -54,12 +52,12 @@ export const CitasController = {
       // Calcular estadísticas
       const stats = {
         total: citas.length,
-        solicitadas: citas.filter((c) => c.estado === 'solicitada').length,
-        confirmadas: citas.filter((c) => c.estado === 'confirmada').length,
-        enProgreso: citas.filter((c) => c.estado === 'en_progreso').length,
-        completadas: citas.filter((c) => c.estado === 'completada').length,
-        canceladas: citas.filter((c) => c.estado === 'cancelada').length,
-        noPresantado: citas.filter((c) => c.estado === 'no_presentado').length,
+        solicitadas: citas.filter((c: any) => c.estado === 'solicitada').length,
+        confirmadas: citas.filter((c: any) => c.estado === 'confirmada').length,
+        enProgreso: citas.filter((c: any) => c.estado === 'en_progreso').length,
+        completadas: citas.filter((c: any) => c.estado === 'completada').length,
+        canceladas: citas.filter((c: any) => c.estado === 'cancelada').length,
+        noPresantado: citas.filter((c: any) => c.estado === 'no_presentado').length,
       };
 
       // Calcular tasas
@@ -371,12 +369,12 @@ export const CitasController = {
 
       const stats = {
         total: citas.length,
-        solicitadas: citas.filter((c) => c.estado === 'solicitada').length,
-        confirmadas: citas.filter((c) => c.estado === 'confirmada').length,
-        enProgreso: citas.filter((c) => c.estado === 'en_progreso').length,
-        completadas: citas.filter((c) => c.estado === 'completada').length,
-        canceladas: citas.filter((c) => c.estado === 'cancelada').length,
-        noPresantado: citas.filter((c) => c.estado === 'no_presentado').length,
+        solicitadas: citas.filter((c: any) => c.estado === 'solicitada').length,
+        confirmadas: citas.filter((c: any) => c.estado === 'confirmada').length,
+        enProgreso: citas.filter((c: any) => c.estado === 'en_progreso').length,
+        completadas: citas.filter((c: any) => c.estado === 'completada').length,
+        canceladas: citas.filter((c: any) => c.estado === 'cancelada').length,
+        noPresantado: citas.filter((c: any) => c.estado === 'no_presentado').length,
       };
 
       const tasaConfirmacion =

@@ -1,9 +1,10 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import prisma from '../prisma/client';
 
 export const NotificacionModel = {
-  async findAll() {
-    return prisma.notificacion.findMany();
+  async findAll(params?: { clienteId?: number }) {
+    return prisma.notificacion.findMany({
+      where: params?.clienteId ? { clienteId: params.clienteId } : undefined,
+    });
   },
   async findById(id: number) {
     return prisma.notificacion.findUnique({ where: { id } });

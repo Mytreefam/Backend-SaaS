@@ -4,9 +4,7 @@
  */
 
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../../prisma/client';
 
 /**
  * GET /api/gerente/dashboard/ventas/canales
@@ -55,7 +53,7 @@ export const obtenerVentasPorCanal = async (req: Request, res: Response) => {
       total: 0,
     };
 
-    pedidos.forEach(pedido => {
+    pedidos.forEach((pedido: any) => {
       const total = Number(pedido.total) || 0;
       ventasPorCanal.total += total;
 

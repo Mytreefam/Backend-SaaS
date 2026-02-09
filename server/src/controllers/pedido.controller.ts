@@ -19,14 +19,20 @@ import { PedidoModel } from '../models/pedido.model';
  *                 $ref: '#/components/schemas/Pedido'
  */
 export const getAllPedidos = async (req: any, res: any) => {
+  if (!req.user) return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
+  if (req.user.role !== 'gerente') return res.status(403).json({ success: false, error: 'FORBIDDEN' });
   const pedidos = await PedidoModel.findAll();
   res.json(pedidos);
 };
 
 export const getPedidoById = async (req: any, res: any) => {
+  if (!req.user) return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
   const { id } = req.params;
   const pedido = await PedidoModel.findById(Number(id));
   if (!pedido) return res.status(404).json({ error: 'No encontrado' });
+  if (req.user.role !== 'gerente' && pedido.clienteId !== req.user.id) {
+    return res.status(403).json({ success: false, error: 'FORBIDDEN' });
+  }
   res.json(pedido);
 };
 
@@ -49,18 +55,38 @@ export const getPedidoById = async (req: any, res: any) => {
  *         description: Pedido creado
  */
 export const createPedido = async (req: any, res: any) => {
-  const nuevo = await PedidoModel.create(req.body);
+  if (!req.user) return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
+
+  // Prevent mass assignment: clients can only create for themselves
+  const payload = { ...req.body };
+  if (req.user.role !== 'gerente') {
+    payload.clienteId = req.user.id;
+  }
+
+  const nuevo = await PedidoModel.create(payload);
   res.status(201).json(nuevo);
 };
 
 export const updatePedido = async (req: any, res: any) => {
+  if (!req.user) return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
   const { id } = req.params;
+  const pedido = await PedidoModel.findById(Number(id));
+  if (!pedido) return res.status(404).json({ error: 'No encontrado' });
+  if (req.user.role !== 'gerente' && pedido.clienteId !== req.user.id) {
+    return res.status(403).json({ success: false, error: 'FORBIDDEN' });
+  }
   const actualizado = await PedidoModel.update(Number(id), req.body);
   res.json(actualizado);
 };
 
 export const deletePedido = async (req: any, res: any) => {
+  if (!req.user) return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
   const { id } = req.params;
+  const pedido = await PedidoModel.findById(Number(id));
+  if (!pedido) return res.status(404).json({ error: 'No encontrado' });
+  if (req.user.role !== 'gerente' && pedido.clienteId !== req.user.id) {
+    return res.status(403).json({ success: false, error: 'FORBIDDEN' });
+  }
   await PedidoModel.delete(Number(id));
   res.status(204).end();
 };

@@ -8,9 +8,7 @@
  */
 
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../prisma/client';
 
 // ============================================================================
 // DOCUMENTOS EMPRESARIALES
@@ -274,7 +272,7 @@ export async function obtenerEstadisticasDocumentos(req: Request, res: Response)
       proximosVencer,
       caducados,
       archivados,
-      porCategoria: porCategoria.reduce((acc, item) => {
+      porCategoria: porCategoria.reduce((acc: any, item: any) => {
         acc[item.categoria] = item._count.id;
         return acc;
       }, {} as Record<string, number>)

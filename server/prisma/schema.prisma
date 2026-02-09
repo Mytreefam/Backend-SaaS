@@ -71,6 +71,7 @@ model Cliente {
   avatar         String?
   ciudad         String?
   idioma         String?
+  refreshTokens  RefreshToken[]
   chats          Chat[]
   citas          Cita[]
   cupones        Cupon[]
@@ -82,6 +83,25 @@ model Cliente {
   pedidos        Pedido[]
   presupuestos   Presupuesto[]
   turnos         Turno[]
+}
+
+// =========================
+// AUTH - REFRESH TOKENS
+// =========================
+model RefreshToken {
+  id                 Int       @id @default(autoincrement())
+  tokenHash           String    @unique
+  clienteId           Int
+  cliente             Cliente   @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  expiresAt           DateTime
+  revokedAt           DateTime?
+  replacedByTokenHash String?
+  userAgent           String?
+  ip                 String?
+  createdAt           DateTime  @default(now())
+
+  @@index([clienteId])
+  @@index([expiresAt])
 }
 
 model Cupon {

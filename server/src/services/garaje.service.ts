@@ -1,5 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import prisma from '../prisma/client';
 
 export const getAllGarajes = async () => prisma.garaje.findMany();
 export const getGarajeById = async (id: number) => prisma.garaje.findUnique({ where: { id } });

@@ -1,5 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import prisma from '../prisma/client';
 
 export const getAllPresupuestos = async () => prisma.presupuesto.findMany();
 export const getPresupuestoById = async (id: number) => prisma.presupuesto.findUnique({ where: { id } });

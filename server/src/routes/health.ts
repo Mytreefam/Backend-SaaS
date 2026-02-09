@@ -7,9 +7,9 @@ router.get('/', async (_req, res) => {
   try {
     // Minimal DB check
     await prisma.$queryRaw`SELECT 1`;
-    res.json({ ok: true });
+    res.json({ success: true, data: { ok: true }, ok: true });
   } catch {
-    res.status(503).json({ ok: false });
+    res.status(503).json({ success: false, error: 'UNHEALTHY', ok: false });
   }
 });
 

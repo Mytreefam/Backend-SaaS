@@ -6,8 +6,6 @@ export function notFoundHandler(_req: Request, res: Response) {
 
 export function errorHandler(err: any, _req: Request, res: Response, _next: NextFunction) {
   const status = typeof err?.status === 'number' ? err.status : 500;
-  const message =
-    typeof err?.message === 'string' && err.message.length > 0 ? err.message : 'INTERNAL_ERROR';
 
   // Avoid leaking internals in production
   const isProd = process.env.NODE_ENV === 'production';
@@ -21,7 +19,8 @@ export function errorHandler(err: any, _req: Request, res: Response, _next: Next
 
   res.status(status).json({
     success: false,
-    error: status === 500 && isProd ? 'INTERNAL_ERROR' : message,
+    // In production we never return raw messages; keep stable codes.
+    error: status >= 500 ? 'INTERNAL_ERROR' : 'REQUEST_FAILED',
   });
 }
 

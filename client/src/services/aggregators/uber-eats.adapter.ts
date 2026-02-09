@@ -10,6 +10,7 @@ import {
   PedidoAgregador,
   EstadoPedidoAgregador
 } from '../../lib/aggregator-adapter';
+import { envelopedFetch } from '../http/envelopedFetch';
 
 // ============================================
 // TIPOS UBER EATS
@@ -110,20 +111,20 @@ export class UberEatsAdapter extends AgregadorBase {
   async conectar(): Promise<RespuestaAgregador> {
     try {
       // Obtener token OAuth2
-      const tokenResponse = await fetch('https://login.uber.com/oauth/v2/token', {
+      const tokenResponse = await envelopedFetch<string>('https://login.uber.com/oauth/v2/token', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
+        skipAuth: true,
+        responseType: 'text',
         body: new URLSearchParams({
           client_id: this.clientId,
           client_secret: this.clientSecret,
           grant_type: 'client_credentials',
-          scope: 'eats.store'
-        })
+          scope: 'eats.store',
+        }),
       });
 
-      const tokenData = await tokenResponse.json();
+      const tokenText = tokenResponse.data.data ?? '';
+      const tokenData = JSON.parse(tokenText || '{}');
       this.accessToken = tokenData.access_token;
 
       // Verificar acceso al store

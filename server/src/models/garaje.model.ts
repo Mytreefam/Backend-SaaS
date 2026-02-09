@@ -1,8 +1,11 @@
 import prisma from '../prisma/client';
 
 export const GarajeModel = {
-  async findAll() {
-    return prisma.garaje.findMany({ include: { cliente: true } });
+  async findAll(params?: { clienteId?: number }) {
+    return prisma.garaje.findMany({
+      where: params?.clienteId ? { clienteId: params.clienteId } : undefined,
+      include: { cliente: true },
+    });
   },
   async findById(id: number) {
     return prisma.garaje.findUnique({ where: { id }, include: { cliente: true } });

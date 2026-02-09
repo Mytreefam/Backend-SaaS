@@ -4,7 +4,7 @@
  * Servicios para gestión financiera y cálculo de EBITDA
  */
 
-import { API_CONFIG, buildUrl, getAuthToken } from '../../config/api.config';
+import { envelopedFetch } from '../http/envelopedFetch';
 
 // ============================================================================
 // TIPOS
@@ -74,18 +74,8 @@ export const ebitdaApi = {
       if (params?.fechaFin) queryParams.append('fecha_fin', params.fechaFin);
       if (queryParams.toString()) url += `?${queryParams.toString()}`;
 
-      const response = await fetch(buildUrl(url), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al obtener cuenta de resultados');
-      }
-
-      return await response.json();
+      const response = await envelopedFetch<CuentaResultados>(url, { method: 'GET' });
+      return response.data.data ?? null;
     } catch (error) {
       console.error('Error al obtener cuenta de resultados:', error);
       return null;
@@ -110,18 +100,11 @@ export const ebitdaApi = {
       if (params?.año) queryParams.append('año', params.año.toString());
       if (queryParams.toString()) url += `?${queryParams.toString()}`;
 
-      const response = await fetch(buildUrl(url), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al obtener EBITDA');
-      }
-
-      return await response.json();
+      const response = await envelopedFetch<{ ebitda: number; margen: number; ingresos: number; gastos: number }>(
+        url,
+        { method: 'GET' },
+      );
+      return response.data.data ?? { ebitda: 0, margen: 0, ingresos: 0, gastos: 0 };
     } catch (error) {
       console.error('Error al obtener EBITDA:', error);
       return { ebitda: 0, margen: 0, ingresos: 0, gastos: 0 };
@@ -183,18 +166,8 @@ export const ebitdaApi = {
       if (puntoVentaId) params.append('punto_venta_id', puntoVentaId.toString());
       if (params.toString()) url += `?${params.toString()}`;
 
-      const response = await fetch(buildUrl(url), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al obtener indicadores');
-      }
-
-      return await response.json();
+      const response = await envelopedFetch<IndicadorFinanciero[]>(url, { method: 'GET' });
+      return response.data.data ?? [];
     } catch (error) {
       console.error('Error al obtener indicadores:', error);
       return [];
@@ -217,18 +190,10 @@ export const ebitdaApi = {
       if (params?.meses) queryParams.append('meses', params.meses.toString());
       if (queryParams.toString()) url += `?${queryParams.toString()}`;
 
-      const response = await fetch(buildUrl(url), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
+      const response = await envelopedFetch<{ mes: string; ebitda: number; margen: number }[]>(url, {
+        method: 'GET',
       });
-
-      if (!response.ok) {
-        throw new Error('Error al obtener histórico EBITDA');
-      }
-
-      return await response.json();
+      return response.data.data ?? [];
     } catch (error) {
       console.error('Error al obtener histórico EBITDA:', error);
       return [];

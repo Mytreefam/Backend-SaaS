@@ -41,7 +41,7 @@ export const obtenerCuentaResultados = async (req: Request, res: Response) => {
       },
     });
 
-    const ingresosNetos = pedidos.reduce((sum, p) => sum + (Number(p.total) || 0), 0);
+    const ingresosNetos = pedidos.reduce((sum: number, p: any) => sum + (Number(p.total) || 0), 0);
 
     // TODO: Obtener costes y gastos de tablas correspondientes
     // Por ahora usamos estimaciones basadas en porcentajes típicos del sector
@@ -53,7 +53,7 @@ export const obtenerCuentaResultados = async (req: Request, res: Response) => {
 
     // Desglose por tipo de entrega
     const ingresosPorOrigen: Record<string, number> = {};
-    pedidos.forEach(p => {
+    pedidos.forEach((p: any) => {
       const tipoEntrega = p.tipoEntrega || 'otros';
       if (!ingresosPorOrigen[tipoEntrega]) ingresosPorOrigen[tipoEntrega] = 0;
       ingresosPorOrigen[tipoEntrega] += Number(p.total) || 0;

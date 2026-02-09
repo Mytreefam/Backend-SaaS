@@ -9,6 +9,7 @@
  */
 
 import { toast } from 'sonner@2.0.3';
+import { envelopedFetch } from './http/envelopedFetch';
 
 // ============================================================================
 // TIPOS
@@ -591,11 +592,13 @@ export function isConnectionOnline(): boolean {
  */
 export async function checkConnection(): Promise<boolean> {
   try {
-    const response = await fetch('/api/health', {
+    await envelopedFetch<unknown>('/api/health', {
       method: 'HEAD',
       cache: 'no-cache',
+      skipAuth: true,
+      responseType: 'none',
     });
-    isOnline = response.ok;
+    isOnline = true;
   } catch {
     isOnline = false;
   }

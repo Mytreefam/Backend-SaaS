@@ -28,6 +28,7 @@ import cajaRoutes from './routes/caja';
 import healthRoutes from './routes/health';
 import { authenticate, requireAuth, requireRole } from './middleware/auth.middleware';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware';
+import { responseEnvelope } from './middleware/response.middleware';
 
 const app = express();
 
@@ -72,6 +73,9 @@ app.use(
 
 // Attach req.user when Authorization is present
 app.use(authenticate);
+
+// Standardize JSON response shape
+app.use(responseEnvelope);
 
 // Servir archivos estáticos de la carpeta uploads
 if (process.env.SERVE_UPLOADS_PUBLICLY !== 'false') {
@@ -123,8 +127,8 @@ app.use('/gerente', requireAuth, requireRole('gerente'), gerenteRoutes);
 // Backwards-compat alias for existing /api/gerente calls
 app.use('/api/gerente', requireAuth, requireRole('gerente'), gerenteRoutes);
 
-app.use('/onboarding', requireAuth, onboardingRoutes);
-app.use('/caja', requireAuth, cajaRoutes);
+app.use('/onboarding', requireAuth, requireRole('trabajador', 'gerente'), onboardingRoutes);
+app.use('/caja', requireAuth, requireRole('trabajador', 'gerente'), cajaRoutes);
 
 // 404 + error handler (last)
 app.use(notFoundHandler);

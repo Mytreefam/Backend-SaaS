@@ -5,6 +5,11 @@ export const CitasController = {
   // Obtener todas las citas con opciones de filtrado
   async getAll(req: Request, res: Response) {
     try {
+      if (!req.user) {
+        return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
+      }
+
+      const isStaff = req.user.role === 'gerente' || req.user.role === 'trabajador';
       const { estado, clienteId, servicio, mes, anio } = req.query;
 
       // Construir el objeto de filtro
@@ -14,8 +19,13 @@ export const CitasController = {
         where.estado = estado as string;
       }
 
-      if (clienteId) {
-        where.clienteId = parseInt(clienteId as string);
+      if (isStaff) {
+        if (clienteId) {
+          where.clienteId = parseInt(clienteId as string);
+        }
+      } else {
+        // Ownership: clients can only see their own citas
+        where.clienteId = req.user.id;
       }
 
       if (servicio) {
@@ -82,8 +92,7 @@ export const CitasController = {
       console.error('Error al obtener citas:', error);
       res.status(500).json({
         success: false,
-        message: 'Error al obtener citas',
-        error: error instanceof Error ? error.message : 'Error desconocido',
+        error: 'CITAS_LIST_FAILED',
       });
     }
   },
@@ -91,6 +100,10 @@ export const CitasController = {
   // Obtener cita por ID
   async getById(req: Request, res: Response) {
     try {
+      if (!req.user) {
+        return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
+      }
+      const isStaff = req.user.role === 'gerente' || req.user.role === 'trabajador';
       const { id } = req.params;
 
       const cita = await prisma.cita.findUnique({
@@ -101,8 +114,12 @@ export const CitasController = {
       if (!cita) {
         return res.status(404).json({
           success: false,
-          message: 'Cita no encontrada',
+          error: 'CITA_NOT_FOUND',
         });
+      }
+
+      if (!isStaff && cita.clienteId !== req.user.id) {
+        return res.status(403).json({ success: false, error: 'FORBIDDEN' });
       }
 
       res.json({
@@ -113,8 +130,7 @@ export const CitasController = {
       console.error('Error al obtener cita:', error);
       res.status(500).json({
         success: false,
-        message: 'Error al obtener cita',
-        error: error instanceof Error ? error.message : 'Error desconocido',
+        error: 'CITA_GET_FAILED',
       });
     }
   },
@@ -122,25 +138,32 @@ export const CitasController = {
   // Crear nueva cita
   async create(req: Request, res: Response) {
     try {
+      if (!req.user) {
+        return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
+      }
+      const isStaff = req.user.role === 'gerente' || req.user.role === 'trabajador';
+
       const { fecha, hora, motivo, servicio, clienteId, telefono, email, notas } = req.body;
 
       // Validar datos requeridos
-      if (!fecha || !motivo || !clienteId) {
+      if (!fecha || !motivo || (!isStaff && !req.user.id) || (isStaff && !clienteId)) {
         return res.status(400).json({
           success: false,
-          message: 'Faltan campos requeridos: fecha, motivo, clienteId',
+          error: 'VALIDATION_ERROR',
         });
       }
 
+      const resolvedClienteId = isStaff ? clienteId : req.user.id;
+
       // Verificar que el cliente existe
       const cliente = await prisma.cliente.findUnique({
-        where: { id: clienteId },
+        where: { id: resolvedClienteId },
       });
 
       if (!cliente) {
         return res.status(404).json({
           success: false,
-          message: 'Cliente no encontrado',
+          error: 'CLIENTE_NOT_FOUND',
         });
       }
 
@@ -150,7 +173,7 @@ export const CitasController = {
           hora,
           motivo,
           servicio: servicio || motivo,
-          clienteId,
+          clienteId: resolvedClienteId,
           telefono: telefono || cliente.telefono,
           email: email || cliente.email,
           notas,
@@ -161,15 +184,13 @@ export const CitasController = {
 
       res.status(201).json({
         success: true,
-        message: 'Cita creada exitosamente',
         data: cita,
       });
     } catch (error) {
       console.error('Error al crear cita:', error);
       res.status(500).json({
         success: false,
-        message: 'Error al crear cita',
-        error: error instanceof Error ? error.message : 'Error desconocido',
+        error: 'CITA_CREATE_FAILED',
       });
     }
   },
@@ -177,6 +198,10 @@ export const CitasController = {
   // Actualizar cita
   async update(req: Request, res: Response) {
     try {
+      if (!req.user) {
+        return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
+      }
+      const isStaff = req.user.role === 'gerente' || req.user.role === 'trabajador';
       const { id } = req.params;
       const { fecha, hora, motivo, servicio, estado, telefono, email, notas } = req.body;
 
@@ -188,8 +213,12 @@ export const CitasController = {
       if (!citaExistente) {
         return res.status(404).json({
           success: false,
-          message: 'Cita no encontrada',
+          error: 'CITA_NOT_FOUND',
         });
+      }
+
+      if (!isStaff && citaExistente.clienteId !== req.user.id) {
+        return res.status(403).json({ success: false, error: 'FORBIDDEN' });
       }
 
       const dataUpdate: any = {};
@@ -197,7 +226,8 @@ export const CitasController = {
       if (hora) dataUpdate.hora = hora;
       if (motivo) dataUpdate.motivo = motivo;
       if (servicio) dataUpdate.servicio = servicio;
-      if (estado) dataUpdate.estado = estado;
+      // Clients cannot arbitrarily change estado
+      if (estado && isStaff) dataUpdate.estado = estado;
       if (telefono) dataUpdate.telefono = telefono;
       if (email) dataUpdate.email = email;
       if (notas !== undefined) dataUpdate.notas = notas;
@@ -210,15 +240,13 @@ export const CitasController = {
 
       res.json({
         success: true,
-        message: 'Cita actualizada exitosamente',
         data: cita,
       });
     } catch (error) {
       console.error('Error al actualizar cita:', error);
       res.status(500).json({
         success: false,
-        message: 'Error al actualizar cita',
-        error: error instanceof Error ? error.message : 'Error desconocido',
+        error: 'CITA_UPDATE_FAILED',
       });
     }
   },
@@ -226,13 +254,21 @@ export const CitasController = {
   // Cambiar estado de cita
   async changeStatus(req: Request, res: Response) {
     try {
+      if (!req.user) {
+        return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
+      }
+      const isStaff = req.user.role === 'gerente' || req.user.role === 'trabajador';
+      if (!isStaff) {
+        return res.status(403).json({ success: false, error: 'FORBIDDEN' });
+      }
+
       const { id } = req.params;
       const { estado, canceladaPor, razonCancelacion } = req.body;
 
       if (!estado) {
         return res.status(400).json({
           success: false,
-          message: 'El campo estado es requerido',
+          error: 'VALIDATION_ERROR',
         });
       }
 
@@ -249,7 +285,7 @@ export const CitasController = {
       if (!estadosValidos.includes(estado)) {
         return res.status(400).json({
           success: false,
-          message: `Estado inválido. Valores permitidos: ${estadosValidos.join(', ')}`,
+          error: 'INVALID_ESTADO',
         });
       }
 
@@ -260,6 +296,11 @@ export const CitasController = {
         dataUpdate.razonCancelacion = razonCancelacion;
       }
 
+      const citaExistente = await prisma.cita.findUnique({ where: { id: parseInt(id) } });
+      if (!citaExistente) {
+        return res.status(404).json({ success: false, error: 'CITA_NOT_FOUND' });
+      }
+
       const cita = await prisma.cita.update({
         where: { id: parseInt(id) },
         data: dataUpdate,
@@ -268,15 +309,13 @@ export const CitasController = {
 
       res.json({
         success: true,
-        message: `Cita actualizada a estado: ${estado}`,
         data: cita,
       });
     } catch (error) {
       console.error('Error al cambiar estado de cita:', error);
       res.status(500).json({
         success: false,
-        message: 'Error al cambiar estado de cita',
-        error: error instanceof Error ? error.message : 'Error desconocido',
+        error: 'CITA_STATUS_FAILED',
       });
     }
   },
@@ -284,6 +323,13 @@ export const CitasController = {
   // Confirmar cita
   async confirm(req: Request, res: Response) {
     try {
+      if (!req.user) {
+        return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
+      }
+      const isStaff = req.user.role === 'gerente' || req.user.role === 'trabajador';
+      if (!isStaff) {
+        return res.status(403).json({ success: false, error: 'FORBIDDEN' });
+      }
       const { id } = req.params;
 
       const cita = await prisma.cita.update({
@@ -294,15 +340,13 @@ export const CitasController = {
 
       res.json({
         success: true,
-        message: 'Cita confirmada exitosamente',
         data: cita,
       });
     } catch (error) {
       console.error('Error al confirmar cita:', error);
       res.status(500).json({
         success: false,
-        message: 'Error al confirmar cita',
-        error: error instanceof Error ? error.message : 'Error desconocido',
+        error: 'CITA_CONFIRM_FAILED',
       });
     }
   },
@@ -310,30 +354,40 @@ export const CitasController = {
   // Cancelar cita
   async cancel(req: Request, res: Response) {
     try {
+      if (!req.user) {
+        return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
+      }
+      const isStaff = req.user.role === 'gerente' || req.user.role === 'trabajador';
       const { id } = req.params;
       const { canceladaPor, razonCancelacion } = req.body;
+
+      const citaExistente = await prisma.cita.findUnique({ where: { id: parseInt(id) } });
+      if (!citaExistente) {
+        return res.status(404).json({ success: false, error: 'CITA_NOT_FOUND' });
+      }
+      if (!isStaff && citaExistente.clienteId !== req.user.id) {
+        return res.status(403).json({ success: false, error: 'FORBIDDEN' });
+      }
 
       const cita = await prisma.cita.update({
         where: { id: parseInt(id) },
         data: {
           estado: 'cancelada',
-          canceladaPor: canceladaPor || 'admin',
-          razonCancelacion: razonCancelacion || 'Cancelada por administrador',
+          canceladaPor: canceladaPor || (isStaff ? 'admin' : 'cliente'),
+          razonCancelacion: razonCancelacion || (isStaff ? 'Cancelada por administrador' : 'Cancelada por cliente'),
         },
         include: { cliente: true },
       });
 
       res.json({
         success: true,
-        message: 'Cita cancelada exitosamente',
         data: cita,
       });
     } catch (error) {
       console.error('Error al cancelar cita:', error);
       res.status(500).json({
         success: false,
-        message: 'Error al cancelar cita',
-        error: error instanceof Error ? error.message : 'Error desconocido',
+        error: 'CITA_CANCEL_FAILED',
       });
     }
   },
@@ -341,7 +395,19 @@ export const CitasController = {
   // Eliminar cita
   async delete(req: Request, res: Response) {
     try {
+      if (!req.user) {
+        return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
+      }
+      const isStaff = req.user.role === 'gerente' || req.user.role === 'trabajador';
       const { id } = req.params;
+
+      const citaExistente = await prisma.cita.findUnique({ where: { id: parseInt(id) } });
+      if (!citaExistente) {
+        return res.status(404).json({ success: false, error: 'CITA_NOT_FOUND' });
+      }
+      if (!isStaff && citaExistente.clienteId !== req.user.id) {
+        return res.status(403).json({ success: false, error: 'FORBIDDEN' });
+      }
 
       const cita = await prisma.cita.delete({
         where: { id: parseInt(id) },
@@ -349,15 +415,13 @@ export const CitasController = {
 
       res.json({
         success: true,
-        message: 'Cita eliminada exitosamente',
         data: cita,
       });
     } catch (error) {
       console.error('Error al eliminar cita:', error);
       res.status(500).json({
         success: false,
-        message: 'Error al eliminar cita',
-        error: error instanceof Error ? error.message : 'Error desconocido',
+        error: 'CITA_DELETE_FAILED',
       });
     }
   },
@@ -365,6 +429,13 @@ export const CitasController = {
   // Obtener estadísticas de citas
   async getStats(req: Request, res: Response) {
     try {
+      if (!req.user) {
+        return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
+      }
+      const isStaff = req.user.role === 'gerente' || req.user.role === 'trabajador';
+      if (!isStaff) {
+        return res.status(403).json({ success: false, error: 'FORBIDDEN' });
+      }
       const citas = await prisma.cita.findMany();
 
       const stats = {
@@ -397,8 +468,7 @@ export const CitasController = {
       console.error('Error al obtener estadísticas:', error);
       res.status(500).json({
         success: false,
-        message: 'Error al obtener estadísticas',
-        error: error instanceof Error ? error.message : 'Error desconocido',
+        error: 'CITAS_STATS_FAILED',
       });
     }
   },

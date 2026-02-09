@@ -2,11 +2,29 @@ import { Router } from 'express';
 import * as clienteController from '../controllers/cliente.controller';
 import prisma from '../prisma/client';
 import { requireAuth, requireOwnershipOrRole, requireRole } from '../middleware/auth.middleware';
+import { z } from 'zod';
+import { validate } from '../middleware/validate.middleware';
 
 const router = Router();
 
 // Public: registration
-router.post('/', clienteController.createCliente);
+router.post(
+  '/',
+  validate({
+    body: z.object({
+      nombre: z.string().min(1),
+      email: z.string().email(),
+      password: z.string().min(6),
+      telefono: z.string().min(3).optional(),
+      avatar: z.string().min(1).optional(),
+      ciudad: z.string().min(1).optional(),
+      idioma: z.string().min(1).optional(),
+      // role is ignored server-side for public registration
+      role: z.string().optional(),
+    }),
+  }),
+  clienteController.createCliente,
+);
 
 // All other client routes require authentication
 router.use(requireAuth);
@@ -18,7 +36,25 @@ router.get('/', requireRole('gerente'), clienteController.getAllClientes);
 const requireClientOwnership = requireOwnershipOrRole({ param: 'id', rolesAllowed: ['gerente'] });
 
 router.get('/:id', requireClientOwnership, clienteController.getClienteById);
-router.put('/:id', requireClientOwnership, clienteController.updateCliente);
+router.put(
+  '/:id',
+  requireClientOwnership,
+  validate({
+    params: z.object({ id: z.string().min(1) }),
+    body: z.object({
+      nombre: z.string().min(1).optional(),
+      email: z.string().email().optional(),
+      telefono: z.string().min(3).optional(),
+      avatar: z.string().min(1).optional(),
+      ciudad: z.string().min(1).optional(),
+      idioma: z.string().min(1).optional(),
+      // role/password changes disallowed here
+      role: z.string().optional(),
+      password: z.string().optional(),
+    }),
+  }),
+  clienteController.updateCliente,
+);
 router.delete('/:id', requireClientOwnership, clienteController.deleteCliente);
 
 // Obtener promociones de un cliente específico

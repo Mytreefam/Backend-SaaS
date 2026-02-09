@@ -4,7 +4,7 @@
  * Gestión de conversaciones y mensajes
  */
 
-import { API_CONFIG, buildUrl, getAuthToken } from '../../config/api.config';
+import { envelopedFetch } from '../http/envelopedFetch';
 
 // ============================================================================
 // TIPOS
@@ -68,19 +68,9 @@ export const chatApi = {
       if (clienteId) {
         url += `?clienteId=${clienteId}`;
       }
-      
-      const response = await fetch(buildUrl(url), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
 
-      if (!response.ok) {
-        throw new Error('Error al obtener chats');
-      }
-
-      return await response.json();
+      const response = await envelopedFetch<ChatAPI[]>(url, { method: 'GET' });
+      return response.data.data ?? [];
     } catch (error) {
       console.error('Error al obtener chats:', error);
       return [];
@@ -92,18 +82,8 @@ export const chatApi = {
    */
   async getById(id: number): Promise<ChatAPI | null> {
     try {
-      const response = await fetch(buildUrl(`/chats/${id}`), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        return null;
-      }
-
-      return await response.json();
+      const response = await envelopedFetch<ChatAPI>(`/chats/${id}`, { method: 'GET' });
+      return response.data.data ?? null;
     } catch (error) {
       console.error('Error al obtener chat:', error);
       return null;
@@ -115,20 +95,11 @@ export const chatApi = {
    */
   async create(data: CrearChatRequest): Promise<ChatAPI | null> {
     try {
-      const response = await fetch(buildUrl('/chats'), {
+      const response = await envelopedFetch<ChatAPI>('/chats', {
         method: 'POST',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
         body: JSON.stringify(data),
       });
-
-      if (!response.ok) {
-        throw new Error('Error al crear chat');
-      }
-
-      return await response.json();
+      return response.data.data ?? null;
     } catch (error) {
       console.error('Error al crear chat:', error);
       return null;
@@ -140,20 +111,11 @@ export const chatApi = {
    */
   async updateStatus(id: number, estado: string): Promise<ChatAPI | null> {
     try {
-      const response = await fetch(buildUrl(`/chats/${id}`), {
+      const response = await envelopedFetch<ChatAPI>(`/chats/${id}`, {
         method: 'PUT',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
         body: JSON.stringify({ estado }),
       });
-
-      if (!response.ok) {
-        throw new Error('Error al actualizar chat');
-      }
-
-      return await response.json();
+      return response.data.data ?? null;
     } catch (error) {
       console.error('Error al actualizar chat:', error);
       return null;
@@ -165,20 +127,11 @@ export const chatApi = {
    */
   async sendMessage(chatId: number, mensaje: EnviarMensajeRequest): Promise<MensajeAPI | null> {
     try {
-      const response = await fetch(buildUrl(`/chats/${chatId}/mensajes`), {
+      const response = await envelopedFetch<MensajeAPI>(`/chats/${chatId}/mensajes`, {
         method: 'POST',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
         body: JSON.stringify(mensaje),
       });
-
-      if (!response.ok) {
-        throw new Error('Error al enviar mensaje');
-      }
-
-      return await response.json();
+      return response.data.data ?? null;
     } catch (error) {
       console.error('Error al enviar mensaje:', error);
       return null;
@@ -190,15 +143,8 @@ export const chatApi = {
    */
   async delete(id: number): Promise<boolean> {
     try {
-      const response = await fetch(buildUrl(`/chats/${id}`), {
-        method: 'DELETE',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-
-      return response.ok;
+      await envelopedFetch<unknown>(`/chats/${id}`, { method: 'DELETE' });
+      return true;
     } catch (error) {
       console.error('Error al eliminar chat:', error);
       return false;

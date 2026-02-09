@@ -4,9 +4,15 @@
  * Gestión de pedidos del cliente
  */
 
-import { API_CONFIG, buildUrl, getAuthToken } from '../../config/api.config';
+import { API_CONFIG } from '../../config/api.config';
 import { toast } from 'sonner@2.0.3';
 import { CartItem } from '../../contexts/CartContext';
+import { envelopedFetch } from '../http/envelopedFetch';
+
+function isNotFoundMessage(message: string): boolean {
+  const m = message.toLowerCase();
+  return m.includes('no encontrado') || m.includes('not_found') || m.includes('not found');
+}
 
 // ============================================================================
 // TIPOS
@@ -58,18 +64,11 @@ export const pedidosApi = {
    */
   async getAll(): Promise<Pedido[]> {
     try {
-      const response = await fetch(buildUrl(API_CONFIG.ENDPOINTS.PEDIDOS), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
+      const response = await envelopedFetch<Pedido[]>(API_CONFIG.ENDPOINTS.PEDIDOS, {
+        headers: API_CONFIG.HEADERS,
       });
 
-      if (!response.ok) {
-        throw new Error('Error al obtener pedidos');
-      }
-
-      return await response.json();
+      return response.data.data || [];
     } catch (error) {
       console.error('Error al obtener pedidos:', error);
       toast.error('Error al cargar pedidos');
@@ -82,25 +81,19 @@ export const pedidosApi = {
    */
   async getById(id: string | number): Promise<Pedido | null> {
     try {
-      const response = await fetch(buildUrl(API_CONFIG.ENDPOINTS.PEDIDO_BY_ID(String(id))), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
+      const response = await envelopedFetch<Pedido>(API_CONFIG.ENDPOINTS.PEDIDO_BY_ID(String(id)), {
+        headers: API_CONFIG.HEADERS,
       });
 
-      if (!response.ok) {
-        if (response.status === 404) {
-          toast.error('Pedido no encontrado');
-          return null;
-        }
-        throw new Error('Error al obtener pedido');
-      }
-
-      return await response.json();
+      return response.data.data || null;
     } catch (error) {
       console.error('Error al obtener pedido:', error);
-      toast.error('Error al cargar pedido');
+      const message = error instanceof Error ? error.message : '';
+      if (isNotFoundMessage(message)) {
+        toast.error('Pedido no encontrado');
+      } else {
+        toast.error('Error al cargar pedido');
+      }
       return null;
     }
   },
@@ -110,22 +103,15 @@ export const pedidosApi = {
    */
   async create(data: PedidoCreate): Promise<Pedido | null> {
     try {
-      const response = await fetch(buildUrl(API_CONFIG.ENDPOINTS.PEDIDOS), {
+      const response = await envelopedFetch<Pedido>(API_CONFIG.ENDPOINTS.PEDIDOS, {
         method: 'POST',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
+        headers: API_CONFIG.HEADERS,
         body: JSON.stringify(data),
       });
 
-      if (!response.ok) {
-        throw new Error('Error al crear pedido');
-      }
-
-      const pedido = await response.json();
+      const pedido = response.data.data;
       toast.success('Pedido creado correctamente');
-      return pedido;
+      return pedido || null;
     } catch (error) {
       console.error('Error al crear pedido:', error);
       toast.error('Error al crear pedido');
@@ -138,22 +124,15 @@ export const pedidosApi = {
    */
   async update(id: string | number, data: Partial<Pedido>): Promise<Pedido | null> {
     try {
-      const response = await fetch(buildUrl(API_CONFIG.ENDPOINTS.PEDIDO_BY_ID(String(id))), {
+      const response = await envelopedFetch<Pedido>(API_CONFIG.ENDPOINTS.PEDIDO_BY_ID(String(id)), {
         method: 'PUT',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
+        headers: API_CONFIG.HEADERS,
         body: JSON.stringify(data),
       });
 
-      if (!response.ok) {
-        throw new Error('Error al actualizar pedido');
-      }
-
-      const pedido = await response.json();
+      const pedido = response.data.data;
       toast.success('Pedido actualizado correctamente');
-      return pedido;
+      return pedido || null;
     } catch (error) {
       console.error('Error al actualizar pedido:', error);
       toast.error('Error al actualizar pedido');
@@ -166,17 +145,10 @@ export const pedidosApi = {
    */
   async delete(id: string | number): Promise<boolean> {
     try {
-      const response = await fetch(buildUrl(API_CONFIG.ENDPOINTS.PEDIDO_BY_ID(String(id))), {
+      await envelopedFetch<unknown>(API_CONFIG.ENDPOINTS.PEDIDO_BY_ID(String(id)), {
         method: 'DELETE',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
+        headers: API_CONFIG.HEADERS,
       });
-
-      if (!response.ok) {
-        throw new Error('Error al cancelar pedido');
-      }
 
       toast.success('Pedido cancelado correctamente');
       return true;

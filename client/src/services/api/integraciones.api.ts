@@ -5,7 +5,7 @@
  * (Glovo, Uber Eats, Just Eat, etc.)
  */
 
-import { API_CONFIG, buildUrl, getAuthToken } from '../../config/api.config';
+import { envelopedFetch } from '../http/envelopedFetch';
 
 // ============================================================================
 // TIPOS
@@ -85,18 +85,8 @@ export const integracionesApi = {
       let url = '/gerente/integraciones/plataformas';
       if (empresaId) url += `?empresa_id=${empresaId}`;
 
-      const response = await fetch(buildUrl(url), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al obtener plataformas');
-      }
-
-      return await response.json();
+      const response = await envelopedFetch<PlataformaDelivery[]>(url, { method: 'GET' });
+      return response.data.data ?? [];
     } catch (error) {
       console.error('Error al obtener plataformas:', error);
       return [];
@@ -108,16 +98,11 @@ export const integracionesApi = {
    */
   async togglePlataforma(plataformaId: number, activa: boolean): Promise<boolean> {
     try {
-      const response = await fetch(buildUrl(`/gerente/integraciones/plataformas/${plataformaId}/toggle`), {
+      await envelopedFetch<unknown>(`/gerente/integraciones/plataformas/${plataformaId}/toggle`, {
         method: 'PUT',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
         body: JSON.stringify({ activa }),
       });
-
-      return response.ok;
+      return true;
     } catch (error) {
       console.error('Error al cambiar estado de plataforma:', error);
       return false;
@@ -133,16 +118,11 @@ export const integracionesApi = {
     secretKey?: string;
   }): Promise<boolean> {
     try {
-      const response = await fetch(buildUrl(`/gerente/integraciones/plataformas/${plataformaId}`), {
+      await envelopedFetch<unknown>(`/gerente/integraciones/plataformas/${plataformaId}`, {
         method: 'PUT',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
         body: JSON.stringify({ configuracion: config }),
       });
-
-      return response.ok;
+      return true;
     } catch (error) {
       console.error('Error al configurar plataforma:', error);
       return false;
@@ -157,20 +137,11 @@ export const integracionesApi = {
       const url = plataformaId 
         ? `/gerente/integraciones/plataformas/${plataformaId}/sincronizar`
         : '/gerente/integraciones/plataformas/1/sincronizar';
-      const response = await fetch(buildUrl(url), {
+      const response = await envelopedFetch<{ sincronizados: number; errores: number }>(url, {
         method: 'POST',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
         body: JSON.stringify({ productos }),
       });
-
-      if (!response.ok) {
-        throw new Error('Error al sincronizar productos');
-      }
-
-      return await response.json();
+      return response.data.data ?? { sincronizados: 0, errores: 0 };
     } catch (error) {
       console.error('Error al sincronizar productos:', error);
       return { sincronizados: 0, errores: 0 };
@@ -195,18 +166,8 @@ export const integracionesApi = {
       if (params?.fechaFin) queryParams.append('fecha_fin', params.fechaFin);
       if (queryParams.toString()) url += `?${queryParams.toString()}`;
 
-      const response = await fetch(buildUrl(url), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al obtener historial');
-      }
-
-      return await response.json();
+      const response = await envelopedFetch<HistorialSincronizacion[]>(url, { method: 'GET' });
+      return response.data.data ?? [];
     } catch (error) {
       console.error('Error al obtener historial:', error);
       return [];
@@ -229,18 +190,8 @@ export const integracionesApi = {
       if (params?.fecha) queryParams.append('fecha', params.fecha);
       if (queryParams.toString()) url += `?${queryParams.toString()}`;
 
-      const response = await fetch(buildUrl(url), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al obtener pedidos externos');
-      }
-
-      return await response.json();
+      const response = await envelopedFetch<PedidoExterno[]>(url, { method: 'GET' });
+      return response.data.data ?? [];
     } catch (error) {
       console.error('Error al obtener pedidos externos:', error);
       return [];
@@ -252,16 +203,11 @@ export const integracionesApi = {
    */
   async aceptarPedido(pedidoId: number, tiempoEstimado?: number): Promise<boolean> {
     try {
-      const response = await fetch(buildUrl(`/gerente/integraciones/pedidos-externos/${pedidoId}/aceptar`), {
+      await envelopedFetch<unknown>(`/gerente/integraciones/pedidos-externos/${pedidoId}/aceptar`, {
         method: 'PUT',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
         body: JSON.stringify({ tiempoEstimado }),
       });
-
-      return response.ok;
+      return true;
     } catch (error) {
       console.error('Error al aceptar pedido:', error);
       return false;
@@ -273,16 +219,11 @@ export const integracionesApi = {
    */
   async rechazarPedido(pedidoId: number, motivo: string): Promise<boolean> {
     try {
-      const response = await fetch(buildUrl(`/gerente/integraciones/pedidos-externos/${pedidoId}/rechazar`), {
+      await envelopedFetch<unknown>(`/gerente/integraciones/pedidos-externos/${pedidoId}/rechazar`, {
         method: 'PUT',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
         body: JSON.stringify({ motivo }),
       });
-
-      return response.ok;
+      return true;
     } catch (error) {
       console.error('Error al rechazar pedido:', error);
       return false;
@@ -297,18 +238,14 @@ export const integracionesApi = {
       let url = '/gerente/integraciones/estadisticas';
       if (empresaId) url += `?empresa_id=${empresaId}`;
 
-      const response = await fetch(buildUrl(url), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al obtener estadísticas');
-      }
-
-      return await response.json();
+      const response = await envelopedFetch<EstadisticasIntegraciones>(url, { method: 'GET' });
+      return response.data.data ?? {
+        plataformasActivas: 0,
+        plataformasTotales: 0,
+        pedidosUltimaHora: 0,
+        tasaExitoSync: 0,
+        productosSync: 0,
+      };
     } catch (error) {
       console.error('Error al obtener estadísticas:', error);
       return {
@@ -326,15 +263,11 @@ export const integracionesApi = {
    */
   async testConexion(plataformaId: number): Promise<{ok: boolean; mensaje: string}> {
     try {
-      const response = await fetch(buildUrl(`/gerente/integraciones/plataformas/${plataformaId}/test`), {
-        method: 'POST',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-
-      return await response.json();
+      const response = await envelopedFetch<{ ok: boolean; mensaje: string }>(
+        `/gerente/integraciones/plataformas/${plataformaId}/test`,
+        { method: 'POST' },
+      );
+      return response.data.data ?? { ok: false, mensaje: 'Error de conexión' };
     } catch (error) {
       console.error('Error al probar conexión:', error);
       return { ok: false, mensaje: 'Error de conexión' };

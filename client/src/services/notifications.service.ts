@@ -4,6 +4,7 @@
  */
 
 import { API_CONFIG } from '../config/api.config';
+import { envelopedFetch } from './http/envelopedFetch';
 import type {
   Notification,
   NotificationPreferences,
@@ -174,18 +175,12 @@ class NotificationsService {
     try {
       // Usar el endpoint de cliente si tenemos usuarioId (que es el clienteId)
       const clienteId = request.usuarioId;
-      const response = await fetch(`${CLIENTES_ENDPOINT}/${clienteId}/notificaciones`, {
+      const response = await envelopedFetch<any[]>(`${CLIENTES_ENDPOINT}/${clienteId}/notificaciones`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        skipAuth: true,
       });
-      
-      if (!response.ok) {
-        throw new Error(`Error al obtener notificaciones: ${response.statusText}`);
-      }
-      
-      const data = await response.json();
+
+      const data = response.data.data ?? [];
       
       // Transformar del formato backend al formato frontend
       const notificaciones: Notification[] = data.map((n: any) => ({
@@ -244,12 +239,16 @@ class NotificationsService {
       // Marcar cada notificación como leída
       let actualizadas = 0;
       for (const id of request.notificacionIds) {
-        const response = await fetch(`${NOTIFICATIONS_ENDPOINT}/${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ leida: true }),
-        });
-        if (response.ok) actualizadas++;
+        try {
+          await envelopedFetch<unknown>(`${NOTIFICATIONS_ENDPOINT}/${id}`, {
+            method: 'PUT',
+            skipAuth: true,
+            body: JSON.stringify({ leida: true }),
+          });
+          actualizadas++;
+        } catch {
+          // mantener conteo: solo incrementa si fue OK
+        }
       }
       
       return { success: actualizadas > 0, actualizadas };
@@ -264,20 +263,25 @@ class NotificationsService {
   async markAllAsRead(usuarioId: string): Promise<MarkAsReadResponse> {
     try {
       // Obtener todas las notificaciones del cliente
-      const response = await fetch(`${CLIENTES_ENDPOINT}/${usuarioId}/notificaciones`);
-      if (!response.ok) throw new Error('Error al obtener notificaciones');
-      
-      const notificaciones = await response.json();
+      const response = await envelopedFetch<any[]>(`${CLIENTES_ENDPOINT}/${usuarioId}/notificaciones`, {
+        method: 'GET',
+        skipAuth: true,
+      });
+      const notificaciones = response.data.data ?? [];
       let actualizadas = 0;
       
       // Marcar cada una como leída
       for (const n of notificaciones.filter((n: any) => !n.leida)) {
-        const updateRes = await fetch(`${NOTIFICATIONS_ENDPOINT}/${n.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ leida: true }),
-        });
-        if (updateRes.ok) actualizadas++;
+        try {
+          await envelopedFetch<unknown>(`${NOTIFICATIONS_ENDPOINT}/${n.id}`, {
+            method: 'PUT',
+            skipAuth: true,
+            body: JSON.stringify({ leida: true }),
+          });
+          actualizadas++;
+        } catch {
+          // ignore individual failures
+        }
       }
       
       return { success: true, actualizadas };
@@ -299,11 +303,11 @@ class NotificationsService {
   
   async deleteNotification(notificacionId: string, usuarioId: string): Promise<boolean> {
     try {
-      const response = await fetch(`${NOTIFICATIONS_ENDPOINT}/${notificacionId}`, {
+      await envelopedFetch<unknown>(`${NOTIFICATIONS_ENDPOINT}/${notificacionId}`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
+        skipAuth: true,
       });
-      return response.ok;
+      return true;
     } catch (error) {
       console.error('Error en deleteNotification:', error);
       return false;
@@ -331,21 +335,17 @@ class NotificationsService {
   
   async createNotification(request: CreateNotificationRequest): Promise<CreateNotificationResponse> {
     try {
-      const response = await fetch(NOTIFICATIONS_ENDPOINT, {
+      const response = await envelopedFetch<any>(NOTIFICATIONS_ENDPOINT, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        skipAuth: true,
         body: JSON.stringify({
           mensaje: request.mensaje || request.titulo,
           clienteId: Number(request.usuarioId),
           leida: false,
         }),
       });
-      
-      if (!response.ok) {
-        throw new Error(`Error al crear notificación`);
-      }
-      
-      const data = await response.json();
+
+      const data = response.data.data ?? {};
       const newNotification: Notification = {
         id: String(data.id),
         ...request,
@@ -379,10 +379,11 @@ class NotificationsService {
   
   async getStats(usuarioId: string, empresaId?: string): Promise<NotificationStats> {
     try {
-      const response = await fetch(`${CLIENTES_ENDPOINT}/${usuarioId}/notificaciones`);
-      if (!response.ok) throw new Error('Error');
-      
-      const notificaciones = await response.json();
+      const response = await envelopedFetch<any[]>(`${CLIENTES_ENDPOINT}/${usuarioId}/notificaciones`, {
+        method: 'GET',
+        skipAuth: true,
+      });
+      const notificaciones = response.data.data ?? [];
       const sinLeer = notificaciones.filter((n: any) => !n.leida).length;
       
       return {

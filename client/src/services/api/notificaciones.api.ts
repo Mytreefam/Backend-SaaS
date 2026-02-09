@@ -1,4 +1,4 @@
-import { API_CONFIG, buildUrl, getAuthToken } from '../../config/api.config';
+import { envelopedFetch } from '../http/envelopedFetch';
 
 export interface NotificacionBackend {
   id: number;
@@ -11,14 +11,10 @@ export const notificacionesApi = {
   // Obtener notificaciones de un cliente
   getByClienteId: async (clienteId: number): Promise<NotificacionBackend[]> => {
     try {
-      const response = await fetch(buildUrl(`/clientes/${clienteId}/notificaciones`), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
+      const response = await envelopedFetch<NotificacionBackend[]>(`/clientes/${clienteId}/notificaciones`, {
+        method: 'GET',
       });
-      if (!response.ok) throw new Error('Error al obtener notificaciones');
-      return await response.json();
+      return response.data.data ?? [];
     } catch (error) {
       console.error('Error fetching notificaciones:', error);
       return [];
@@ -28,14 +24,8 @@ export const notificacionesApi = {
   // Obtener todas las notificaciones
   getAll: async (): Promise<NotificacionBackend[]> => {
     try {
-      const response = await fetch(buildUrl('/notificaciones'), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-      if (!response.ok) throw new Error('Error al obtener notificaciones');
-      return await response.json();
+      const response = await envelopedFetch<NotificacionBackend[]>('/notificaciones', { method: 'GET' });
+      return response.data.data ?? [];
     } catch (error) {
       console.error('Error fetching notificaciones:', error);
       return [];
@@ -45,16 +35,11 @@ export const notificacionesApi = {
   // Crear notificación
   create: async (data: { mensaje: string; clienteId: number; leida?: boolean }): Promise<NotificacionBackend | null> => {
     try {
-      const response = await fetch(buildUrl('/notificaciones'), {
+      const response = await envelopedFetch<NotificacionBackend>('/notificaciones', {
         method: 'POST',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
         body: JSON.stringify(data),
       });
-      if (!response.ok) throw new Error('Error al crear notificación');
-      return await response.json();
+      return response.data.data ?? null;
     } catch (error) {
       console.error('Error creating notificación:', error);
       return null;
@@ -64,16 +49,11 @@ export const notificacionesApi = {
   // Marcar como leída
   marcarLeida: async (id: number): Promise<NotificacionBackend | null> => {
     try {
-      const response = await fetch(buildUrl(`/notificaciones/${id}`), {
+      const response = await envelopedFetch<NotificacionBackend>(`/notificaciones/${id}`, {
         method: 'PUT',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
         body: JSON.stringify({ leida: true }),
       });
-      if (!response.ok) throw new Error('Error al actualizar notificación');
-      return await response.json();
+      return response.data.data ?? null;
     } catch (error) {
       console.error('Error updating notificación:', error);
       return null;
@@ -83,14 +63,8 @@ export const notificacionesApi = {
   // Eliminar notificación
   delete: async (id: number): Promise<boolean> => {
     try {
-      const response = await fetch(buildUrl(`/notificaciones/${id}`), {
-        method: 'DELETE',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-      return response.ok;
+      await envelopedFetch<unknown>(`/notificaciones/${id}`, { method: 'DELETE' });
+      return true;
     } catch (error) {
       console.error('Error deleting notificación:', error);
       return false;

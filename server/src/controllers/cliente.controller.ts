@@ -20,7 +20,12 @@ import { ClienteModel } from '../models/cliente.model';
  */
 export const getAllClientes = async (req: any, res: any) => {
   const clientes = await ClienteModel.findAll();
-  res.json(clientes);
+  const safe = (clientes || []).map((c: any) => {
+    if (!c) return c;
+    const { password, ...rest } = c;
+    return rest;
+  });
+  res.json(safe);
 };
 
 /**
@@ -52,7 +57,8 @@ export const getClienteById = async (req: any, res: any) => {
   const { id } = req.params;
   const cliente = await ClienteModel.findById(Number(id));
   if (!cliente) return res.status(404).json({ error: 'No encontrado' });
-  res.json(cliente);
+  const { password, ...safe } = cliente as any;
+  res.json(safe);
 };
 
 /**
@@ -78,8 +84,14 @@ export const getClienteById = async (req: any, res: any) => {
  *               $ref: '#/components/schemas/Cliente'
  */
 export const createCliente = async (req: any, res: any) => {
-  const nuevo = await ClienteModel.create(req.body);
-  res.status(201).json(nuevo);
+  // Public registration: always force role=cliente
+  const payload = {
+    ...req.body,
+    role: 'cliente',
+  };
+  const nuevo = await ClienteModel.create(payload);
+  const { password, ...safe } = nuevo as any;
+  res.status(201).json(safe);
 };
 
 /**
@@ -112,8 +124,11 @@ export const createCliente = async (req: any, res: any) => {
  */
 export const updateCliente = async (req: any, res: any) => {
   const { id } = req.params;
-  const actualizado = await ClienteModel.update(Number(id), req.body);
-  res.json(actualizado);
+  // Disallow role updates via this endpoint (RBAC handled elsewhere)
+  const { role, password, ...rest } = req.body || {};
+  const actualizado = await ClienteModel.update(Number(id), rest);
+  const { password: _pw, ...safe } = actualizado as any;
+  res.json(safe);
 };
 
 /**

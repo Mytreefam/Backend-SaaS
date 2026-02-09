@@ -13,6 +13,7 @@
 import { saveOfflineAction, isConnectionOnline } from './offline.service';
 import { toast } from 'sonner@2.0.3';
 import { API_CONFIG, buildUrl, getAuthToken } from '../config/api.config';
+import { envelopedFetch } from './http/envelopedFetch';
 
 // ============================================================================
 // CONFIGURACIÓN
@@ -190,25 +191,18 @@ export async function get<T = any>(
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
     
-    const response = await fetch(url, {
+    const response = await envelopedFetch<T>(url, {
       method: 'GET',
       headers,
       signal: controller.signal,
       ...options,
-    });
+    } as any);
     
     clearTimeout(timeoutId);
-    
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw { status: response.status, ...error };
-    }
-    
-    const data = await response.json();
-    
+
     return {
       success: true,
-      data,
+      data: response.data.data,
     };
   } catch (error) {
     const apiError = handleApiError(error);
@@ -260,26 +254,19 @@ export async function post<T = any>(
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
     
-    const response = await fetch(url, {
+    const response = await envelopedFetch<T>(url, {
       method: 'POST',
       headers,
       body: JSON.stringify(data),
       signal: controller.signal,
       ...options,
-    });
+    } as any);
     
     clearTimeout(timeoutId);
-    
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw { status: response.status, ...error };
-    }
-    
-    const responseData = await response.json();
-    
+
     return {
       success: true,
-      data: responseData,
+      data: response.data.data,
     };
   } catch (error) {
     const apiError = handleApiError(error);
@@ -322,26 +309,19 @@ export async function put<T = any>(
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
     
-    const response = await fetch(url, {
+    const response = await envelopedFetch<T>(url, {
       method: 'PUT',
       headers,
       body: JSON.stringify(data),
       signal: controller.signal,
       ...options,
-    });
+    } as any);
     
     clearTimeout(timeoutId);
-    
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw { status: response.status, ...error };
-    }
-    
-    const responseData = await response.json();
-    
+
     return {
       success: true,
-      data: responseData,
+      data: response.data.data,
     };
   } catch (error) {
     const apiError = handleApiError(error);
@@ -381,25 +361,18 @@ export async function del<T = any>(
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
     
-    const response = await fetch(url, {
+    const response = await envelopedFetch<T>(url, {
       method: 'DELETE',
       headers,
       signal: controller.signal,
       ...options,
-    });
+    } as any);
     
     clearTimeout(timeoutId);
-    
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw { status: response.status, ...error };
-    }
-    
-    const responseData = await response.json().catch(() => ({}));
-    
+
     return {
       success: true,
-      data: responseData,
+      data: response.data.data,
     };
   } catch (error) {
     const apiError = handleApiError(error);
@@ -428,26 +401,19 @@ export async function patch<T = any>(
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
     
-    const response = await fetch(url, {
+    const response = await envelopedFetch<T>(url, {
       method: 'PATCH',
       headers,
       body: JSON.stringify(data),
       signal: controller.signal,
       ...options,
-    });
+    } as any);
     
     clearTimeout(timeoutId);
-    
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw { status: response.status, ...error };
-    }
-    
-    const responseData = await response.json();
-    
+
     return {
       success: true,
-      data: responseData,
+      data: response.data.data,
     };
   } catch (error) {
     const apiError = handleApiError(error);

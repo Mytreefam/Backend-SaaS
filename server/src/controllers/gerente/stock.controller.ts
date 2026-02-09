@@ -807,38 +807,42 @@ export const agregarLineaInventario = async (req: Request, res: Response) => {
     const { id } = req.params;
     const { articuloId, codigoArticulo, nombreArticulo, stockTeorico, stockContado } = req.body;
     console.log('📥 Agregar línea a sesión:', id, req.body);
-
-    const linea = await prisma.lineaInventario.create({
-      data: {
-        sesionInventarioId: parseInt(id),
-        articuloId: articuloId || 0,
-        codigoArticulo: codigoArticulo || '',
-        nombreArticulo: nombreArticulo || '',
-        stockTeorico: stockTeorico || 0,
-        stockContado: stockContado || null,
-        diferencia: stockContado !== undefined ? stockContado - (stockTeorico || 0) : null
-      }
-    });
-
-    // Actualizar progreso de la sesión
-    const sesion = await prisma.sesionInventario.findUnique({
-      where: { id: parseInt(id) },
-      include: { lineas: true }
-    });
-
-    if (sesion) {
-      const lineasContadas = sesion.lineas.filter(l => l.stockContado !== null).length;
-      const totalLineas = sesion.lineas.length;
-      const progreso = totalLineas > 0 ? (lineasContadas / totalLineas) * 100 : 0;
-      
-      await prisma.sesionInventario.update({
-        where: { id: parseInt(id) },
-        data: { progreso }
+    const sesionId = parseInt(id, 10);
+    const result = await prisma.$transaction(async (tx: any) => {
+      const linea = await tx.lineaInventario.create({
+        data: {
+          sesionInventarioId: sesionId,
+          articuloId: articuloId || 0,
+          codigoArticulo: codigoArticulo || '',
+          nombreArticulo: nombreArticulo || '',
+          stockTeorico: stockTeorico || 0,
+          stockContado: stockContado ?? null,
+          diferencia: stockContado !== undefined ? stockContado - (stockTeorico || 0) : null,
+        },
       });
-    }
 
-    console.log('✅ Línea agregada:', linea.id);
-    res.status(201).json({ success: true, data: linea });
+      // Actualizar progreso de la sesión
+      const sesion = await tx.sesionInventario.findUnique({
+        where: { id: sesionId },
+        include: { lineas: true },
+      });
+
+      if (sesion) {
+        const lineasContadas = sesion.lineas.filter((l: any) => l.stockContado !== null).length;
+        const totalLineas = sesion.lineas.length;
+        const progreso = totalLineas > 0 ? (lineasContadas / totalLineas) * 100 : 0;
+
+        await tx.sesionInventario.update({
+          where: { id: sesionId },
+          data: { progreso },
+        });
+      }
+
+      return linea;
+    });
+
+    console.log('✅ Línea agregada:', result.id);
+    res.status(201).json({ success: true, data: result });
   } catch (error) {
     console.error('Error al agregar línea:', error);
     res.status(500).json({ success: false, error: 'Error al agregar línea de inventario' });
@@ -850,50 +854,67 @@ export const actualizarLineaInventario = async (req: Request, res: Response) => 
     const { id, lineaId } = req.params;
     const { stockContado, observaciones, contadoPor } = req.body;
     console.log('📥 Actualizar línea inventario:', lineaId, req.body);
+    const sesionId = parseInt(id, 10);
+    const lineaIdNum = parseInt(lineaId, 10);
 
-    const lineaActual = await prisma.lineaInventario.findUnique({
-      where: { id: parseInt(lineaId) }
+    const result = await prisma.$transaction(async (tx: any) => {
+      const lineaActual = await tx.lineaInventario.findUnique({
+        where: { id: lineaIdNum },
+      });
+
+      if (!lineaActual) {
+        return { kind: 'not_found' as const };
+      }
+
+      const diferencia =
+        stockContado !== undefined ? stockContado - lineaActual.stockTeorico : lineaActual.diferencia;
+
+      const linea = await tx.lineaInventario.update({
+        where: { id: lineaIdNum },
+        data: {
+          stockContado: stockContado !== undefined ? stockContado : lineaActual.stockContado,
+          diferencia,
+          observaciones: observaciones || lineaActual.observaciones,
+          contadoPor: contadoPor || lineaActual.contadoPor,
+          fechaConteo: stockContado !== undefined ? new Date() : lineaActual.fechaConteo,
+          modificadoEn: new Date(),
+        },
+      });
+
+      // Actualizar totales de la sesión
+      const sesion = await tx.sesionInventario.findUnique({
+        where: { id: sesionId },
+        include: { lineas: true },
+      });
+
+      if (sesion) {
+        const lineasContadas = sesion.lineas.filter((l: any) => l.stockContado !== null).length;
+        const totalLineas = sesion.lineas.length;
+        const progreso = totalLineas > 0 ? (lineasContadas / totalLineas) * 100 : 0;
+        const diferenciasUnidades = sesion.lineas.reduce(
+          (acc: number, l: any) => acc + (l.diferencia || 0),
+          0,
+        );
+        const diferenciasValor = sesion.lineas.reduce(
+          (acc: number, l: any) => acc + (l.valorDiferencia || 0),
+          0,
+        );
+
+        await tx.sesionInventario.update({
+          where: { id: sesionId },
+          data: { progreso, diferenciasUnidades, diferenciasValor },
+        });
+      }
+
+      return { kind: 'ok' as const, linea };
     });
 
-    if (!lineaActual) {
+    if (result.kind === 'not_found') {
       return res.status(404).json({ success: false, error: 'Línea no encontrada' });
     }
 
-    const diferencia = stockContado !== undefined ? stockContado - lineaActual.stockTeorico : lineaActual.diferencia;
-
-    const linea = await prisma.lineaInventario.update({
-      where: { id: parseInt(lineaId) },
-      data: {
-        stockContado: stockContado !== undefined ? stockContado : lineaActual.stockContado,
-        diferencia,
-        observaciones: observaciones || lineaActual.observaciones,
-        contadoPor: contadoPor || lineaActual.contadoPor,
-        fechaConteo: stockContado !== undefined ? new Date() : lineaActual.fechaConteo,
-        modificadoEn: new Date()
-      }
-    });
-
-    // Actualizar totales de la sesión
-    const sesion = await prisma.sesionInventario.findUnique({
-      where: { id: parseInt(id) },
-      include: { lineas: true }
-    });
-
-    if (sesion) {
-      const lineasContadas = sesion.lineas.filter(l => l.stockContado !== null).length;
-      const totalLineas = sesion.lineas.length;
-      const progreso = totalLineas > 0 ? (lineasContadas / totalLineas) * 100 : 0;
-      const diferenciasUnidades = sesion.lineas.reduce((acc, l) => acc + (l.diferencia || 0), 0);
-      const diferenciasValor = sesion.lineas.reduce((acc, l) => acc + (l.valorDiferencia || 0), 0);
-
-      await prisma.sesionInventario.update({
-        where: { id: parseInt(id) },
-        data: { progreso, diferenciasUnidades, diferenciasValor }
-      });
-    }
-
-    console.log('✅ Línea actualizada:', linea.id);
-    res.json({ success: true, data: linea });
+    console.log('✅ Línea actualizada:', result.linea.id);
+    res.json({ success: true, data: result.linea });
   } catch (error) {
     console.error('Error al actualizar línea:', error);
     res.status(500).json({ success: false, error: 'Error al actualizar línea' });

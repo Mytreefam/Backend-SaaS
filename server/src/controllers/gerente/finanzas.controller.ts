@@ -81,7 +81,7 @@ export const obtenerResumenFinanzas = async (req: Request, res: Response) => {
       }
     });
 
-    const totalIngresos = facturas.reduce((sum, f) => sum + f.total, 0);
+    const totalIngresos = facturas.reduce((sum: number, f: any) => sum + f.total, 0);
     const totalFacturas = facturas.length;
     
     // TODO: Calcular gastos desde pedidos a proveedores
@@ -151,7 +151,7 @@ export const obtenerCuentaResultados = async (req: Request, res: Response) => {
     });
 
     // Calcular ingresos basados en pedidos reales
-    const totalVentas = pedidos.reduce((sum, p) => sum + p.total, 0);
+    const totalVentas = pedidos.reduce((sum: number, p: any) => sum + p.total, 0);
     const ingresosMostrador = totalVentas * 0.58; // 58% mostrador
     const ingresosAppWeb = totalVentas * 0.27; // 27% app/web
     const ingresosTerceros = totalVentas * 0.10; // 10% terceros  
@@ -286,7 +286,7 @@ export const obtenerFacturas = async (req: Request, res: Response) => {
       }
     });
 
-    const facturasFormateadas = facturas.map(f => ({
+    const facturasFormateadas = facturas.map((f: any) => ({
       id: f.id.toString(),
       numero: `F-${f.id.toString().padStart(6, '0')}`,
       fecha: f.fecha,
@@ -298,7 +298,7 @@ export const obtenerFacturas = async (req: Request, res: Response) => {
       total: f.total,
       estado_pago: 'pagado', // TODO: Agregar al schema
       metodo_pago: 'tarjeta', // TODO: Agregar al schema
-      items: f.pedido?.items?.map(item => ({
+      items: f.pedido?.items?.map((item: any) => ({
         producto_nombre: item.producto.nombre,
         cantidad: item.cantidad,
         precio_unitario: item.precio,
@@ -355,7 +355,7 @@ export const obtenerCierresCaja = async (req: Request, res: Response) => {
     });
 
     // Transformar datos para coincidir con la interface esperada
-    const cierres = cierresDB.map(cierre => ({
+    const cierres = cierresDB.map((cierre: any) => ({
       id: cierre.id.toString(),
       numero: cierre.numero,
       punto_venta_id: cierre.puntoVentaId,

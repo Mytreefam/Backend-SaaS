@@ -4,7 +4,7 @@
  * Servicios para gestión de stock, proveedores y almacenes
  */
 
-import { API_CONFIG, buildUrl, getAuthToken } from '../../config/api.config';
+import { envelopedFetch } from '../http/envelopedFetch';
 
 // ============================================================================
 // TIPOS - PROVEEDORES
@@ -107,18 +107,8 @@ export const proveedoresApi = {
       let url = '/gerente/stock/proveedores';
       if (empresaId) url += `?empresa_id=${empresaId}`;
 
-      const response = await fetch(buildUrl(url), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al obtener proveedores');
-      }
-
-      return await response.json();
+      const response = await envelopedFetch<Proveedor[]>(url, { method: 'GET' });
+      return response.data.data ?? [];
     } catch (error) {
       console.error('Error al obtener proveedores:', error);
       return [];
@@ -130,18 +120,10 @@ export const proveedoresApi = {
    */
   async getById(id: number): Promise<Proveedor | null> {
     try {
-      const response = await fetch(buildUrl(`/gerente/stock/proveedores/${id}`), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
+      const response = await envelopedFetch<Proveedor>(`/gerente/stock/proveedores/${id}`, {
+        method: 'GET',
       });
-
-      if (!response.ok) {
-        throw new Error('Error al obtener proveedor');
-      }
-
-      return await response.json();
+      return response.data.data ?? null;
     } catch (error) {
       console.error('Error al obtener proveedor:', error);
       return null;
@@ -153,20 +135,11 @@ export const proveedoresApi = {
    */
   async create(data: ProveedorCreate): Promise<Proveedor | null> {
     try {
-      const response = await fetch(buildUrl('/gerente/stock/proveedores'), {
+      const response = await envelopedFetch<Proveedor>('/gerente/stock/proveedores', {
         method: 'POST',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
         body: JSON.stringify(data),
       });
-
-      if (!response.ok) {
-        throw new Error('Error al crear proveedor');
-      }
-
-      return await response.json();
+      return response.data.data ?? null;
     } catch (error) {
       console.error('Error al crear proveedor:', error);
       return null;
@@ -178,20 +151,11 @@ export const proveedoresApi = {
    */
   async update(id: number, data: Partial<ProveedorCreate>): Promise<Proveedor | null> {
     try {
-      const response = await fetch(buildUrl(`/gerente/stock/proveedores/${id}`), {
+      const response = await envelopedFetch<Proveedor>(`/gerente/stock/proveedores/${id}`, {
         method: 'PUT',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
         body: JSON.stringify(data),
       });
-
-      if (!response.ok) {
-        throw new Error('Error al actualizar proveedor');
-      }
-
-      return await response.json();
+      return response.data.data ?? null;
     } catch (error) {
       console.error('Error al actualizar proveedor:', error);
       return null;
@@ -203,15 +167,8 @@ export const proveedoresApi = {
    */
   async delete(id: number): Promise<boolean> {
     try {
-      const response = await fetch(buildUrl(`/gerente/stock/proveedores/${id}`), {
-        method: 'DELETE',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-
-      return response.ok;
+      await envelopedFetch<unknown>(`/gerente/stock/proveedores/${id}`, { method: 'DELETE' });
+      return true;
     } catch (error) {
       console.error('Error al eliminar proveedor:', error);
       return false;
@@ -244,18 +201,8 @@ export const stockApi = {
       if (params?.busqueda) queryParams.append('busqueda', params.busqueda);
       if (queryParams.toString()) url += `?${queryParams.toString()}`;
 
-      const response = await fetch(buildUrl(url), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al obtener artículos');
-      }
-
-      return await response.json();
+      const response = await envelopedFetch<ArticuloStock[]>(url, { method: 'GET' });
+      return response.data.data ?? [];
     } catch (error) {
       console.error('Error al obtener artículos:', error);
       return [];
@@ -270,18 +217,8 @@ export const stockApi = {
       let url = '/gerente/stock/almacenes';
       if (empresaId) url += `?empresa_id=${empresaId}`;
 
-      const response = await fetch(buildUrl(url), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al obtener almacenes');
-      }
-
-      return await response.json();
+      const response = await envelopedFetch<Almacen[]>(url, { method: 'GET' });
+      return response.data.data ?? [];
     } catch (error) {
       console.error('Error al obtener almacenes:', error);
       return [];
@@ -308,18 +245,8 @@ export const stockApi = {
       if (params?.fechaFin) queryParams.append('fecha_fin', params.fechaFin);
       if (queryParams.toString()) url += `?${queryParams.toString()}`;
 
-      const response = await fetch(buildUrl(url), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al obtener movimientos');
-      }
-
-      return await response.json();
+      const response = await envelopedFetch<MovimientoStock[]>(url, { method: 'GET' });
+      return response.data.data ?? [];
     } catch (error) {
       console.error('Error al obtener movimientos:', error);
       return [];
@@ -338,20 +265,11 @@ export const stockApi = {
     documentoRef?: string;
   }): Promise<MovimientoStock | null> {
     try {
-      const response = await fetch(buildUrl('/gerente/stock/entradas'), {
+      const response = await envelopedFetch<MovimientoStock>('/gerente/stock/entradas', {
         method: 'POST',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
         body: JSON.stringify(data),
       });
-
-      if (!response.ok) {
-        throw new Error('Error al registrar entrada');
-      }
-
-      return await response.json();
+      return response.data.data ?? null;
     } catch (error) {
       console.error('Error al registrar entrada:', error);
       return null;
@@ -369,20 +287,11 @@ export const stockApi = {
     tipo?: 'venta' | 'merma' | 'consumo_propio' | 'ajuste';
   }): Promise<MovimientoStock | null> {
     try {
-      const response = await fetch(buildUrl('/gerente/stock/salidas'), {
+      const response = await envelopedFetch<MovimientoStock>('/gerente/stock/salidas', {
         method: 'POST',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
         body: JSON.stringify(data),
       });
-
-      if (!response.ok) {
-        throw new Error('Error al registrar salida');
-      }
-
-      return await response.json();
+      return response.data.data ?? null;
     } catch (error) {
       console.error('Error al registrar salida:', error);
       return null;
@@ -394,20 +303,11 @@ export const stockApi = {
    */
   async transferir(data: TransferenciaStock): Promise<MovimientoStock | null> {
     try {
-      const response = await fetch(buildUrl('/gerente/stock/transferencias'), {
+      const response = await envelopedFetch<MovimientoStock>('/gerente/stock/transferencias', {
         method: 'POST',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
         body: JSON.stringify(data),
       });
-
-      if (!response.ok) {
-        throw new Error('Error al realizar transferencia');
-      }
-
-      return await response.json();
+      return response.data.data ?? null;
     } catch (error) {
       console.error('Error al realizar transferencia:', error);
       return null;
@@ -422,18 +322,8 @@ export const stockApi = {
       let url = '/gerente/stock/alertas';
       if (empresaId) url += `?empresa_id=${empresaId}`;
 
-      const response = await fetch(buildUrl(url), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al obtener alertas');
-      }
-
-      return await response.json();
+      const response = await envelopedFetch<ArticuloStock[]>(url, { method: 'GET' });
+      return response.data.data ?? [];
     } catch (error) {
       console.error('Error al obtener alertas:', error);
       return [];
@@ -450,24 +340,18 @@ export const stockApi = {
     motivo: string;
   }): Promise<MovimientoStock | null> {
     try {
-      const response = await fetch(buildUrl(`/gerente/stock/articulos/${data.articuloId}/ajustar`), {
+      const response = await envelopedFetch<MovimientoStock>(
+        `/gerente/stock/articulos/${data.articuloId}/ajustar`,
+        {
         method: 'PUT',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
         body: JSON.stringify({
           almacenId: data.almacenId,
           stockReal: data.stockReal,
           motivo: data.motivo,
         }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al ajustar inventario');
-      }
-
-      return await response.json();
+        },
+      );
+      return response.data.data ?? null;
     } catch (error) {
       console.error('Error al ajustar inventario:', error);
       return null;

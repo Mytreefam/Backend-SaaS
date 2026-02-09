@@ -75,7 +75,16 @@ export const updatePedido = async (req: any, res: any) => {
   if (req.user.role !== 'gerente' && pedido.clienteId !== req.user.id) {
     return res.status(403).json({ success: false, error: 'FORBIDDEN' });
   }
-  const actualizado = await PedidoModel.update(Number(id), req.body);
+
+  // Mass-assignment prevention: restrict updatable fields
+  const payload: any = {
+    estado: req.body?.estado,
+    total: req.body?.total,
+    tipoEntrega: req.body?.tipoEntrega,
+    metodoPago: req.body?.metodoPago,
+  };
+
+  const actualizado = await PedidoModel.update(Number(id), payload);
   res.json(actualizado);
 };
 

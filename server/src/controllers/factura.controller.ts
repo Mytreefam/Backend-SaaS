@@ -19,15 +19,23 @@ import { FacturaModel } from '../models/factura.model';
  *                 $ref: '#/components/schemas/Factura'
  */
 export const getAllFacturas = async (req: any, res: any) => {
-  const facturas = await FacturaModel.findAll();
-  res.json(facturas);
+  if (!req.user) return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
+  const facturas =
+    req.user.role === 'gerente'
+      ? await FacturaModel.findAll()
+      : await FacturaModel.findAll({ clienteId: req.user.id });
+  res.json({ success: true, data: facturas });
 };
 
 export const getFacturaById = async (req: any, res: any) => {
+  if (!req.user) return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
   const { id } = req.params;
   const factura = await FacturaModel.findById(Number(id));
   if (!factura) return res.status(404).json({ error: 'No encontrada' });
-  res.json(factura);
+  if (req.user.role !== 'gerente' && factura.clienteId !== req.user.id) {
+    return res.status(403).json({ success: false, error: 'FORBIDDEN' });
+  }
+  res.json({ success: true, data: factura });
 };
 
 /**
@@ -49,20 +57,66 @@ export const getFacturaById = async (req: any, res: any) => {
  *         description: Factura creada
  */
 export const createFactura = async (req: any, res: any) => {
-  const nueva = await FacturaModel.create(req.body);
-  res.status(201).json(nueva);
+  if (!req.user) return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
+
+  // Mass-assignment prevention: allow only a safe subset of fields.
+  const payload: any = {
+    numero: req.body?.numero,
+    pedidoId: req.body?.pedidoId ?? null,
+    total: req.body?.total,
+    subtotal: req.body?.subtotal,
+    impuestos: req.body?.impuestos ?? 0,
+    metodoPago: req.body?.metodoPago,
+    estadoVerifactu: req.body?.estadoVerifactu,
+    marcaId: req.body?.marcaId,
+    puntoVentaId: req.body?.puntoVentaId ?? null,
+    notas: req.body?.notas ?? null,
+  };
+
+  if (req.user.role === 'gerente' && req.body?.clienteId) {
+    payload.clienteId = Number(req.body.clienteId);
+  } else {
+    payload.clienteId = req.user.id;
+  }
+
+  const nueva = await FacturaModel.create(payload);
+  res.status(201).json({ success: true, data: nueva });
 };
 
 export const updateFactura = async (req: any, res: any) => {
+  if (!req.user) return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
   const { id } = req.params;
-  const actualizada = await FacturaModel.update(Number(id), req.body);
-  res.json(actualizada);
+  const factura = await FacturaModel.findById(Number(id));
+  if (!factura) return res.status(404).json({ error: 'No encontrada' });
+  if (req.user.role !== 'gerente' && factura.clienteId !== req.user.id) {
+    return res.status(403).json({ success: false, error: 'FORBIDDEN' });
+  }
+
+  const payload: any = {
+    total: req.body?.total,
+    subtotal: req.body?.subtotal,
+    impuestos: req.body?.impuestos,
+    metodoPago: req.body?.metodoPago,
+    estadoVerifactu: req.body?.estadoVerifactu,
+    notas: req.body?.notas,
+    puntoVentaId: req.body?.puntoVentaId,
+  };
+  // never allow clienteId changes
+
+  const actualizada = await FacturaModel.update(Number(id), payload);
+  res.json({ success: true, data: actualizada });
 };
 
 export const deleteFactura = async (req: any, res: any) => {
+  if (!req.user) return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
   const { id } = req.params;
+  const factura = await FacturaModel.findById(Number(id));
+  if (!factura) return res.status(404).json({ error: 'No encontrada' });
+  if (req.user.role !== 'gerente' && factura.clienteId !== req.user.id) {
+    return res.status(403).json({ success: false, error: 'FORBIDDEN' });
+  }
   await FacturaModel.delete(Number(id));
-  res.status(204).end();
+  res.status(200).json({ success: true, data: { deleted: true } });
 };
 
 /**
@@ -91,11 +145,16 @@ export const deleteFactura = async (req: any, res: any) => {
  *         description: Factura no encontrada
  */
 export const downloadPdf = async (req: any, res: any) => {
+  if (!req.user) return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
   const { id } = req.params;
   const factura = await FacturaModel.findById(Number(id));
   
   if (!factura) {
     return res.status(404).json({ error: 'Factura no encontrada' });
+  }
+
+  if (req.user.role !== 'gerente' && factura.clienteId !== req.user.id) {
+    return res.status(403).json({ success: false, error: 'FORBIDDEN' });
   }
   
   // Generar un PDF simple con los datos de la factura

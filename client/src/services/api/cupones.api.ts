@@ -4,8 +4,9 @@
  * Gestión de cupones y descuentos
  */
 
-import { API_CONFIG, buildUrl, getAuthToken } from '../../config/api.config';
+import { API_CONFIG } from '../../config/api.config';
 import { toast } from 'sonner@2.0.3';
+import { envelopedFetch } from '../http/envelopedFetch';
 
 // ============================================================================
 // TIPOS
@@ -44,18 +45,10 @@ export const cuponesApi = {
    */
   async getAll(): Promise<Cupon[]> {
     try {
-      const response = await fetch(buildUrl(API_CONFIG.ENDPOINTS.CUPONES), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
+      const response = await envelopedFetch<Cupon[]>(API_CONFIG.ENDPOINTS.CUPONES, {
+        method: 'GET',
       });
-
-      if (!response.ok) {
-        throw new Error('Error al obtener cupones');
-      }
-
-      return await response.json();
+      return response.data.data ?? [];
     } catch (error) {
       console.error('Error al obtener cupones:', error);
       return [];
@@ -67,23 +60,15 @@ export const cuponesApi = {
    */
   async validar(data: ValidarCuponRequest): Promise<ValidarCuponResponse> {
     try {
-      const response = await fetch(buildUrl(API_CONFIG.ENDPOINTS.CUPON_VALIDAR), {
+      const response = await envelopedFetch<ValidarCuponResponse>(API_CONFIG.ENDPOINTS.CUPON_VALIDAR, {
         method: 'POST',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
         body: JSON.stringify(data),
       });
 
-      if (!response.ok) {
-        return {
-          valido: false,
-          mensaje: 'Cupón no válido o expirado',
-        };
-      }
-
-      const result = await response.json();
+      const result: ValidarCuponResponse = response.data.data ?? {
+        valido: false,
+        mensaje: 'Cupón no válido o expirado',
+      };
       
       if (result.valido) {
         toast.success(result.mensaje || 'Cupón aplicado correctamente');
@@ -107,22 +92,12 @@ export const cuponesApi = {
    */
   async create(data: Omit<Cupon, 'id' | 'usado'>): Promise<Cupon | null> {
     try {
-      const response = await fetch(buildUrl(API_CONFIG.ENDPOINTS.CUPONES), {
+      const response = await envelopedFetch<Cupon>(API_CONFIG.ENDPOINTS.CUPONES, {
         method: 'POST',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
         body: JSON.stringify(data),
       });
-
-      if (!response.ok) {
-        throw new Error('Error al crear cupón');
-      }
-
-      const cupon = await response.json();
       toast.success('Cupón creado correctamente');
-      return cupon;
+      return response.data.data ?? null;
     } catch (error) {
       console.error('Error al crear cupón:', error);
       toast.error('Error al crear cupón');

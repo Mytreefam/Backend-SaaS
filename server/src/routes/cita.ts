@@ -1,5 +1,7 @@
 import express, { Router } from 'express';
 import { CitasController } from '../controllers/citas.controller';
+import { z } from 'zod';
+import { validate } from '../middleware/validate.middleware';
 
 const router: Router = express.Router();
 
@@ -38,7 +40,22 @@ router.get('/:id', CitasController.getById);
  * @body    {String} email - Email de contacto (opcional)
  * @body    {String} notas - Notas adicionales (opcional)
  */
-router.post('/', CitasController.create);
+router.post(
+  '/',
+  validate({
+    body: z.object({
+      fecha: z.union([z.string().min(1), z.date()]),
+      hora: z.string().min(1).optional(),
+      motivo: z.string().min(1),
+      servicio: z.string().min(1).optional(),
+      clienteId: z.number().int().optional(),
+      telefono: z.string().min(3).optional(),
+      email: z.string().email().optional(),
+      notas: z.string().optional(),
+    }),
+  }),
+  CitasController.create,
+);
 
 /**
  * @route   PUT /api/citas/:id
@@ -52,7 +69,23 @@ router.post('/', CitasController.create);
  * @body    {String} email - Email (opcional)
  * @body    {String} notas - Notas (opcional)
  */
-router.put('/:id', CitasController.update);
+router.put(
+  '/:id',
+  validate({
+    params: z.object({ id: z.string().min(1) }),
+    body: z.object({
+      fecha: z.union([z.string().min(1), z.date()]).optional(),
+      hora: z.string().min(1).optional(),
+      motivo: z.string().min(1).optional(),
+      servicio: z.string().min(1).optional(),
+      estado: z.string().min(1).optional(),
+      telefono: z.string().min(3).optional(),
+      email: z.string().email().optional(),
+      notas: z.string().optional(),
+    }),
+  }),
+  CitasController.update,
+);
 
 /**
  * @route   PATCH /api/citas/:id/status
@@ -61,13 +94,24 @@ router.put('/:id', CitasController.update);
  * @body    {String} canceladaPor - Usuario que canceló (si estado = cancelada) (opcional)
  * @body    {String} razonCancelacion - Razón de cancelación (opcional)
  */
-router.patch('/:id/status', CitasController.changeStatus);
+router.patch(
+  '/:id/status',
+  validate({
+    params: z.object({ id: z.string().min(1) }),
+    body: z.object({
+      estado: z.string().min(1),
+      canceladaPor: z.string().optional(),
+      razonCancelacion: z.string().optional(),
+    }),
+  }),
+  CitasController.changeStatus,
+);
 
 /**
  * @route   PATCH /api/citas/:id/confirm
  * @desc    Confirmar cita
  */
-router.patch('/:id/confirm', CitasController.confirm);
+router.patch('/:id/confirm', validate({ params: z.object({ id: z.string().min(1) }) }), CitasController.confirm);
 
 /**
  * @route   PATCH /api/citas/:id/cancel
@@ -75,12 +119,22 @@ router.patch('/:id/confirm', CitasController.confirm);
  * @body    {String} canceladaPor - Usuario que canceló (opcional)
  * @body    {String} razonCancelacion - Razón de cancelación (opcional)
  */
-router.patch('/:id/cancel', CitasController.cancel);
+router.patch(
+  '/:id/cancel',
+  validate({
+    params: z.object({ id: z.string().min(1) }),
+    body: z.object({
+      canceladaPor: z.string().optional(),
+      razonCancelacion: z.string().optional(),
+    }),
+  }),
+  CitasController.cancel,
+);
 
 /**
  * @route   DELETE /api/citas/:id
  * @desc    Eliminar cita
  */
-router.delete('/:id', CitasController.delete);
+router.delete('/:id', validate({ params: z.object({ id: z.string().min(1) }) }), CitasController.delete);
 
 export default router;

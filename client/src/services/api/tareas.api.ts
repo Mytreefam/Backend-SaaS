@@ -4,7 +4,7 @@
  * Gestión de tareas del trabajador conectada al backend
  */
 
-import { API_CONFIG, buildUrl, getAuthToken } from '../../config/api.config';
+import { envelopedFetch } from '../http/envelopedFetch';
 
 // ============================================================================
 // TIPOS
@@ -56,24 +56,20 @@ export const tareasApi = {
    */
   async getByEmpleadoId(empleadoId: number): Promise<TareaTrabajador[]> {
     try {
-      const response = await fetch(buildUrl(`/gerente/operativa/tareas?empleadoId=${empleadoId}`), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
+      const response = await envelopedFetch<TareaTrabajador[]>(
+        `/gerente/operativa/tareas?empleadoId=${empleadoId}`,
+        { method: 'GET' },
+      );
+      return response.data.data ?? [];
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      console.error('Error al obtener tareas:', error);
 
-      if (!response.ok) {
-        // Si no existe endpoint, devolver array vacío
-        if (response.status === 404) {
-          return [];
-        }
-        throw new Error('Error al obtener tareas');
+      // Si no existe endpoint, devolver array vacío
+      if (message.includes('No encontrado') || message.includes('NOT_FOUND')) {
+        return [];
       }
 
-      return await response.json();
-    } catch (error) {
-      console.error('Error al obtener tareas:', error);
       // Fallback a localStorage mientras se implementa backend
       return this.getFromLocalStorage(empleadoId);
     }
@@ -103,24 +99,15 @@ export const tareasApi = {
    */
   async create(data: TareaCreate): Promise<TareaTrabajador | null> {
     try {
-      const response = await fetch(buildUrl('/gerente/operativa/tareas'), {
+      const response = await envelopedFetch<TareaTrabajador>('/gerente/operativa/tareas', {
         method: 'POST',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
         body: JSON.stringify({
           ...data,
           estado: 'pendiente',
           fechaCreacion: new Date().toISOString(),
         }),
       });
-
-      if (!response.ok) {
-        throw new Error('Error al crear tarea');
-      }
-
-      return await response.json();
+      return response.data.data ?? null;
     } catch (error) {
       console.error('Error al crear tarea:', error);
       return null;
@@ -132,20 +119,11 @@ export const tareasApi = {
    */
   async update(id: number, data: TareaUpdate): Promise<TareaTrabajador | null> {
     try {
-      const response = await fetch(buildUrl(`/gerente/operativa/tareas/${id}`), {
+      const response = await envelopedFetch<TareaTrabajador>(`/gerente/operativa/tareas/${id}`, {
         method: 'PUT',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
         body: JSON.stringify(data),
       });
-
-      if (!response.ok) {
-        throw new Error('Error al actualizar tarea');
-      }
-
-      return await response.json();
+      return response.data.data ?? null;
     } catch (error) {
       console.error('Error al actualizar tarea:', error);
       return null;
@@ -157,20 +135,11 @@ export const tareasApi = {
    */
   async completar(id: number): Promise<TareaTrabajador | null> {
     try {
-      const response = await fetch(buildUrl(`/gerente/operativa/tareas/${id}/completar`), {
+      const response = await envelopedFetch<TareaTrabajador>(`/gerente/operativa/tareas/${id}/completar`, {
         method: 'PUT',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
         body: JSON.stringify({ estado: 'completada' }),
       });
-
-      if (!response.ok) {
-        throw new Error('Error al completar tarea');
-      }
-
-      return await response.json();
+      return response.data.data ?? null;
     } catch (error) {
       console.error('Error al completar tarea:', error);
       return null;
@@ -200,15 +169,8 @@ export const tareasApi = {
    */
   async delete(id: number): Promise<boolean> {
     try {
-      const response = await fetch(buildUrl(`/gerente/operativa/tareas/${id}`), {
-        method: 'DELETE',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-
-      return response.ok;
+      await envelopedFetch<unknown>(`/gerente/operativa/tareas/${id}`, { method: 'DELETE' });
+      return true;
     } catch (error) {
       console.error('Error al eliminar tarea:', error);
       return false;

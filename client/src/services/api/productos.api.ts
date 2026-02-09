@@ -4,8 +4,9 @@
  * Gestión de productos y catálogo
  */
 
-import { API_CONFIG, buildUrl, getAuthToken } from '../../config/api.config';
+import { API_CONFIG } from '../../config/api.config';
 import { toast } from 'sonner@2.0.3';
+import { envelopedFetch } from '../http/envelopedFetch';
 
 // ============================================================================
 // TIPOS
@@ -30,18 +31,8 @@ export const productosApi = {
    */
   async getAll(): Promise<Producto[]> {
     try {
-      const response = await fetch(buildUrl(API_CONFIG.ENDPOINTS.PRODUCTOS), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al obtener productos');
-      }
-
-      return await response.json();
+      const response = await envelopedFetch<Producto[]>(API_CONFIG.ENDPOINTS.PRODUCTOS, { method: 'GET' });
+      return response.data.data ?? [];
     } catch (error) {
       console.error('Error al obtener productos:', error);
       toast.error('Error al cargar productos');
@@ -54,24 +45,19 @@ export const productosApi = {
    */
   async getById(id: string | number): Promise<Producto | null> {
     try {
-      const response = await fetch(buildUrl(API_CONFIG.ENDPOINTS.PRODUCTO_BY_ID(String(id))), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
+      const response = await envelopedFetch<Producto>(API_CONFIG.ENDPOINTS.PRODUCTO_BY_ID(String(id)), {
+        method: 'GET',
       });
+      return response.data.data ?? null;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      console.error('Error al obtener producto:', error);
 
-      if (!response.ok) {
-        if (response.status === 404) {
-          toast.error('Producto no encontrado');
-          return null;
-        }
-        throw new Error('Error al obtener producto');
+      if (message.includes('No encontrado') || message.includes('NOT_FOUND')) {
+        toast.error('Producto no encontrado');
+        return null;
       }
 
-      return await response.json();
-    } catch (error) {
-      console.error('Error al obtener producto:', error);
       toast.error('Error al cargar producto');
       return null;
     }
@@ -82,22 +68,12 @@ export const productosApi = {
    */
   async create(data: Omit<Producto, 'id'>): Promise<Producto | null> {
     try {
-      const response = await fetch(buildUrl(API_CONFIG.ENDPOINTS.PRODUCTOS), {
+      const response = await envelopedFetch<Producto>(API_CONFIG.ENDPOINTS.PRODUCTOS, {
         method: 'POST',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
         body: JSON.stringify(data),
       });
-
-      if (!response.ok) {
-        throw new Error('Error al crear producto');
-      }
-
-      const producto = await response.json();
       toast.success('Producto creado correctamente');
-      return producto;
+      return response.data.data ?? null;
     } catch (error) {
       console.error('Error al crear producto:', error);
       toast.error('Error al crear producto');
@@ -110,22 +86,12 @@ export const productosApi = {
    */
   async update(id: string | number, data: Partial<Producto>): Promise<Producto | null> {
     try {
-      const response = await fetch(buildUrl(API_CONFIG.ENDPOINTS.PRODUCTO_BY_ID(String(id))), {
+      const response = await envelopedFetch<Producto>(API_CONFIG.ENDPOINTS.PRODUCTO_BY_ID(String(id)), {
         method: 'PUT',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
         body: JSON.stringify(data),
       });
-
-      if (!response.ok) {
-        throw new Error('Error al actualizar producto');
-      }
-
-      const producto = await response.json();
       toast.success('Producto actualizado correctamente');
-      return producto;
+      return response.data.data ?? null;
     } catch (error) {
       console.error('Error al actualizar producto:', error);
       toast.error('Error al actualizar producto');
@@ -138,18 +104,7 @@ export const productosApi = {
    */
   async delete(id: string | number): Promise<boolean> {
     try {
-      const response = await fetch(buildUrl(API_CONFIG.ENDPOINTS.PRODUCTO_BY_ID(String(id))), {
-        method: 'DELETE',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al eliminar producto');
-      }
-
+      await envelopedFetch<unknown>(API_CONFIG.ENDPOINTS.PRODUCTO_BY_ID(String(id)), { method: 'DELETE' });
       toast.success('Producto eliminado correctamente');
       return true;
     } catch (error) {

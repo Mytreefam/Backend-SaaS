@@ -4,7 +4,7 @@
  * Servicios para gestión de escandallos y costes de productos
  */
 
-import { API_CONFIG, buildUrl, getAuthToken } from '../../config/api.config';
+import { envelopedFetch } from '../http/envelopedFetch';
 
 // ============================================================================
 // TIPOS
@@ -79,18 +79,8 @@ export const escandalloApi = {
       if (params?.soloNoRentables) queryParams.append('solo_no_rentables', 'true');
       if (queryParams.toString()) url += `?${queryParams.toString()}`;
 
-      const response = await fetch(buildUrl(url), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al obtener escandallos');
-      }
-
-      return await response.json();
+      const response = await envelopedFetch<Escandallo[]>(url, { method: 'GET' });
+      return response.data.data ?? [];
     } catch (error) {
       console.error('Error al obtener escandallos:', error);
       return [];
@@ -102,18 +92,10 @@ export const escandalloApi = {
    */
   async getByProductoId(productoId: number): Promise<Escandallo | null> {
     try {
-      const response = await fetch(buildUrl(`/gerente/escandallos/producto/${productoId}`), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
+      const response = await envelopedFetch<Escandallo>(`/gerente/escandallos/producto/${productoId}`, {
+        method: 'GET',
       });
-
-      if (!response.ok) {
-        throw new Error('Error al obtener escandallo');
-      }
-
-      return await response.json();
+      return response.data.data ?? null;
     } catch (error) {
       console.error('Error al obtener escandallo:', error);
       return null;
@@ -125,20 +107,11 @@ export const escandalloApi = {
    */
   async guardar(productoId: number, ingredientes: Omit<Ingrediente, 'id' | 'costeTotal'>[]): Promise<Escandallo | null> {
     try {
-      const response = await fetch(buildUrl('/gerente/escandallos'), {
+      const response = await envelopedFetch<Escandallo>('/gerente/escandallos', {
         method: 'POST',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
         body: JSON.stringify({ productoId, ingredientes }),
       });
-
-      if (!response.ok) {
-        throw new Error('Error al guardar escandallo');
-      }
-
-      return await response.json();
+      return response.data.data ?? null;
     } catch (error) {
       console.error('Error al guardar escandallo:', error);
       return null;
@@ -153,18 +126,15 @@ export const escandalloApi = {
       let url = '/gerente/escandallos/resumen';
       if (empresaId) url += `?empresa_id=${empresaId}`;
 
-      const response = await fetch(buildUrl(url), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al obtener resumen');
-      }
-
-      return await response.json();
+      const response = await envelopedFetch<ResumenEscandallo>(url, { method: 'GET' });
+      return response.data.data ?? {
+        totalProductos: 0,
+        productosRentables: 0,
+        productosNoRentables: 0,
+        margenMedio: 0,
+        costesMedios: 0,
+        ventasTotales: 0,
+      };
     } catch (error) {
       console.error('Error al obtener resumen:', error);
       return {
@@ -186,18 +156,8 @@ export const escandalloApi = {
       let url = '/gerente/escandallos/costes-proveedor';
       if (empresaId) url += `?empresa_id=${empresaId}`;
 
-      const response = await fetch(buildUrl(url), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al obtener costes por proveedor');
-      }
-
-      return await response.json();
+      const response = await envelopedFetch<CostePorProveedor[]>(url, { method: 'GET' });
+      return response.data.data ?? [];
     } catch (error) {
       console.error('Error al obtener costes por proveedor:', error);
       return [];
@@ -209,20 +169,14 @@ export const escandalloApi = {
    */
   async recalcular(empresaId?: number): Promise<{actualizados: number; errores: number}> {
     try {
-      const response = await fetch(buildUrl('/gerente/escandallos/recalcular'), {
+      const response = await envelopedFetch<{ actualizados: number; errores: number }>(
+        '/gerente/escandallos/recalcular',
+        {
         method: 'POST',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
         body: JSON.stringify({ empresaId }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al recalcular escandallos');
-      }
-
-      return await response.json();
+        },
+      );
+      return response.data.data ?? { actualizados: 0, errores: 0 };
     } catch (error) {
       console.error('Error al recalcular escandallos:', error);
       return { actualizados: 0, errores: 0 };

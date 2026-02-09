@@ -6,6 +6,7 @@
 
 import { API_CONFIG, buildUrl, setAuthToken, clearAuthToken } from '../../config/api.config';
 import { toast } from 'sonner@2.0.3';
+import { envelopedFetch } from '../http/envelopedFetch';
 
 // ============================================================================
 // TIPOS
@@ -42,7 +43,7 @@ export const authApi = {
    */
   async login(credentials: LoginCredentials): Promise<LoginResponse> {
     try {
-      const response = await fetch(buildUrl(API_CONFIG.ENDPOINTS.LOGIN), {
+      const response = await envelopedFetch<LoginResponse>(API_CONFIG.ENDPOINTS.LOGIN, {
         method: 'POST',
         headers: API_CONFIG.HEADERS,
         body: JSON.stringify({
@@ -51,14 +52,10 @@ export const authApi = {
         }),
       });
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error('Email o contraseña incorrectos');
-        }
+      const data = response.data.data;
+      if (!data) {
         throw new Error('Error al iniciar sesión');
       }
-
-      const data = await response.json();
 
       // Guardar token si existe
       if (data.token) {
@@ -92,14 +89,12 @@ export const authApi = {
    */
   async logout(): Promise<void> {
     try {
-      // Llamar al endpoint de logout (opcional)
-      // await fetch(buildUrl(API_CONFIG.ENDPOINTS.LOGOUT), {
-      //   method: 'POST',
-      //   headers: {
-      //     ...API_CONFIG.HEADERS,
-      //     'Authorization': `Bearer ${getAuthToken()}`,
-      //   },
-      // });
+      // Llamar al endpoint de logout
+      await envelopedFetch<{ ok?: boolean }>(API_CONFIG.ENDPOINTS.LOGOUT, {
+        method: 'POST',
+        headers: API_CONFIG.HEADERS,
+        credentials: 'include',
+      });
 
       // Limpiar tokens y datos locales
       clearAuthToken();
@@ -143,24 +138,18 @@ export const authApi = {
    */
   async refreshToken(): Promise<string | null> {
     try {
-      const response = await fetch(buildUrl(API_CONFIG.ENDPOINTS.REFRESH), {
+      const response = await envelopedFetch<{ token?: string }>(API_CONFIG.ENDPOINTS.REFRESH, {
         method: 'POST',
         headers: API_CONFIG.HEADERS,
         credentials: 'include', // Para enviar cookies si se usan
+        skipAuth: true,
       });
 
-      if (!response.ok) {
-        return null;
-      }
+      const token = response.data.data?.token;
+      if (!token) return null;
 
-      const data = await response.json();
-      
-      if (data.token) {
-        setAuthToken(data.token, true);
-        return data.token;
-      }
-
-      return null;
+      setAuthToken(token, true);
+      return token;
     } catch (error) {
       console.error('Error al refrescar token:', error);
       return null;

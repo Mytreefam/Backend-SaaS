@@ -5,7 +5,7 @@
  * KPIs, ventas, alertas y métricas del negocio
  */
 
-import { API_CONFIG, buildUrl, getAuthToken } from '../../config/api.config';
+import { envelopedFetch } from '../http/envelopedFetch';
 
 // ============================================================================
 // TIPOS
@@ -76,18 +76,8 @@ export const dashboardApi = {
       if (puntoVentaId) params.append('punto_venta_id', puntoVentaId.toString());
       if (params.toString()) url += `?${params.toString()}`;
 
-      const response = await fetch(buildUrl(url), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al obtener KPIs');
-      }
-
-      return await response.json();
+      const response = await envelopedFetch<KPIsGlobales>(url, { method: 'GET' });
+      return response.data.data as KPIsGlobales;
     } catch (error) {
       console.error('Error al obtener KPIs:', error);
       // Fallback con valores por defecto
@@ -124,18 +114,8 @@ export const dashboardApi = {
       if (params?.agrupacion) queryParams.append('agrupacion', params.agrupacion);
       if (queryParams.toString()) url += `?${queryParams.toString()}`;
 
-      const response = await fetch(buildUrl(url), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al obtener ventas');
-      }
-
-      return await response.json();
+      const response = await envelopedFetch<DatosVentas[]>(url, { method: 'GET' });
+      return response.data.data ?? [];
     } catch (error) {
       console.error('Error al obtener ventas:', error);
       return [];
@@ -158,18 +138,8 @@ export const dashboardApi = {
       if (params?.fecha) queryParams.append('fecha', params.fecha);
       if (queryParams.toString()) url += `?${queryParams.toString()}`;
 
-      const response = await fetch(buildUrl(url), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al obtener ventas por canal');
-      }
-
-      return await response.json();
+      const response = await envelopedFetch<VentasPorCanal>(url, { method: 'GET' });
+      return response.data.data as VentasPorCanal;
     } catch (error) {
       console.error('Error al obtener ventas por canal:', error);
       return {
@@ -204,18 +174,8 @@ export const dashboardApi = {
       if (params?.soloNoResueltas) queryParams.append('solo_no_resueltas', 'true');
       if (queryParams.toString()) url += `?${queryParams.toString()}`;
 
-      const response = await fetch(buildUrl(url), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al obtener alertas');
-      }
-
-      return await response.json();
+      const response = await envelopedFetch<AlertaCritica[]>(url, { method: 'GET' });
+      return response.data.data ?? [];
     } catch (error) {
       console.error('Error al obtener alertas:', error);
       return [];
@@ -227,15 +187,10 @@ export const dashboardApi = {
    */
   async resolverAlerta(alertaId: number): Promise<boolean> {
     try {
-      const response = await fetch(buildUrl(`/gerente/dashboard/alertas/${alertaId}/resolver`), {
+      await envelopedFetch<unknown>(`/gerente/dashboard/alertas/${alertaId}/resolver`, {
         method: 'PUT',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
       });
-
-      return response.ok;
+      return true;
     } catch (error) {
       console.error('Error al resolver alerta:', error);
       return false;

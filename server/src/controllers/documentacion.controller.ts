@@ -514,13 +514,17 @@ export async function obtenerResumenGastos(req: Request, res: Response) {
     
     const gastos = await prisma.gastoEmpresa.findMany({ where });
     
-    const totalGastos = gastos.reduce((sum, g) => sum + g.total, 0);
-    const gastosPendientes = gastos.filter(g => g.estadoPago === 'pendiente').reduce((sum, g) => sum + g.total, 0);
-    const gastosPagados = gastos.filter(g => g.estadoPago === 'pagado').reduce((sum, g) => sum + g.total, 0);
+    const totalGastos = gastos.reduce((sum: number, g: any) => sum + g.total, 0);
+    const gastosPendientes = gastos
+      .filter((g: any) => g.estadoPago === 'pendiente')
+      .reduce((sum: number, g: any) => sum + g.total, 0);
+    const gastosPagados = gastos
+      .filter((g: any) => g.estadoPago === 'pagado')
+      .reduce((sum: number, g: any) => sum + g.total, 0);
     
     // Por categoría
     const porCategoria: Record<string, number> = {};
-    gastos.forEach(g => {
+    gastos.forEach((g: any) => {
       porCategoria[g.categoria] = (porCategoria[g.categoria] || 0) + g.total;
     });
     

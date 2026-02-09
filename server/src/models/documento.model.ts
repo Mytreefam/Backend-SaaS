@@ -1,8 +1,11 @@
 import prisma from '../prisma/client';
 
 export const DocumentoModel = {
-  async findAll() {
-    return prisma.documento.findMany({ include: { cliente: true } });
+  async findAll(params?: { clienteId?: number }) {
+    return prisma.documento.findMany({
+      where: params?.clienteId ? { clienteId: params.clienteId } : undefined,
+      include: { cliente: true },
+    });
   },
   async findById(id: number) {
     return prisma.documento.findUnique({ where: { id }, include: { cliente: true } });

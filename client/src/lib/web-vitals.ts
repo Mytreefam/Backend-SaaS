@@ -10,6 +10,7 @@
  */
 
 import { isDevelopment, isProduction } from './env-utils';
+import { PERF_SEND_EXTERNAL_ENABLED } from '../observability/envFlags';
 
 interface Metric {
   id: string;
@@ -76,8 +77,9 @@ function reportMetric(metric: Metric) {
     console.log(`${emoji} ${name}: ${value.toFixed(2)}ms (${rating})`);
   }
 
-  // En producción, enviar a analytics
-  if (isProduction) {
+  // En producción, NO enviar externamente por defecto.
+  // (Se puede habilitar explícitamente por flag)
+  if (isProduction && PERF_SEND_EXTERNAL_ENABLED) {
     // TODO: Integrar con tu servicio de analytics
     // analytics.logEvent('web_vital', {
     //   metric_name: name,

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { envelopedFetch } from '../services/http/envelopedFetch';
 
 interface ImagePerformanceMetrics {
   loadTime: number;
@@ -29,7 +30,16 @@ export function useImagePerformance(): UseImagePerformanceReturn {
       const loadTime = performance.now() - startTime;
 
       // Intentar obtener el tamaño real (solo funciona si la imagen está en el mismo origen o con CORS)
-      fetch(url, { method: 'HEAD' })
+      const resolvedUrl = (() => {
+        try {
+          // Preserve native fetch(url) behavior for relative paths (same-origin)
+          return new URL(url, window.location.href).toString();
+        } catch {
+          return url;
+        }
+      })();
+
+      envelopedFetch<unknown>(resolvedUrl, { method: 'HEAD', skipAuth: true })
         .then((response) => {
           const size = parseInt(response.headers.get('content-length') || '0', 10);
           setMetrics((prev) => [

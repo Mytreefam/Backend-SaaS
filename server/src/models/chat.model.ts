@@ -32,8 +32,10 @@ export const ChatModel = {
     });
   },
   async delete(id: number) {
-    await prisma.mensaje.deleteMany({ where: { chatId: id } });
-    return prisma.chat.delete({ where: { id } });
+    return prisma.$transaction([
+      prisma.mensaje.deleteMany({ where: { chatId: id } }),
+      prisma.chat.delete({ where: { id } }),
+    ]);
   },
   async addMensaje(chatId: number, mensaje: any) {
     return prisma.mensaje.create({

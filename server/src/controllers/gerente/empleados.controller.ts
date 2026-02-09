@@ -370,7 +370,7 @@ export const obtenerTodosFichajes = async (req: Request, res: Response) => {
     });
 
     // Transformar los datos para que coincidan con el formato esperado en el frontend
-    const fichajesFormato = fichajes.map(f => ({
+    const fichajesFormato = fichajes.map((f: any) => ({
       id: f.id,
       empleadoId: f.empleadoId,
       empleadoNombre: f.empleado.nombre,

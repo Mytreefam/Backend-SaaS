@@ -4,7 +4,7 @@
  * Gestión de fichajes del trabajador
  */
 
-import { API_CONFIG, buildUrl, getAuthToken } from '../../config/api.config';
+import { envelopedFetch } from '../http/envelopedFetch';
 
 // ============================================================================
 // TIPOS
@@ -48,18 +48,10 @@ export const fichajesApi = {
    */
   async getByEmpleadoId(empleadoId: number): Promise<Fichaje[]> {
     try {
-      const response = await fetch(buildUrl(`/gerente/empleados/${empleadoId}/fichajes`), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
+      const response = await envelopedFetch<Fichaje[]>(`/gerente/empleados/${empleadoId}/fichajes`, {
+        method: 'GET',
       });
-
-      if (!response.ok) {
-        throw new Error('Error al obtener fichajes');
-      }
-
-      return await response.json();
+      return response.data.data ?? [];
     } catch (error) {
       console.error('Error al obtener fichajes:', error);
       return [];
@@ -72,18 +64,11 @@ export const fichajesApi = {
   async getFichajesHoy(empleadoId: number): Promise<Fichaje[]> {
     try {
       const hoy = new Date().toISOString().split('T')[0];
-      const response = await fetch(buildUrl(`/gerente/empleados/${empleadoId}/fichajes?fecha=${hoy}`), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al obtener fichajes de hoy');
-      }
-
-      return await response.json();
+      const response = await envelopedFetch<Fichaje[]>(
+        `/gerente/empleados/${empleadoId}/fichajes?fecha=${hoy}`,
+        { method: 'GET' },
+      );
+      return response.data.data ?? [];
     } catch (error) {
       console.error('Error al obtener fichajes de hoy:', error);
       return [];
@@ -95,24 +80,15 @@ export const fichajesApi = {
    */
   async registrar(data: FichajeCreate): Promise<Fichaje | null> {
     try {
-      const response = await fetch(buildUrl('/gerente/empleados/fichajes'), {
+      const response = await envelopedFetch<Fichaje>('/gerente/empleados/fichajes', {
         method: 'POST',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
         body: JSON.stringify({
           ...data,
           fecha: new Date().toISOString().split('T')[0],
           hora: new Date().toTimeString().split(' ')[0],
         }),
       });
-
-      if (!response.ok) {
-        throw new Error('Error al registrar fichaje');
-      }
-
-      return await response.json();
+      return response.data.data ?? null;
     } catch (error) {
       console.error('Error al registrar fichaje:', error);
       return null;

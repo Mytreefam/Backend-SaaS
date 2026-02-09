@@ -24,11 +24,11 @@ import { CuponesProvider } from './contexts/CuponesContext';
 import { PedidosProvider } from './contexts/PedidosContext';
 import { inicializarPedidosDemo } from './data/pedidos-demo';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { initWebVitals } from './lib/web-vitals';
 import { inicializarCronJobs } from './services/cron-jobs';
 import { getConfig } from './config/white-label.config';
 import { inicializarMarcasDefault } from './utils/marcasHelper';
 import { authApi } from './services/api';
+import { onAuthExpired } from './observability/authExpiry';
 
 // Lazy Loading de componentes pesados
 const ClienteDashboard = lazy(() => import('./components/ClienteDashboard').then(m => ({ default: m.ClienteDashboard })));
@@ -100,8 +100,7 @@ function App() {
     // Inicializar Analytics
     analytics.initialize();
 
-    // Inicializar Web Vitals monitoring
-    initWebVitals();
+    // Web Vitals / performance telemetry is initialized at app root (see `src/main.tsx`)
     
     // Inicializar Sistema de Marcas MADRE
     inicializarMarcasDefault();
@@ -156,6 +155,16 @@ function App() {
         setAppState('login');
       }
     }, 2000); // 2 segundos de splash
+  }, []);
+
+  // Global auth-expiry safety: single transition to login on refresh failure
+  useEffect(() => {
+    return onAuthExpired(() => {
+      // Best-effort backend logout; never block UI recovery
+      void authApi.logout().catch(() => {});
+      setCurrentUser(null);
+      setAppState('login');
+    });
   }, []);
 
   // Mostrar modal de actualización si hay nueva versión

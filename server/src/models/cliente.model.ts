@@ -1,4 +1,5 @@
 import prisma from '../prisma/client';
+import bcrypt from 'bcryptjs';
 
 export const ClienteModel = {
   async findAll() {
@@ -10,11 +11,12 @@ export const ClienteModel = {
   async create(data: any) {
     // Permitir avatar, idioma, ciudad
     // Generar 'codigo' SIEMPRE, nunca confiar en el valor recibido
+    const passwordHash = await bcrypt.hash(String(data.password), 12);
     const clienteData = {
       codigo: `CLI-${Date.now()}-${Math.floor(Math.random()*10000)}`,
       nombre: data.nombre,
       email: data.email,
-      password: data.password,
+      password: passwordHash,
       telefono: data.telefono,
       role: data.role || 'cliente',
       avatar: data.avatar,

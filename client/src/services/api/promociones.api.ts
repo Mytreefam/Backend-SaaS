@@ -1,4 +1,5 @@
 import { API_CONFIG } from '../../config/api.config';
+import { envelopedFetch } from '../http/envelopedFetch';
 
 export interface PromocionAPI {
   id: number;
@@ -12,13 +13,15 @@ export const promocionesApi = {
   // Obtener todas las promociones
   getAll: async (): Promise<PromocionAPI[]> => {
     try {
-      const response = await fetch(`${API_CONFIG.BASE_URL}/promociones`);
-      if (!response.ok) {
-        throw new Error(`Error HTTP: ${response.status}`);
-      }
-      return await response.json();
+      const response = await envelopedFetch<PromocionAPI[]>(`${API_CONFIG.BASE_URL}/promociones`, {
+        method: 'GET',
+        skipAuth: true,
+      });
+      return response.data.data ?? [];
     } catch (error) {
       console.error('Error al obtener promociones:', error);
+      const status = (error as any)?.status;
+      if (typeof status === 'number') throw new Error(`Error HTTP: ${status}`);
       throw error;
     }
   },
@@ -26,13 +29,15 @@ export const promocionesApi = {
   // Obtener promoción por ID
   getById: async (id: number): Promise<PromocionAPI> => {
     try {
-      const response = await fetch(`${API_CONFIG.BASE_URL}/promociones/${id}`);
-      if (!response.ok) {
-        throw new Error(`Error HTTP: ${response.status}`);
-      }
-      return await response.json();
+      const response = await envelopedFetch<PromocionAPI>(`${API_CONFIG.BASE_URL}/promociones/${id}`, {
+        method: 'GET',
+        skipAuth: true,
+      });
+      return response.data.data as PromocionAPI;
     } catch (error) {
       console.error('Error al obtener promoción:', error);
+      const status = (error as any)?.status;
+      if (typeof status === 'number') throw new Error(`Error HTTP: ${status}`);
       throw error;
     }
   },
@@ -40,20 +45,17 @@ export const promocionesApi = {
   // Crear nueva promoción
   create: async (promocion: Omit<PromocionAPI, 'id'>): Promise<PromocionAPI> => {
     try {
-      const response = await fetch(`${API_CONFIG.BASE_URL}/promociones`, {
+      const response = await envelopedFetch<PromocionAPI>(`${API_CONFIG.BASE_URL}/promociones`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        skipAuth: true,
         body: JSON.stringify(promocion),
       });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Error HTTP: ${response.status} - ${JSON.stringify(errorData)}`);
-      }
-      return await response.json();
+      return response.data.data as PromocionAPI;
     } catch (error) {
       console.error('Error al crear promoción:', error);
+      const status = (error as any)?.status;
+      const message = error instanceof Error ? error.message : String(error);
+      if (typeof status === 'number') throw new Error(`Error HTTP: ${status} - ${message}`);
       throw error;
     }
   },
@@ -61,19 +63,16 @@ export const promocionesApi = {
   // Actualizar promoción
   update: async (id: number, promocion: Partial<PromocionAPI>): Promise<PromocionAPI> => {
     try {
-      const response = await fetch(`${API_CONFIG.BASE_URL}/promociones/${id}`, {
+      const response = await envelopedFetch<PromocionAPI>(`${API_CONFIG.BASE_URL}/promociones/${id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        skipAuth: true,
         body: JSON.stringify(promocion),
       });
-      if (!response.ok) {
-        throw new Error(`Error HTTP: ${response.status}`);
-      }
-      return await response.json();
+      return response.data.data as PromocionAPI;
     } catch (error) {
       console.error('Error al actualizar promoción:', error);
+      const status = (error as any)?.status;
+      if (typeof status === 'number') throw new Error(`Error HTTP: ${status}`);
       throw error;
     }
   },
@@ -81,14 +80,14 @@ export const promocionesApi = {
   // Eliminar promoción
   delete: async (id: number): Promise<void> => {
     try {
-      const response = await fetch(`${API_CONFIG.BASE_URL}/promociones/${id}`, {
+      await envelopedFetch<unknown>(`${API_CONFIG.BASE_URL}/promociones/${id}`, {
         method: 'DELETE',
+        skipAuth: true,
       });
-      if (!response.ok) {
-        throw new Error(`Error HTTP: ${response.status}`);
-      }
     } catch (error) {
       console.error('Error al eliminar promoción:', error);
+      const status = (error as any)?.status;
+      if (typeof status === 'number') throw new Error(`Error HTTP: ${status}`);
       throw error;
     }
   },

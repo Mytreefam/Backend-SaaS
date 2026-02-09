@@ -4,8 +4,25 @@
  * CRUD de clientes y operaciones relacionadas
  */
 
-import { API_CONFIG, buildUrl, getAuthToken } from '../../config/api.config';
+import { API_CONFIG } from '../../config/api.config';
 import { toast } from 'sonner@2.0.3';
+import { envelopedFetch } from '../http/envelopedFetch';
+
+function isNotFoundMessage(message: string): boolean {
+  const m = message.toLowerCase();
+  return m.includes('no encontrado') || m.includes('not_found') || m.includes('not found');
+}
+
+function isDuplicateMessage(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    m.includes('email') ||
+    m.includes('duplicate') ||
+    m.includes('unique') ||
+    m.includes('ya registrado') ||
+    m.includes('already exists')
+  );
+}
 
 // ============================================================================
 // TIPOS
@@ -64,18 +81,11 @@ export const clientesApi = {
    */
   async getAll(): Promise<Cliente[]> {
     try {
-      const response = await fetch(buildUrl(API_CONFIG.ENDPOINTS.CLIENTES), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
+      const response = await envelopedFetch<Cliente[]>(API_CONFIG.ENDPOINTS.CLIENTES, {
+        headers: API_CONFIG.HEADERS,
       });
 
-      if (!response.ok) {
-        throw new Error('Error al obtener clientes');
-      }
-
-      return await response.json();
+      return response.data.data || [];
     } catch (error) {
       console.error('Error al obtener clientes:', error);
       toast.error('Error al cargar clientes');
@@ -88,25 +98,19 @@ export const clientesApi = {
    */
   async getById(id: string | number): Promise<Cliente | null> {
     try {
-      const response = await fetch(buildUrl(API_CONFIG.ENDPOINTS.CLIENTE_BY_ID(String(id))), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
+      const response = await envelopedFetch<Cliente>(API_CONFIG.ENDPOINTS.CLIENTE_BY_ID(String(id)), {
+        headers: API_CONFIG.HEADERS,
       });
 
-      if (!response.ok) {
-        if (response.status === 404) {
-          toast.error('Cliente no encontrado');
-          return null;
-        }
-        throw new Error('Error al obtener cliente');
-      }
-
-      return await response.json();
+      return response.data.data || null;
     } catch (error) {
       console.error('Error al obtener cliente:', error);
-      toast.error('Error al cargar datos del cliente');
+      const message = error instanceof Error ? error.message : '';
+      if (isNotFoundMessage(message)) {
+        toast.error('Cliente no encontrado');
+      } else {
+        toast.error('Error al cargar datos del cliente');
+      }
       return null;
     }
   },
@@ -116,25 +120,22 @@ export const clientesApi = {
    */
   async create(data: ClienteCreate): Promise<Cliente | null> {
     try {
-      const response = await fetch(buildUrl(API_CONFIG.ENDPOINTS.CLIENTES), {
+      const response = await envelopedFetch<Cliente>(API_CONFIG.ENDPOINTS.CLIENTES, {
         method: 'POST',
         headers: API_CONFIG.HEADERS,
         body: JSON.stringify(data),
       });
 
-      if (!response.ok) {
-        if (response.status === 400) {
-          toast.error('Email ya registrado');
-          return null;
-        }
-        throw new Error('Error al crear cliente');
-      }
-
-      const cliente = await response.json();
+      const cliente = response.data.data;
       toast.success('Cliente registrado correctamente');
-      return cliente;
+      return cliente || null;
     } catch (error) {
       console.error('Error al crear cliente:', error);
+      const message = error instanceof Error ? error.message : '';
+      if (isDuplicateMessage(message)) {
+        toast.error('Email ya registrado');
+        return null;
+      }
       toast.error('Error al registrar cliente');
       return null;
     }
@@ -145,22 +146,15 @@ export const clientesApi = {
    */
   async update(id: string | number, data: ClienteUpdate): Promise<Cliente | null> {
     try {
-      const response = await fetch(buildUrl(API_CONFIG.ENDPOINTS.CLIENTE_BY_ID(String(id))), {
+      const response = await envelopedFetch<Cliente>(API_CONFIG.ENDPOINTS.CLIENTE_BY_ID(String(id)), {
         method: 'PUT',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
+        headers: API_CONFIG.HEADERS,
         body: JSON.stringify(data),
       });
 
-      if (!response.ok) {
-        throw new Error('Error al actualizar cliente');
-      }
-
-      const cliente = await response.json();
+      const cliente = response.data.data;
       toast.success('Datos actualizados correctamente');
-      return cliente;
+      return cliente || null;
     } catch (error) {
       console.error('Error al actualizar cliente:', error);
       toast.error('Error al actualizar datos');
@@ -173,17 +167,10 @@ export const clientesApi = {
    */
   async delete(id: string | number): Promise<boolean> {
     try {
-      const response = await fetch(buildUrl(API_CONFIG.ENDPOINTS.CLIENTE_BY_ID(String(id))), {
+      await envelopedFetch<unknown>(API_CONFIG.ENDPOINTS.CLIENTE_BY_ID(String(id)), {
         method: 'DELETE',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
+        headers: API_CONFIG.HEADERS,
       });
-
-      if (!response.ok) {
-        throw new Error('Error al eliminar cliente');
-      }
 
       toast.success('Cliente eliminado correctamente');
       return true;
@@ -199,18 +186,11 @@ export const clientesApi = {
    */
   async getPedidos(clienteId: string | number): Promise<any[]> {
     try {
-      const response = await fetch(buildUrl(API_CONFIG.ENDPOINTS.CLIENTE_PEDIDOS(String(clienteId))), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
+      const response = await envelopedFetch<any[]>(API_CONFIG.ENDPOINTS.CLIENTE_PEDIDOS(String(clienteId)), {
+        headers: API_CONFIG.HEADERS,
       });
 
-      if (!response.ok) {
-        throw new Error('Error al obtener pedidos');
-      }
-
-      return await response.json();
+      return response.data.data || [];
     } catch (error) {
       console.error('Error al obtener pedidos del cliente:', error);
       toast.error('Error al cargar pedidos');
@@ -223,18 +203,11 @@ export const clientesApi = {
    */
   async getPromociones(clienteId: string | number): Promise<any[]> {
     try {
-      const response = await fetch(buildUrl(API_CONFIG.ENDPOINTS.CLIENTE_PROMOCIONES(String(clienteId))), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
+      const response = await envelopedFetch<any[]>(API_CONFIG.ENDPOINTS.CLIENTE_PROMOCIONES(String(clienteId)), {
+        headers: API_CONFIG.HEADERS,
       });
 
-      if (!response.ok) {
-        throw new Error('Error al obtener promociones');
-      }
-
-      return await response.json();
+      return response.data.data || [];
     } catch (error) {
       console.error('Error al obtener promociones:', error);
       return [];
@@ -246,18 +219,11 @@ export const clientesApi = {
    */
   async getNotificaciones(clienteId: string | number): Promise<any[]> {
     try {
-      const response = await fetch(buildUrl(API_CONFIG.ENDPOINTS.CLIENTE_NOTIFICACIONES(String(clienteId))), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
+      const response = await envelopedFetch<any[]>(API_CONFIG.ENDPOINTS.CLIENTE_NOTIFICACIONES(String(clienteId)), {
+        headers: API_CONFIG.HEADERS,
       });
 
-      if (!response.ok) {
-        throw new Error('Error al obtener notificaciones');
-      }
-
-      return await response.json();
+      return response.data.data || [];
     } catch (error) {
       console.error('Error al obtener notificaciones:', error);
       return [];
@@ -269,18 +235,12 @@ export const clientesApi = {
    */
   async getTurnoActivo(clienteId: string | number): Promise<any | null> {
     try {
-      const response = await fetch(buildUrl(API_CONFIG.ENDPOINTS.CLIENTE_TURNO_ACTIVO(String(clienteId))), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
+      const response = await envelopedFetch<any>(API_CONFIG.ENDPOINTS.CLIENTE_TURNO_ACTIVO(String(clienteId)), {
+        headers: API_CONFIG.HEADERS,
       });
 
-      if (!response.ok) {
-        return null;
-      }
-
-      const data = await response.json();
+      const data = response.data.data;
+      if (!data) return null;
       return Object.keys(data).length > 0 ? data : null;
     } catch (error) {
       console.error('Error al obtener turno activo:', error);

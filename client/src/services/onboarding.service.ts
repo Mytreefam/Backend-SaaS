@@ -26,6 +26,7 @@ import type {
 } from '../types/onboarding.types';
 import { toast } from 'sonner@2.0.3';
 import { API_CONFIG } from '../config/api.config';
+import { envelopedFetch } from './http/envelopedFetch';
 
 // ==================== CONFIGURACIÓN ====================
 
@@ -322,13 +323,12 @@ class OnboardingService {
     }
     
     // Llamada real a la API
-    const response = await fetch(`${ONBOARDING_ENDPOINT}/procesos`, {
+    const response = await envelopedFetch<CrearProcesoOnboardingResponse>(`${ONBOARDING_ENDPOINT}/procesos`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request)
+      body: JSON.stringify(request),
+      skipAuth: true,
     });
-    
-    return await response.json();
+    return response.data.data as CrearProcesoOnboardingResponse;
   }
   
   /**
@@ -346,8 +346,11 @@ class OnboardingService {
       return proceso;
     }
     
-    const response = await fetch(`${ONBOARDING_ENDPOINT}/procesos/${procesoId}`);
-    return await response.json();
+    const response = await envelopedFetch<ProcesoOnboarding>(`${ONBOARDING_ENDPOINT}/procesos/${procesoId}`, {
+      method: 'GET',
+      skipAuth: true,
+    });
+    return response.data.data as ProcesoOnboarding;
   }
   
   /**
@@ -380,8 +383,11 @@ class OnboardingService {
     }
     
     const queryParams = new URLSearchParams(params as any);
-    const response = await fetch(`${ONBOARDING_ENDPOINT}/procesos?${queryParams}`);
-    return await response.json();
+    const response = await envelopedFetch<ProcesoOnboarding[]>(`${ONBOARDING_ENDPOINT}/procesos?${queryParams}`, {
+      method: 'GET',
+      skipAuth: true,
+    });
+    return response.data.data ?? [];
   }
   
   /**
@@ -429,10 +435,11 @@ class OnboardingService {
       return;
     }
     
-    await fetch(`${ONBOARDING_ENDPOINT}/procesos/${procesoId}/fase`, {
+    await envelopedFetch<unknown>(`${ONBOARDING_ENDPOINT}/procesos/${procesoId}/fase`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fase: nuevaFase })
+      skipAuth: true,
+      responseType: 'none',
+      body: JSON.stringify({ fase: nuevaFase }),
     });
   }
   
@@ -476,10 +483,11 @@ class OnboardingService {
       return;
     }
     
-    await fetch(`${ONBOARDING_ENDPOINT}/procesos/${procesoId}/tareas/${request.tareaId}`, {
+    await envelopedFetch<unknown>(`${ONBOARDING_ENDPOINT}/procesos/${procesoId}/tareas/${request.tareaId}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request)
+      skipAuth: true,
+      responseType: 'none',
+      body: JSON.stringify(request),
     });
   }
   
@@ -508,10 +516,11 @@ class OnboardingService {
       return;
     }
     
-    await fetch(`${ONBOARDING_ENDPOINT}/procesos/${procesoId}/tareas/${tareaId}/aprobar`, {
+    await envelopedFetch<unknown>(`${ONBOARDING_ENDPOINT}/procesos/${procesoId}/tareas/${tareaId}/aprobar`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ aprobadoPor })
+      skipAuth: true,
+      responseType: 'none',
+      body: JSON.stringify({ aprobadoPor }),
     });
   }
   
@@ -556,9 +565,11 @@ class OnboardingService {
     formData.append('documentoId', request.documentoId);
     formData.append('empleadoId', request.empleadoId);
     
-    await fetch(`${ONBOARDING_ENDPOINT}/procesos/${request.procesoId}/documentos`, {
+    await envelopedFetch<unknown>(`${ONBOARDING_ENDPOINT}/procesos/${request.procesoId}/documentos`, {
       method: 'POST',
-      body: formData
+      skipAuth: true,
+      responseType: 'none',
+      body: formData,
     });
   }
   
@@ -591,11 +602,15 @@ class OnboardingService {
       return;
     }
     
-    await fetch(`${ONBOARDING_ENDPOINT}/procesos/${procesoId}/documentos/${request.documentoId}/validar`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request)
-    });
+    await envelopedFetch<unknown>(
+      `${ONBOARDING_ENDPOINT}/procesos/${procesoId}/documentos/${request.documentoId}/validar`,
+      {
+        method: 'POST',
+        skipAuth: true,
+        responseType: 'none',
+        body: JSON.stringify(request),
+      },
+    );
   }
   
   // ==================== FORMACIÓN ====================
@@ -642,11 +657,15 @@ class OnboardingService {
       return;
     }
     
-    await fetch(`${ONBOARDING_ENDPOINT}/procesos/${procesoId}/formaciones/${request.formacionId}/completar`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request)
-    });
+    await envelopedFetch<unknown>(
+      `${ONBOARDING_ENDPOINT}/procesos/${procesoId}/formaciones/${request.formacionId}/completar`,
+      {
+        method: 'POST',
+        skipAuth: true,
+        responseType: 'none',
+        body: JSON.stringify(request),
+      },
+    );
   }
   
   // ==================== NOTAS ====================
@@ -679,10 +698,11 @@ class OnboardingService {
       return;
     }
     
-    await fetch(`${ONBOARDING_ENDPOINT}/procesos/${request.procesoId}/notas`, {
+    await envelopedFetch<unknown>(`${ONBOARDING_ENDPOINT}/procesos/${request.procesoId}/notas`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request)
+      skipAuth: true,
+      responseType: 'none',
+      body: JSON.stringify(request),
     });
   }
   
@@ -710,8 +730,11 @@ class OnboardingService {
     }
     
     const queryParams = new URLSearchParams(params as any);
-    const response = await fetch(`${ONBOARDING_ENDPOINT}/plantillas?${queryParams}`);
-    return await response.json();
+    const response = await envelopedFetch<PlantillaOnboarding[]>(
+      `${ONBOARDING_ENDPOINT}/plantillas?${queryParams}`,
+      { method: 'GET', skipAuth: true },
+    );
+    return response.data.data ?? [];
   }
   
   /**
@@ -745,13 +768,12 @@ class OnboardingService {
       return plantilla;
     }
     
-    const response = await fetch(`${ONBOARDING_ENDPOINT}/plantillas`, {
+    const response = await envelopedFetch<PlantillaOnboarding>(`${ONBOARDING_ENDPOINT}/plantillas`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request)
+      skipAuth: true,
+      body: JSON.stringify(request),
     });
-    
-    return await response.json();
+    return response.data.data as PlantillaOnboarding;
   }
   
   // ==================== ESTADÍSTICAS ====================
@@ -828,8 +850,11 @@ class OnboardingService {
       };
     }
     
-    const response = await fetch(`${ONBOARDING_ENDPOINT}/estadisticas?empresaId=${empresaId}`);
-    return await response.json();
+    const response = await envelopedFetch<EstadisticasOnboarding>(
+      `${ONBOARDING_ENDPOINT}/estadisticas?empresaId=${empresaId}`,
+      { method: 'GET', skipAuth: true },
+    );
+    return response.data.data as EstadisticasOnboarding;
   }
   
   // ==================== HELPERS ====================

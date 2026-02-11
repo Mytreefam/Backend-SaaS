@@ -12,16 +12,14 @@ export const API_CONFIG = {
   // URL base del backend
   BASE_URL: (() => {
     const envBase = (import.meta as any)?.env?.VITE_API_BASE_URL as string | undefined;
-    const isProd = Boolean((import.meta as any)?.env?.PROD);
 
-    const defaultProdBase =
+    // Default: same-origin behind nginx (/sass/api -> 127.0.0.1:4000)
+    const defaultBase =
       typeof window !== 'undefined' && window.location?.origin
         ? `${window.location.origin}/sass/api`
         : 'https://mytreefam.com/sass/api';
 
-    const defaultDevBase = 'http://localhost:4000';
-
-    const raw = (envBase || (isProd ? defaultProdBase : defaultDevBase)).trim();
+    const raw = (envBase || defaultBase).trim();
     // Avoid double slashes when concatenating with endpoints like "/auth/login"
     return raw.endsWith('/') ? raw.slice(0, -1) : raw;
   })(),

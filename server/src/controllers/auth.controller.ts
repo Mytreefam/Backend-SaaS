@@ -109,7 +109,7 @@ export const logout = async (req: Request, res: Response) => {
       httpOnly: true,
       sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',
-      path: '/auth/refresh',
+      path: '/',
     });
     return res.status(200).json({ success: true, data: { ok: true }, ok: true });
   }

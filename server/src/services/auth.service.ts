@@ -15,8 +15,10 @@ function getRefreshCookieOptions(): CookieOptions {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
-    // Narrow scope: only sent to refresh endpoint
-    path: '/auth/refresh',
+    // IMPORTANT: behind nginx the public path is /sass/api/auth/refresh.
+    // If we set path="/auth/refresh", the browser will NOT send the cookie to /sass/api/auth/refresh.
+    // Use "/" so refresh works under any reverse-proxy prefix.
+    path: '/',
   };
 }
 

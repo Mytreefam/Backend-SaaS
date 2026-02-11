@@ -122,7 +122,8 @@ app.use('/garajes', requireAuth, garajeRoutes);
 app.use('/presupuestos', requireAuth, presupuestoRoutes);
 app.use('/promociones', requireAuth, promocionRoutes);
 app.use('/cupones', requireAuth, cuponRoutes);
-app.use('/productos', requireAuth, productoRoutes);
+// Public read for Cliente; mutations protected inside router.
+app.use('/productos', productoRoutes);
 app.use('/upload', requireAuth, uploadRoutes);
 app.use('/turnos', requireAuth, turnoRoutes);
 app.use('/puntos-venta', requireAuth, puntoVentaRoutes);

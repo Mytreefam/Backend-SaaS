@@ -4,6 +4,7 @@ export const NotificacionModel = {
   async findAll(params?: { clienteId?: number }) {
     return prisma.notificacion.findMany({
       where: params?.clienteId ? { clienteId: params.clienteId } : undefined,
+      orderBy: { creadoEn: 'desc' },
     });
   },
   async findById(id: number) {

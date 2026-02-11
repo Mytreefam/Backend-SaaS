@@ -31,11 +31,12 @@ import {
 import { toast } from 'sonner@2.0.3';
 import { useCart } from '../../contexts/CartContext';
 import { useProductos } from '../../contexts/ProductosContext';
+import type { PedidoConfirmacionData } from './PedidoConfirmacionModal';
 
 interface CestaOverlayProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onProcederPago?: () => void;
+  onProcederPago?: (pedido: PedidoConfirmacionData | null) => void;
   userData?: {
     id?: string | number;
     name: string;
@@ -240,9 +241,9 @@ export function CestaOverlay({ isOpen, onOpenChange, onProcederPago, userData }:
     toast.success(`${producto.nombre} añadido al carrito`);
   };
 
-  const handleAplicarCupon = () => {
+  const handleAplicarCupon = async () => {
     if (cuponInput.trim()) {
-      const aplicado = aplicarCupon(cuponInput.trim());
+      const aplicado = await aplicarCupon(cuponInput.trim());
       if (aplicado) {
         setCuponInput('');
       }
@@ -292,23 +293,14 @@ export function CestaOverlay({ isOpen, onOpenChange, onProcederPago, userData }:
   };
 
   const handleConfirmarPedido = () => {
-    // Guardar selección para el checkout
-    localStorage.setItem('checkout_tipo_entrega', tipoEntrega);
-    if (tipoEntrega === 'tienda') {
-      localStorage.setItem('checkout_tienda', tiendaSeleccionada);
-    } else {
-      localStorage.setItem('checkout_direccion', userData?.direccion || '');
-    }
-    localStorage.setItem('checkout_metodo_pago', metodoPago);
-
     // Abrir modal de checkout
     setCheckoutModalOpen(true);
   };
 
-  const handleCheckoutSuccess = (pedidoId: string, facturaId: string) => {
+  const handleCheckoutSuccess = (pedido: PedidoConfirmacionData) => {
     onOpenChange(false);
     if (onProcederPago) {
-      onProcederPago();
+      onProcederPago(pedido);
     }
   };
 

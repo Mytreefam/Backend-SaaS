@@ -15,7 +15,9 @@ router.post(
       estado: z.string().optional(),
       total: z.number().nonnegative(),
       tipoEntrega: z.string().optional(),
+      direccionEntrega: z.string().min(1).optional(),
       metodoPago: z.string().optional(),
+      puntoVentaId: z.string().min(1).optional(),
       items: z.array(
         z.object({
           productoId: z.number().int().optional(),
@@ -36,10 +38,19 @@ router.put(
       estado: z.string().optional(),
       total: z.number().nonnegative().optional(),
       tipoEntrega: z.string().optional(),
+      direccionEntrega: z.string().min(1).optional(),
       metodoPago: z.string().optional(),
+      puntoVentaId: z.string().min(1).optional(),
+      motivoCancelacion: z.string().optional(),
+      motivoDevolucion: z.string().optional(),
     }),
   }),
   pedidoController.updatePedido,
+);
+router.post(
+  '/:id/cobrar',
+  validate({ params: z.object({ id: z.string().min(1) }) }),
+  pedidoController.cobrarPedido,
 );
 router.delete('/:id', pedidoController.deletePedido);
 

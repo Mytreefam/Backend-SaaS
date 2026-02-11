@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../ui/dialog';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
@@ -21,8 +21,8 @@ import {
   AlertCircle,
   Check
 } from 'lucide-react';
-import { proveedores, Proveedor } from '../../../data/proveedores';
-import { stockIngredientes } from '../../../data/stock-ingredientes';
+import { stockApi } from '../../../services/api/gerente.api';
+import { PUNTOS_VENTA_ARRAY, getNombrePDVConMarcas } from '../../../constants/empresaConfig';
 
 interface LineaPedidoTemp {
   id: string;
@@ -52,24 +52,59 @@ export function ModalCrearPedidoProveedor({ isOpen, onClose, onCrearPedido }: Mo
   // Líneas de pedido
   const [lineas, setLineas] = useState<LineaPedidoTemp[]>([]);
   const [busquedaArticulo, setBusquedaArticulo] = useState<string>('');
+
+  // Data real (API)
+  const [cargandoApi, setCargandoApi] = useState(false);
+  const [proveedoresApi, setProveedoresApi] = useState<any[]>([]);
+  const [articulosApi, setArticulosApi] = useState<any[]>([]);
   
   // Cálculos
   const subtotal = lineas.reduce((sum, linea) => sum + linea.subtotal, 0);
   const iva = subtotal * 0.21;
   const total = subtotal + iva;
   
-  const proveedor = proveedores.find(p => p.id === proveedorSeleccionado);
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    setCargandoApi(true);
+    Promise.all([stockApi.obtenerProveedores?.({}), stockApi.obtenerArticulos?.({})])
+      .then(([provRes, artRes]) => {
+        if (cancelled) return;
+        setProveedoresApi(Array.isArray(provRes) ? provRes : []);
+        setArticulosApi(Array.isArray(artRes) ? artRes : []);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setProveedoresApi([]);
+        setArticulosApi([]);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setCargandoApi(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
+
+  const proveedor = useMemo(() => {
+    return proveedoresApi.find((p) => String(p.id) === String(proveedorSeleccionado));
+  }, [proveedoresApi, proveedorSeleccionado]);
   
   // Filtrar artículos disponibles según proveedor seleccionado
-  const articulosDisponibles = proveedorSeleccionado 
-    ? stockIngredientes.filter(art => 
-        art.proveedor === proveedor?.nombre && 
-        art.nombre.toLowerCase().includes(busquedaArticulo.toLowerCase())
-      )
-    : [];
+  const articulosDisponibles = useMemo(() => {
+    if (!proveedorSeleccionado) return [];
+    const pid = Number(proveedorSeleccionado);
+    return articulosApi.filter((art: any) => {
+      const matchProveedor = !Number.isFinite(pid) ? true : Number(art.proveedorId ?? art.proveedor_id) === pid;
+      const matchTexto = String(art.nombre || '').toLowerCase().includes(busquedaArticulo.toLowerCase());
+      return matchProveedor && matchTexto;
+    });
+  }, [articulosApi, proveedorSeleccionado, busquedaArticulo]);
 
   const agregarLinea = (articuloId: string) => {
-    const articulo = stockIngredientes.find(a => a.id === articuloId);
+    const articulo = articulosApi.find((a: any) => String(a.id) === String(articuloId));
     if (!articulo) return;
     
     // Verificar si ya está en la lista
@@ -78,14 +113,20 @@ export function ModalCrearPedidoProveedor({ isOpen, onClose, onCrearPedido }: Mo
       return;
     }
     
+    const unidadRaw = String(articulo.unidadMedida || articulo.unidad_medida || 'unidades').toLowerCase();
+    const unidad: LineaPedidoTemp['unidad'] =
+      unidadRaw.includes('kg') ? 'kg' : unidadRaw.includes('l') ? 'litros' : 'unidades';
+
+    const precio = Number(articulo.precioUltimaCompra ?? articulo.precio_ultima_compra ?? 0);
+
     const nuevaLinea: LineaPedidoTemp = {
       id: `LP-${Date.now()}`,
-      articuloId: articulo.id,
+      articuloId: String(articulo.id),
       articuloNombre: articulo.nombre,
       cantidad: 1,
-      unidad: articulo.unidad,
-      precioUnitario: articulo.precioKg,
-      subtotal: articulo.precioKg
+      unidad,
+      precioUnitario: precio,
+      subtotal: precio
     };
     
     setLineas([...lineas, nuevaLinea]);
@@ -142,37 +183,32 @@ export function ModalCrearPedidoProveedor({ isOpen, onClose, onCrearPedido }: Mo
     setPaso(paso - 1);
   };
   
-  const crearPedido = () => {
-    const numeroPedido = `PED-2024-${String(Math.floor(Math.random() * 900) + 100).padStart(3, '0')}`;
-    
-    const nuevoPedido = {
-      id: `PED-${Date.now()}`,
-      numero: numeroPedido,
-      proveedorId: proveedorSeleccionado,
-      proveedorNombre: proveedor?.nombre || '',
-      fecha: new Date(),
-      fechaEntregaEsperada: new Date(fechaEntrega),
-      estado: 'pendiente',
-      lineas: lineas.map(l => ({
-        ...l,
-        cantidadRecibida: undefined
-      })),
-      subtotal,
-      iva,
-      total,
-      observaciones,
-      creadoPor: 'Usuario Actual', // TODO: Obtener del contexto de sesión
-      pdvDestino
-    };
-    
-    console.log('📤 EVENTO: CREAR_PEDIDO_PROVEEDOR', nuevoPedido);
-    
-    if (onCrearPedido) {
-      onCrearPedido(nuevoPedido);
+  const crearPedido = async () => {
+    try {
+      const pedido = await stockApi.crearPedidoProveedor({
+        proveedorId: Number(proveedorSeleccionado),
+        puntoVentaId: pdvDestino,
+        empresaId: proveedor?.empresaId || 'EMP-001',
+        fechaEntregaEstimada: fechaEntrega || undefined,
+        observaciones: observaciones || undefined,
+        items: lineas.map((l) => ({
+          articuloId: Number(l.articuloId),
+          nombreArticulo: l.articuloNombre,
+          cantidad: l.cantidad,
+          precioUnitario: l.precioUnitario,
+          total: l.subtotal,
+        })),
+        subtotal,
+        iva,
+        total,
+      });
+
+      if (onCrearPedido) onCrearPedido(pedido);
+      toast.success('Pedido creado correctamente');
+      cerrarModal();
+    } catch (e) {
+      toast.error('No se pudo crear el pedido');
     }
-    
-    toast.success(`Pedido ${numeroPedido} creado correctamente`);
-    cerrarModal();
   };
   
   const cerrarModal = () => {
@@ -232,8 +268,13 @@ export function ModalCrearPedidoProveedor({ isOpen, onClose, onCrearPedido }: Mo
                     <SelectValue placeholder="Selecciona un proveedor" />
                   </SelectTrigger>
                   <SelectContent>
-                    {proveedores.filter(p => p.activo).map(proveedor => (
-                      <SelectItem key={proveedor.id} value={proveedor.id}>
+                    {cargandoApi ? (
+                      <div className="p-2 text-sm text-gray-500">Cargando proveedores...</div>
+                    ) : (
+                      proveedoresApi
+                        .filter((p: any) => p.activo !== false)
+                        .map((proveedor: any) => (
+                          <SelectItem key={proveedor.id} value={String(proveedor.id)}>
                         <div className="flex items-center gap-2">
                           <span>{proveedor.nombre}</span>
                           <Badge variant="outline" className="text-xs">
@@ -241,7 +282,8 @@ export function ModalCrearPedidoProveedor({ isOpen, onClose, onCrearPedido }: Mo
                           </Badge>
                         </div>
                       </SelectItem>
-                    ))}
+                        ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -265,18 +307,14 @@ export function ModalCrearPedidoProveedor({ isOpen, onClose, onCrearPedido }: Mo
                     <SelectValue placeholder="Selecciona destino" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="tiana">
-                      <div className="flex items-center gap-2">
-                        <Store className="w-4 h-4" />
-                        Tiana
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="badalona">
-                      <div className="flex items-center gap-2">
-                        <Store className="w-4 h-4" />
-                        Badalona
-                      </div>
-                    </SelectItem>
+                    {PUNTOS_VENTA_ARRAY.map((pdv) => (
+                      <SelectItem key={pdv.id} value={pdv.id}>
+                        <div className="flex items-center gap-2">
+                          <Store className="w-4 h-4" />
+                          {getNombrePDVConMarcas(pdv.id)}
+                        </div>
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -289,19 +327,18 @@ export function ModalCrearPedidoProveedor({ isOpen, onClose, onCrearPedido }: Mo
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                     <div>
                       <p className="text-gray-600 mb-1">Contacto</p>
-                      <p className="font-medium">{proveedor.contacto.nombreResponsable}</p>
-                      <p className="text-gray-600">{proveedor.contacto.telefono}</p>
+                      <p className="font-medium">{proveedor.contactoNombre || '—'}</p>
+                      <p className="text-gray-600">{proveedor.contactoTelefono || proveedor.contactoEmail || '—'}</p>
                     </div>
                     <div>
                       <p className="text-gray-600 mb-1">Condiciones</p>
-                      <p className="font-medium">Entrega: {proveedor.condicionesComerciales.plazoEntrega} días</p>
-                      <p className="text-gray-600">Pedido mín: €{proveedor.condicionesComerciales.pedidoMinimo}</p>
+                      <p className="font-medium">Pago: {proveedor.condicionesPago || '—'}</p>
+                      <p className="text-gray-600">Estado: {proveedor.estado || (proveedor.activo ? 'Activo' : 'Inactivo')}</p>
                     </div>
                     <div>
                       <p className="text-gray-600 mb-1">Evaluación</p>
                       <div className="flex gap-2">
-                        <Badge variant="outline">⭐ {proveedor.evaluacion.calidad}/5</Badge>
-                        <Badge variant="outline">🚚 {proveedor.evaluacion.puntualidad}/5</Badge>
+                        <Badge variant="outline">Proveedor</Badge>
                       </div>
                     </div>
                   </div>
@@ -353,7 +390,7 @@ export function ModalCrearPedidoProveedor({ isOpen, onClose, onCrearPedido }: Mo
                         <div>
                           <p className="font-medium text-sm">{articulo.nombre}</p>
                           <p className="text-xs text-gray-500">
-                            €{articulo.precioKg.toFixed(2)} / {articulo.unidad}
+                            €{Number(articulo.precioUltimaCompra || 0).toFixed(2)} / {articulo.unidadMedida || 'u'}
                           </p>
                         </div>
                         <Button size="sm" variant="ghost">

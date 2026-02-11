@@ -277,3 +277,88 @@ export const cancelarAsignacionHorario = async (req: Request, res: Response) => 
     res.status(500).json({ error: 'Error al cancelar asignación' });
   }
 };
+
+/**
+ * Listar solicitudes de cambio de horario creadas por trabajadores
+ */
+export const obtenerSolicitudesCambioHorario = async (req: Request, res: Response) => {
+  try {
+    const { estado, empleadoId, puntoVentaId, desde, hasta } = req.query as any;
+
+    const where: any = {};
+    if (estado) where.estado = String(estado);
+    if (empleadoId) where.empleadoId = Number(empleadoId);
+    if (desde || hasta) {
+      where.fechaSolicitada = {};
+      if (desde) where.fechaSolicitada.gte = new Date(String(desde));
+      if (hasta) where.fechaSolicitada.lte = new Date(String(hasta));
+    }
+    if (puntoVentaId) {
+      where.empleado = { puntoVentaId: String(puntoVentaId) };
+    }
+
+    const solicitudes = await prisma.solicitudCambioHorario.findMany({
+      where,
+      include: {
+        empleado: {
+          select: {
+            id: true,
+            nombre: true,
+            email: true,
+            puntoVentaId: true,
+            empresaId: true,
+            marcaId: true,
+          },
+        },
+        revisadoPor: {
+          select: {
+            id: true,
+            nombre: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: [{ estado: 'asc' }, { solicitadoEn: 'desc' }],
+    });
+
+    res.json(solicitudes);
+  } catch (error) {
+    console.error('Error al obtener solicitudes de cambio de horario:', error);
+    res.status(500).json({ error: 'Error al obtener solicitudes de cambio de horario' });
+  }
+};
+
+/**
+ * Resolver (aprobar/rechazar) una solicitud de cambio de horario
+ */
+export const resolverSolicitudCambioHorario = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { estado, respuesta } = req.body as { estado: 'aprobada' | 'rechazada'; respuesta?: string };
+
+    if (!estado || !['aprobada', 'rechazada'].includes(estado)) {
+      return res.status(400).json({ error: 'Estado inválido' });
+    }
+
+    // Intentar mapear usuario actual a empleado (si existe)
+    const userEmail = (req as any).user?.email ? String((req as any).user.email) : null;
+    const revisadoPor = userEmail
+      ? await prisma.empleado.findUnique({ where: { email: userEmail }, select: { id: true } })
+      : null;
+
+    const updated = await prisma.solicitudCambioHorario.update({
+      where: { id: Number(id) },
+      data: {
+        estado,
+        respuesta: respuesta ?? null,
+        revisadoEn: new Date(),
+        revisadoPorId: revisadoPor?.id ?? null,
+      },
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Error al resolver solicitud de cambio de horario:', error);
+    res.status(500).json({ error: 'Error al resolver solicitud de cambio de horario' });
+  }
+};

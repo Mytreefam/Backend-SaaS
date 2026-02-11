@@ -18,8 +18,7 @@ import {
 import { toast } from 'sonner@2.0.3';
 import { format } from 'date-fns@4.1.0';
 import { es } from 'date-fns@4.1.0/locale';
-import { notificacionesApi } from '../../services/api';
-import { useAuth } from '../../hooks/useAuth';
+import { authApi, notificacionesApi } from '../../services/api';
 
 interface Notificacion {
   id: string;
@@ -41,7 +40,7 @@ interface Alerta {
 }
 
 export function NotificacionesTrabajador() {
-  const { user } = useAuth();
+  const user = authApi.getCurrentUser();
   const [activeTab, setActiveTab] = useState('notificaciones');
   const [cargando, setCargando] = useState(true);
   
@@ -52,15 +51,15 @@ export function NotificacionesTrabajador() {
   const cargarNotificaciones = useCallback(async () => {
     try {
       setCargando(true);
-      const data = await notificacionesApi.getByUsuario(user?.id || 0, 'empleado');
+      const data = await notificacionesApi.getAll();
       
       // Mapear notificaciones del backend a formato local
       const notifs: Notificacion[] = data.map(n => ({
         id: n.id.toString(),
-        tipo: (n.tipo as Notificacion['tipo']) || 'sistema',
-        titulo: n.titulo,
+        tipo: ((n as any).tipo as Notificacion['tipo']) || 'sistema',
+        titulo: (n as any).titulo || 'Notificación',
         mensaje: n.mensaje,
-        fecha: new Date(n.fechaCreacion),
+        fecha: new Date((n as any).creadoEn || Date.now()),
         leida: n.leida,
       }));
       
@@ -68,14 +67,14 @@ export function NotificacionesTrabajador() {
       
       // Separar alertas (notificaciones críticas/importantes)
       const alertasData: Alerta[] = data
-        .filter(n => n.prioridad === 'alta' || n.prioridad === 'urgente')
+        .filter(n => ((n as any).prioridad === 'alta' || (n as any).prioridad === 'urgente'))
         .map(n => ({
           id: n.id.toString(),
-          tipo: n.prioridad === 'urgente' ? 'critica' : 'importante',
-          categoria: (n.tipo as Alerta['categoria']) || 'sistema',
-          titulo: n.titulo,
+          tipo: (n as any).prioridad === 'urgente' ? 'critica' : 'importante',
+          categoria: ((n as any).tipo as Alerta['categoria']) || 'sistema',
+          titulo: (n as any).titulo || 'Alerta',
           mensaje: n.mensaje,
-          fecha: new Date(n.fechaCreacion),
+          fecha: new Date((n as any).creadoEn || Date.now()),
           resuelta: n.leida,
         }));
       
@@ -108,7 +107,7 @@ export function NotificacionesTrabajador() {
 
   const marcarTodasComoLeidas = async () => {
     try {
-      await notificacionesApi.marcarTodasLeidas(user?.id || 0, 'empleado');
+      await notificacionesApi.marcarTodasLeidas(user?.id || 0);
       setNotificaciones(prev => prev.map(n => ({ ...n, leida: true })));
       toast.success('Todas las notificaciones marcadas como leídas');
     } catch (error) {
@@ -118,7 +117,7 @@ export function NotificacionesTrabajador() {
 
   const eliminarNotificacion = async (id: string) => {
     try {
-      await notificacionesApi.eliminar(parseInt(id));
+      await notificacionesApi.delete(parseInt(id));
       setNotificaciones(prev => prev.filter(n => n.id !== id));
       toast.success('Notificación eliminada');
     } catch (error) {
@@ -140,7 +139,7 @@ export function NotificacionesTrabajador() {
 
   const eliminarAlerta = async (id: string) => {
     try {
-      await notificacionesApi.eliminar(parseInt(id));
+      await notificacionesApi.delete(parseInt(id));
       setAlertas(prev => prev.filter(a => a.id !== id));
       toast.success('Alerta eliminada');
     } catch (error) {

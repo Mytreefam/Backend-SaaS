@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -48,6 +48,7 @@ import {
   Eye
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
+import { gerenteConfigApi } from '../../services/api';
 
 // ============================================================================
 // INTERFACES
@@ -88,79 +89,41 @@ export function ConfiguracionAgentesExternos() {
   const [modalEditarOpen, setModalEditarOpen] = useState(false);
   const [agenteSeleccionado, setAgenteSeleccionado] = useState<AgenteExterno | null>(null);
 
-  // DATOS MOCK
-  const empresasDisponibles: Empresa[] = [
-    { id: 'EMP-001', nombre: 'PAU Hostelería' },
-    { id: 'EMP-002', nombre: 'Tech Solutions SL' },
-    { id: 'EMP-003', nombre: 'Retail Express' }
-  ];
+  const [empresasDisponibles, setEmpresasDisponibles] = useState<Empresa[]>([]);
+  const [agentes, setAgentes] = useState<AgenteExterno[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const [agentes, setAgentes] = useState<AgenteExterno[]>([
-    {
-      id: 'AGENTE-001',
-      nombre: 'Gestoría Laboral López',
-      tipo_agente: 'gestoria_laboral',
-      empresas_asignadas: ['EMP-001', 'EMP-002'],
-      estado: 'activo',
-      email_contacto: 'gestoria@lopez.com',
-      telefono: '+34 912 345 678',
-      reglas: [
-        {
-          regla_id: 'REGLA-001',
-          agente_externo_id: 'AGENTE-001',
-          tipo_doc: 'nomina',
-          campo_identificador_preferido: 'dni',
-          origen_identificador: 'nombre_archivo',
-          patron_nombre_archivo: 'NOMINA_{anio}-{mes}_{dni}.pdf',
-          observaciones: 'Formato estándar de nóminas mensual'
-        },
-        {
-          regla_id: 'REGLA-002',
-          agente_externo_id: 'AGENTE-001',
-          tipo_doc: 'contrato',
-          campo_identificador_preferido: 'nombre_completo',
-          origen_identificador: 'contenido_ocr',
-          observaciones: 'Detectar nombre completo en primera página del contrato'
-        },
-        {
-          regla_id: 'REGLA-003',
-          agente_externo_id: 'AGENTE-001',
-          tipo_doc: 'irpf',
-          campo_identificador_preferido: 'dni',
-          origen_identificador: 'ambos',
-          patron_nombre_archivo: 'IRPF_{anio}_{dni}.pdf',
-          observaciones: 'Priorizar nombre de archivo, validar con OCR'
-        }
-      ]
-    },
-    {
-      id: 'AGENTE-002',
-      nombre: 'Proveedores Global SL',
-      tipo_agente: 'proveedor_facturas',
-      empresas_asignadas: ['EMP-001'],
-      estado: 'activo',
-      email_contacto: 'facturas@proveedores.com',
-      reglas: [
-        {
-          regla_id: 'REGLA-004',
-          agente_externo_id: 'AGENTE-002',
-          tipo_doc: 'factura',
-          campo_identificador_preferido: 'nif',
-          origen_identificador: 'contenido_ocr',
-          observaciones: 'Extraer NIF de la empresa del contenido de la factura'
-        }
-      ]
-    },
-    {
-      id: 'AGENTE-003',
-      nombre: 'Asesoría Fiscal Martínez',
-      tipo_agente: 'gestoria_laboral',
-      empresas_asignadas: ['EMP-003'],
-      estado: 'bloqueado',
-      email_contacto: 'info@asesoria-martinez.com',
-      reglas: []
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [empresas, agentesCfg] = await Promise.all([
+        gerenteConfigApi.empresas.list(),
+        gerenteConfigApi.agentesExternos.list(),
+      ]);
+      setEmpresasDisponibles((empresas || []).map((e: any) => ({ id: String(e.id), nombre: String(e.nombreFiscal || e.nombreComercial || e.id) })));
+      setAgentes((agentesCfg || []).map((a: any) => ({
+        id: String(a.id),
+        nombre: String(a.nombre || a.id),
+        tipo_agente: (a.tipo_agente || 'otro') as any,
+        empresas_asignadas: Array.isArray(a.empresas_asignadas) ? a.empresas_asignadas.map(String) : [],
+        estado: (a.estado || (a.activo === false ? 'bloqueado' : 'activo')) as any,
+        email_contacto: a.email_contacto || undefined,
+        telefono: a.telefono || undefined,
+        reglas: Array.isArray(a.reglas) ? a.reglas : [],
+      })));
+    } catch (e) {
+      console.error('Error cargando agentes externos:', e);
+      setEmpresasDisponibles([]);
+      setAgentes([]);
+      toast.error('Error al cargar agentes externos');
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
+
+  useEffect(() => {
+    void load();
+  }, []);
 
   // ============================================================================
   // FUNCIONES
@@ -172,33 +135,33 @@ export function ConfiguracionAgentesExternos() {
   };
 
   const handleEliminarAgente = (agenteId: string) => {
-    if (confirm('¿Estás seguro de eliminar este agente externo?')) {
-      setAgentes(agentes.filter(a => a.id !== agenteId));
-      toast.success('Agente externo eliminado');
-      
-      console.log('🗑️ ELIMINAR AGENTE:', {
-        agente_id: agenteId
+    if (!confirm('¿Estás seguro de eliminar este agente externo?')) return;
+    gerenteConfigApi.agentesExternos
+      .delete(agenteId)
+      .then(() => {
+        toast.success('Agente externo eliminado');
+        void load();
+      })
+      .catch((e) => {
+        console.error(e);
+        toast.error('No se pudo eliminar el agente');
       });
-    }
   };
 
   const handleToggleEstado = (agenteId: string) => {
-    setAgentes(agentes.map(agente => {
-      if (agente.id === agenteId) {
-        const nuevoEstado = agente.estado === 'activo' ? 'bloqueado' : 'activo';
-        
-        console.log('🔄 CAMBIAR ESTADO AGENTE:', {
-          agente_id: agenteId,
-          estado_anterior: agente.estado,
-          estado_nuevo: nuevoEstado
-        });
-        
+    const agente = agentes.find((a) => a.id === agenteId);
+    if (!agente) return;
+    const nuevoEstado = agente.estado === 'activo' ? 'bloqueado' : 'activo';
+    gerenteConfigApi.agentesExternos
+      .upsert({ ...agente, estado: nuevoEstado, activo: nuevoEstado === 'activo' } as any)
+      .then(() => {
         toast.success(`Agente ${nuevoEstado === 'activo' ? 'activado' : 'bloqueado'}`);
-        
-        return { ...agente, estado: nuevoEstado };
-      }
-      return agente;
-    }));
+        void load();
+      })
+      .catch((e) => {
+        console.error(e);
+        toast.error('No se pudo cambiar el estado');
+      });
   };
 
   const getEmpresasNombres = (empresasIds: string[]) => {
@@ -304,6 +267,16 @@ export function ConfiguracionAgentesExternos() {
 
       {/* Lista de agentes */}
       <div className="space-y-4">
+        {loading && (
+          <Card>
+            <CardContent className="py-8 text-sm text-gray-600">Cargando agentes...</CardContent>
+          </Card>
+        )}
+        {!loading && agentes.length === 0 && (
+          <Card>
+            <CardContent className="py-10 text-sm text-gray-600">No hay agentes externos configurados.</CardContent>
+          </Card>
+        )}
         {agentes.map((agente) => (
           <Card key={agente.id} className={agente.estado === 'bloqueado' ? 'opacity-60' : ''}>
             <CardHeader>
@@ -485,21 +458,24 @@ export function ConfiguracionAgentesExternos() {
         agente={agenteSeleccionado}
         empresasDisponibles={empresasDisponibles}
         onGuardar={(agente) => {
-          if (agenteSeleccionado) {
-            // Editar
-            setAgentes(agentes.map(a => a.id === agente.id ? agente : a));
-            toast.success('Agente externo actualizado');
-          } else {
-            // Crear
-            setAgentes([...agentes, { ...agente, id: `AGENTE-${Date.now()}` }]);
-            toast.success('Agente externo creado');
-          }
-          
-          console.log('💾 GUARDAR AGENTE:', agente);
-          
-          setModalCrearOpen(false);
-          setModalEditarOpen(false);
-          setAgenteSeleccionado(null);
+          const payload = {
+            ...agente,
+            id: agente.id || `AGENTE-${Date.now()}`,
+            activo: agente.estado !== 'bloqueado',
+          };
+          gerenteConfigApi.agentesExternos
+            .upsert(payload as any)
+            .then(() => {
+              toast.success(agenteSeleccionado ? 'Agente externo actualizado' : 'Agente externo creado');
+              setModalCrearOpen(false);
+              setModalEditarOpen(false);
+              setAgenteSeleccionado(null);
+              void load();
+            })
+            .catch((e) => {
+              console.error(e);
+              toast.error('No se pudo guardar el agente');
+            });
         }}
       />
     </div>

@@ -22,8 +22,41 @@ import * as integracionesController from '../controllers/gerente/integraciones.c
 import * as escandalloController from '../controllers/gerente/escandallo.controller';
 import * as stockExtController from '../controllers/gerente/stock-extendido.controller';
 import * as chatController from '../controllers/gerente/chat.controller';
+import * as configuracionController from '../controllers/gerente/configuracion.controller';
 
 const router = Router();
+
+// ============================================================================
+// RESPONSE ENVELOPE (Gerente)
+// ============================================================================
+// The frontend uses `envelopedFetch`, which requires `{ success, data?, error? }`.
+// Many gerente controllers still return raw JSON or `{ error }`.
+// This wrapper normalizes all JSON responses under `/gerente/*` without having
+// to refactor every controller at once.
+router.use((req, res, next) => {
+  const originalJson = res.json.bind(res);
+  (res as any).json = (body: any) => {
+    // Already enveloped
+    if (body && typeof body.success === 'boolean') {
+      return originalJson(body);
+    }
+
+    const status = res.statusCode || 200;
+
+    // If controller used `{ error: string }` or set an error status code
+    const maybeError =
+      (body && typeof body === 'object' && typeof body.error === 'string' && body.error) ||
+      (typeof body === 'string' && body) ||
+      null;
+
+    if (status >= 400 || maybeError) {
+      return originalJson({ success: false, error: maybeError || 'ERROR' });
+    }
+
+    return originalJson({ success: true, data: body });
+  };
+  next();
+});
 
 // Configuración de multer para subir archivos
 const UPLOAD_DIR = path.join(__dirname, '../../../uploads/documentos');
@@ -98,6 +131,9 @@ router.post('/empleados/:id/remuneraciones', empleadosController.crearRemuneraci
 // ============================================
 router.get('/horarios', horariosController.obtenerHorarios);
 router.post('/horarios', horariosController.crearHorario);
+// Solicitudes de cambio de horario (creadas por trabajadores)
+router.get('/horarios/solicitudes', horariosController.obtenerSolicitudesCambioHorario);
+router.put('/horarios/solicitudes/:id', horariosController.resolverSolicitudCambioHorario);
 router.get('/horarios/:id', horariosController.obtenerHorarioPorId);
 router.put('/horarios/:id', horariosController.actualizarHorario);
 router.delete('/horarios/:id', horariosController.eliminarHorario);
@@ -281,6 +317,29 @@ router.post('/chat/conversaciones', chatController.crearConversacion);
 router.post('/chat/conversaciones/:conversacionId/mensajes', chatController.enviarMensaje);
 router.put('/chat/conversaciones/:conversacionId/leer', chatController.marcarMensajesLeidos);
 router.delete('/chat/mensajes/:id', chatController.eliminarMensaje);
+
+// ============================================
+// CONFIGURACIÓN (empresas / agentes / terminales / okrs)
+// ============================================
+router.get('/config/empresas', configuracionController.listEmpresasConfig);
+router.post('/config/empresas', configuracionController.upsertEmpresaConfig);
+router.put('/config/empresas/:id', configuracionController.upsertEmpresaConfig);
+router.delete('/config/empresas/:id', configuracionController.deleteEmpresaConfig);
+
+router.get('/config/agentes-externos', configuracionController.listAgentesExternosConfig);
+router.post('/config/agentes-externos', configuracionController.upsertAgenteExternoConfig);
+router.put('/config/agentes-externos/:id', configuracionController.upsertAgenteExternoConfig);
+router.delete('/config/agentes-externos/:id', configuracionController.deleteAgenteExternoConfig);
+
+router.get('/tpv/terminales', configuracionController.listTerminalesTPV);
+router.post('/tpv/terminales', configuracionController.upsertTerminalTPV);
+router.put('/tpv/terminales/:id', configuracionController.upsertTerminalTPV);
+router.delete('/tpv/terminales/:id', configuracionController.deleteTerminalTPV);
+
+router.get('/productividad/okrs', configuracionController.listOkrs);
+router.post('/productividad/okrs', configuracionController.upsertOkr);
+router.put('/productividad/okrs/:id', configuracionController.upsertOkr);
+router.delete('/productividad/okrs/:id', configuracionController.deleteOkr);
 
 // ============================================
 // TICKETS DE SOPORTE

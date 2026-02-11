@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -14,6 +14,7 @@ import { Store, Monitor, MapPin, CheckCircle2, XCircle, AlertCircle } from 'luci
 import { Badge } from '../ui/badge';
 import { Card, CardContent } from '../ui/card';
 import { ModalSeleccionPuntoVenta, usePuntoVentaPreferido } from './ModalSeleccionPuntoVenta';
+import { gerenteConfigApi, puntosVentaApi } from '../../services/api';
 
 interface Marca {
   id: string;
@@ -50,92 +51,122 @@ export function ModalSeleccionTPV({ open, onOpenChange, onConfirmar }: ModalSele
   const [tpvSeleccionado, setTpvSeleccionado] = useState<string>('');
   const [modalPuntoVentaOpen, setModalPuntoVentaOpen] = useState(false);
   const [terminalSeleccionado, setTerminalSeleccionado] = useState<TPVInfo | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [puntosVenta, setPuntosVenta] = useState<PuntoVenta[]>([]);
+  const [terminales, setTerminales] = useState<TPVInfo[]>([]);
+  const [marcaMap, setMarcaMap] = useState<Record<string, Marca>>({});
 
-  // Datos mock de puntos de venta (alineados con ConfiguracionEmpresas)
-  const puntosVenta: PuntoVenta[] = [
-    {
-      id: 'PDV-TIANA',
-      nombre: 'Tiana',
-      direccion: 'Passeig de la Vilesa, 6, 08391 Tiana, Barcelona',
-      marcasDisponibles: [
-        {
-          id: 'MRC-001',
-          nombre: 'Modomio',
-          colorIdentidad: '#FF6B35',
-        },
-        {
-          id: 'MRC-002',
-          nombre: 'Blackburguer',
-          colorIdentidad: '#1A1A1A',
-        },
-      ],
-      tpvsDisponibles: 3,
-      activo: true,
-    },
-    {
-      id: 'PDV-BADALONA',
-      nombre: 'Badalona',
-      direccion: 'Carrer del Doctor Robert, 75, 08915 Badalona, Barcelona',
-      marcasDisponibles: [
-        {
-          id: 'MRC-001',
-          nombre: 'Modomio',
-          colorIdentidad: '#FF6B35',
-        },
-        {
-          id: 'MRC-002',
-          nombre: 'Blackburguer',
-          colorIdentidad: '#1A1A1A',
-        },
-      ],
-      tpvsDisponibles: 4,
-      activo: true,
-    },
-  ];
+  // Cargar PDVs y marcas desde backend (sin mocks)
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setLoading(true);
 
-  // Generar TPVs disponibles según el punto de venta seleccionado
-  const getTpvsDisponibles = (puntoVentaId: string): TPVInfo[] => {
-    const puntoVenta = puntosVenta.find(pv => pv.id === puntoVentaId);
-    if (!puntoVenta) return [];
+    Promise.all([puntosVentaApi.getAll(), gerenteConfigApi.empresas.list()])
+      .then(([pdvs, empresas]) => {
+        if (cancelled) return;
+        setPuntosVenta(
+          (pdvs || []).map((p) => ({
+            id: p.id,
+            nombre: p.nombre,
+            direccion: p.direccion,
+            marcasDisponibles: (p.marcasIds || []).map((mid) => ({
+              id: mid,
+              nombre: mid,
+              colorIdentidad: '#0d9488',
+            })),
+            tpvsDisponibles: 0,
+            activo: p.activo,
+          })),
+        );
 
-    const tpvs: TPVInfo[] = [];
-    for (let i = 1; i <= puntoVenta.tpvsDisponibles; i++) {
-      // Simulación de estados aleatorios
-      let estado: 'disponible' | 'ocupado' | 'mantenimiento' = 'disponible';
-      let usuario: string | undefined;
-      let ultimaApertura: string | undefined;
-      let marcas: string[] = [];
-
-      // Asignar marcas basado en el punto de venta
-      // Terminal 1 en cada ubicación tiene todas las marcas disponibles
-      if (i === 1) {
-        marcas = puntoVenta.marcasDisponibles.map(m => m.nombre);
-      } else {
-        // Los demás terminales tienen la primera marca por defecto
-        marcas = [puntoVenta.marcasDisponibles[0]?.nombre || 'Modomio'];
-      }
-
-      if (i === 1) {
-        estado = 'ocupado';
-        usuario = 'María García';
-        ultimaApertura = 'Hoy 09:30';
-      } else if (i === puntoVenta.tpvsDisponibles && puntoVenta.tpvsDisponibles > 2) {
-        estado = 'mantenimiento';
-      }
-
-      tpvs.push({
-        id: `${puntoVentaId}-TPV${i}`,
-        numero: i,
-        estado,
-        usuario,
-        ultimaApertura,
-        marcas,
+        const mm: Record<string, Marca> = {};
+        (empresas || []).forEach((e: any) => {
+          (e?.marcas || []).forEach((m: any) => {
+            if (m?.id) {
+              mm[String(m.id)] = {
+                id: String(m.id),
+                nombre: String(m.nombre || m.id),
+                colorIdentidad: String(m.colorIdentidad || '#0d9488'),
+              };
+            }
+          });
+        });
+        setMarcaMap(mm);
+      })
+      .catch((e) => {
+        console.error('Error cargando PDVs/marcas:', e);
+        if (!cancelled) setPuntosVenta([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
-    }
-    return tpvs;
-  };
 
-  const tpvsDisponibles = puntoVentaSeleccionado ? getTpvsDisponibles(puntoVentaSeleccionado) : [];
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  // Cargar terminales para PDV seleccionado (si no hay, crear por defecto)
+  useEffect(() => {
+    if (!open || !puntoVentaSeleccionado) {
+      setTerminales([]);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+
+    const ensureDefaults = async () => {
+      const list = await gerenteConfigApi.terminales.list({ puntoVentaId: puntoVentaSeleccionado });
+      if (list.length > 0) return list;
+
+      // Crear 3 terminales por defecto (persistentes)
+      const created: any[] = [];
+      for (let i = 1; i <= 3; i++) {
+        const id = `${puntoVentaSeleccionado}-TPV${i}`;
+        const terminal = await gerenteConfigApi.terminales.upsert({
+          id,
+          puntoVentaId: puntoVentaSeleccionado,
+          numero: i,
+          nombre: `Terminal ${i}${i === 1 ? ' - Principal' : ''}`,
+          tipo: i === 1 ? 'principal' : 'secundario',
+          estado: 'disponible',
+          marcas: [],
+          activo: true,
+        });
+        if (terminal) created.push(terminal);
+      }
+      return created;
+    };
+
+    ensureDefaults()
+      .then((list) => {
+        if (cancelled) return;
+        setTerminales(
+          (list || []).map((t: any) => ({
+            id: t.id,
+            numero: Number(t.numero || 0),
+            estado: (t.estado || 'disponible') as any,
+            usuario: undefined,
+            ultimaApertura: t.ultimaApertura || undefined,
+            marcas: Array.isArray(t.marcas) ? t.marcas.map(String) : [],
+          })),
+        );
+      })
+      .catch((e) => {
+        console.error('Error cargando terminales:', e);
+        if (!cancelled) setTerminales([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, puntoVentaSeleccionado]);
+
+  const tpvsDisponibles = terminales;
   const { getPreferencia } = usePuntoVentaPreferido(tpvSeleccionado);
 
   const handleConfirmar = () => {
@@ -201,11 +232,13 @@ export function ModalSeleccionTPV({ open, onOpenChange, onConfirmar }: ModalSele
     
     // Mapear cada marca disponible en el terminal
     return terminalSeleccionado.marcas.map(marcaNombre => {
-      const marcaInfo = puntoVentaFisico.marcasDisponibles.find(m => m.nombre === marcaNombre);
+      const marcaInfo =
+        marcaMap[String(marcaNombre)] ||
+        puntoVentaFisico.marcasDisponibles.find(m => m.id === marcaNombre || m.nombre === marcaNombre);
       return {
         id: marcaInfo?.id || marcaNombre,
         nombre: `${marcaNombre} - ${puntoVentaFisico.nombre}`,
-        marca: marcaNombre,
+        marca: marcaInfo?.nombre || marcaNombre,
         direccion: puntoVentaFisico.direccion
       };
     });

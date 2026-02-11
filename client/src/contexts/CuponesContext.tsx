@@ -105,69 +105,38 @@ export function CuponesProvider({ children }: CuponesProviderProps) {
       // Cargar cupones desde el backend
       const cuponesBackend = await cuponesApi.getAll();
       
-      if (cuponesBackend && cuponesBackend.length > 0) {
-        // Transformar cupones del backend al formato del frontend
-        const cuponesTransformados: Cupon[] = cuponesBackend.map((c: any) => ({
-          id: c.id?.toString() || '',
-          codigo: c.codigo || '',
-          nombre: c.descripcion || c.codigo || '',
-          descripcion: c.descripcion || '',
-          tipoDescuento: c.descuento?.includes('%') ? 'porcentaje' : 'fijo',
-          valorDescuento: parseFloat(c.descuento?.replace('%', '').replace('€', '') || '0'),
-          monedaDescuento: '€',
-          fechaInicio: new Date().toISOString(),
-          fechaFin: c.validoHasta || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          activo: !c.usado,
-          usoMaximo: 1,
-          usosActuales: c.usado ? 1 : 0,
-          clienteEspecifico: c.clienteId?.toString(),
-          origenCreacion: 'manual',
-          creadoEn: new Date().toISOString(),
-          creadoPor: 'sistema',
-        }));
-        
-        setCupones(cuponesTransformados);
-        console.log('✅ Cupones cargados desde backend:', cuponesTransformados.length);
-      } else {
-        // Fallback: cargar desde localStorage o usar mock
-        const cuponesGuardados = localStorage.getItem('udar_cupones');
-        if (cuponesGuardados) {
-          setCupones(JSON.parse(cuponesGuardados));
-        } else {
-          const mockCupones = generarMockCupones();
-          setCupones(mockCupones);
-          localStorage.setItem('udar_cupones', JSON.stringify(mockCupones));
-        }
-      }
+      // Transformar cupones del backend al formato del frontend (sin mocks)
+      const cuponesTransformados: Cupon[] = (cuponesBackend || []).map((c: any) => ({
+        id: c.id?.toString() || '',
+        codigo: c.codigo || '',
+        nombre: c.descripcion || c.codigo || '',
+        descripcion: c.descripcion || '',
+        tipoDescuento: c.descuento?.includes('%') ? 'porcentaje' : 'fijo',
+        valorDescuento: parseFloat(c.descuento?.replace('%', '').replace('€', '') || '0'),
+        monedaDescuento: '€',
+        fechaInicio: new Date().toISOString(),
+        fechaFin: c.validoHasta || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        activo: !c.usado,
+        usoMaximo: 1,
+        usosActuales: c.usado ? 1 : 0,
+        clienteEspecifico: c.clienteId?.toString(),
+        origenCreacion: 'manual',
+        creadoEn: new Date().toISOString(),
+        creadoPor: 'sistema',
+      }));
+      
+      setCupones(cuponesTransformados);
+      console.log('✅ Cupones cargados desde backend:', cuponesTransformados.length);
     } catch (error) {
       console.error('❌ Error cargando cupones:', error);
-      // Fallback a localStorage
-      const cuponesGuardados = localStorage.getItem('udar_cupones');
-      if (cuponesGuardados) {
-        setCupones(JSON.parse(cuponesGuardados));
-      }
+      setCupones([]);
     }
     
-    // Cargar reglas y otros datos desde localStorage (no hay API para estos)
-    const reglasGuardadas = localStorage.getItem('udar_reglas_cupones');
-    const codigosGuardados = localStorage.getItem('udar_codigos_google_maps');
-    const historialGuardado = localStorage.getItem('udar_historial_cupones');
-
-    if (reglasGuardadas) {
-      setReglas(JSON.parse(reglasGuardadas));
-    } else {
-      const mockReglas = generarMockReglas();
-      setReglas(mockReglas);
-      localStorage.setItem('udar_reglas_cupones', JSON.stringify(mockReglas));
-    }
-
-    if (codigosGuardados) {
-      setCodigosGoogleMaps(JSON.parse(codigosGuardados));
-    }
-
-    if (historialGuardado) {
-      setHistorialUsos(JSON.parse(historialGuardado));
-    }
+    // Reglas/códigos/historial aún no están soportados por backend en este proyecto.
+    // Para producción, se dejan vacíos (sin mocks).
+    setReglas([]);
+    setCodigosGoogleMaps([]);
+    setHistorialUsos([]);
   };
 
   // Guardar en localStorage cuando cambie el estado

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { ModalCrearEmpresa } from './ModalCrearEmpresa';
 import { toast } from 'sonner@2.0.3';
+import { gerenteConfigApi } from '../../services/api';
 
 interface Marca {
   id: string;
@@ -70,90 +71,26 @@ interface Empresa {
 
 export function ConfiguracionEmpresas() {
   const [modalCrearEmpresaOpen, setModalCrearEmpresaOpen] = useState(false);
+  const [empresas, setEmpresas] = useState<Empresa[]>([]);
+  const [loading, setLoading] = useState(false);
   
-  // Datos mock - en producción vendrían de la API
-  const [empresas] = useState<Empresa[]>([
-    {
-      id: 'EMP-001',
-      nombreFiscal: 'Disarmink S.L.',
-      cif: 'B67284315',
-      nombreComercial: 'Hoy Pecamos',
-      domicilioFiscal: 'Avenida Onze Setembre, 1, 08391 Tiana, Barcelona',
-      marcas: [
-        {
-          id: 'MRC-001',
-          nombre: 'Modomio',
-          colorIdentidad: '#FF6B35',
-        },
-        {
-          id: 'MRC-002',
-          nombre: 'Blackburguer',
-          colorIdentidad: '#1A1A1A',
-        },
-      ],
-      puntosVenta: [
-        {
-          id: 'PDV-TIANA',
-          nombre: 'Tiana',
-          direccion: 'Passeig de la Vilesa, 6, 08391 Tiana, Barcelona',
-          coordenadas: {
-            latitud: 41.4933,
-            longitud: 2.2633,
-          },
-          telefono: '+34 933 456 789',
-          email: 'tiana@hoypecamos.com',
-          marcasDisponibles: [
-            {
-              id: 'MRC-001',
-              nombre: 'Modomio',
-              colorIdentidad: '#FF6B35',
-            },
-            {
-              id: 'MRC-002',
-              nombre: 'Blackburguer',
-              colorIdentidad: '#1A1A1A',
-            },
-          ],
-          activo: true,
-        },
-        {
-          id: 'PDV-BADALONA',
-          nombre: 'Badalona',
-          direccion: 'Carrer del Doctor Robert, 75, 08915 Badalona, Barcelona',
-          coordenadas: {
-            latitud: 41.4500,
-            longitud: 2.2461,
-          },
-          telefono: '+34 933 456 790',
-          email: 'badalona@hoypecamos.com',
-          marcasDisponibles: [
-            {
-              id: 'MRC-001',
-              nombre: 'Modomio',
-              colorIdentidad: '#FF6B35',
-            },
-            {
-              id: 'MRC-002',
-              nombre: 'Blackburguer',
-              colorIdentidad: '#1A1A1A',
-            },
-          ],
-          activo: true,
-        },
-      ],
-      cuentasBancarias: [
-        {
-          numero: 'ES91 2100 0418 4502 0005 1332',
-          alias: 'Cuenta Principal Disarmink',
-        },
-        {
-          numero: 'ES76 0128 0123 4501 0006 7890',
-          alias: 'Cuenta Operativa Hoy Pecamos',
-        },
-      ],
-      activo: true,
-    },
-  ]);
+  const load = async () => {
+    setLoading(true);
+    try {
+      const data = await gerenteConfigApi.empresas.list();
+      setEmpresas((data as any) || []);
+    } catch (e) {
+      console.error('Error cargando empresas config:', e);
+      toast.error('Error al cargar empresas');
+      setEmpresas([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -183,6 +120,18 @@ export function ConfiguracionEmpresas() {
 
       {/* Lista de Empresas */}
       <Accordion type="single" collapsible className="space-y-4">
+        {loading && (
+          <Card>
+            <CardContent className="py-8 text-sm text-gray-600">Cargando empresas...</CardContent>
+          </Card>
+        )}
+        {!loading && empresas.length === 0 && (
+          <Card>
+            <CardContent className="py-10 text-sm text-gray-600">
+              No hay empresas configuradas aún. Crea una para empezar.
+            </CardContent>
+          </Card>
+        )}
         {empresas.map((empresa) => (
           <AccordionItem 
             key={empresa.id} 
@@ -420,6 +369,7 @@ export function ConfiguracionEmpresas() {
       <ModalCrearEmpresa
         open={modalCrearEmpresaOpen}
         onOpenChange={setModalCrearEmpresaOpen}
+        onCreated={() => void load()}
       />
     </div>
   );

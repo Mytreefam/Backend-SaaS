@@ -1,4 +1,3 @@
-import { API_CONFIG } from '../../config/api.config';
 import { envelopedFetch } from '../http/envelopedFetch';
 
 export interface PromocionAPI {
@@ -13,9 +12,8 @@ export const promocionesApi = {
   // Obtener todas las promociones
   getAll: async (): Promise<PromocionAPI[]> => {
     try {
-      const response = await envelopedFetch<PromocionAPI[]>(`${API_CONFIG.BASE_URL}/promociones`, {
+      const response = await envelopedFetch<PromocionAPI[]>('/promociones', {
         method: 'GET',
-        skipAuth: true,
       });
       return response.data.data ?? [];
     } catch (error) {
@@ -29,9 +27,8 @@ export const promocionesApi = {
   // Obtener promoción por ID
   getById: async (id: number): Promise<PromocionAPI> => {
     try {
-      const response = await envelopedFetch<PromocionAPI>(`${API_CONFIG.BASE_URL}/promociones/${id}`, {
+      const response = await envelopedFetch<PromocionAPI>(`/promociones/${id}`, {
         method: 'GET',
-        skipAuth: true,
       });
       return response.data.data as PromocionAPI;
     } catch (error) {
@@ -45,9 +42,8 @@ export const promocionesApi = {
   // Crear nueva promoción
   create: async (promocion: Omit<PromocionAPI, 'id'>): Promise<PromocionAPI> => {
     try {
-      const response = await envelopedFetch<PromocionAPI>(`${API_CONFIG.BASE_URL}/promociones`, {
+      const response = await envelopedFetch<PromocionAPI>('/promociones', {
         method: 'POST',
-        skipAuth: true,
         body: JSON.stringify(promocion),
       });
       return response.data.data as PromocionAPI;
@@ -63,9 +59,8 @@ export const promocionesApi = {
   // Actualizar promoción
   update: async (id: number, promocion: Partial<PromocionAPI>): Promise<PromocionAPI> => {
     try {
-      const response = await envelopedFetch<PromocionAPI>(`${API_CONFIG.BASE_URL}/promociones/${id}`, {
+      const response = await envelopedFetch<PromocionAPI>(`/promociones/${id}`, {
         method: 'PUT',
-        skipAuth: true,
         body: JSON.stringify(promocion),
       });
       return response.data.data as PromocionAPI;
@@ -80,9 +75,8 @@ export const promocionesApi = {
   // Eliminar promoción
   delete: async (id: number): Promise<void> => {
     try {
-      await envelopedFetch<unknown>(`${API_CONFIG.BASE_URL}/promociones/${id}`, {
+      await envelopedFetch<unknown>(`/promociones/${id}`, {
         method: 'DELETE',
-        skipAuth: true,
       });
     } catch (error) {
       console.error('Error al eliminar promoción:', error);

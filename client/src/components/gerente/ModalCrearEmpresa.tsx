@@ -29,7 +29,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import { ModalCrearAgente } from './ModalCrearAgente';
-import { guardarMarcasMultiples } from '../../utils/marcasHelper';
+import { gerenteConfigApi } from '../../services/api';
 
 interface Marca {
   marcaNombre: string;
@@ -52,9 +52,10 @@ interface CuentaBancaria {
 interface ModalCrearEmpresaProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onCreated?: () => void;
 }
 
-export function ModalCrearEmpresa({ open, onOpenChange }: ModalCrearEmpresaProps) {
+export function ModalCrearEmpresa({ open, onOpenChange, onCreated }: ModalCrearEmpresaProps) {
   // Estados para datos fiscales
   const [nombreFiscal, setNombreFiscal] = useState('');
   const [cif, setCif] = useState('');
@@ -297,7 +298,7 @@ export function ModalCrearEmpresa({ open, onOpenChange }: ModalCrearEmpresaProps
   };
 
   // Guardar empresa
-  const guardarEmpresa = () => {
+  const guardarEmpresa = async () => {
     if (!validarFormulario()) {
       return;
     }
@@ -331,38 +332,43 @@ export function ModalCrearEmpresa({ open, onOpenChange }: ModalCrearEmpresaProps
 
     console.log('📦 Datos de empresa a enviar a BBDD:', datosEmpresa);
     
-    // ⭐ GUARDAR MARCAS EN LOCALSTORAGE GLOBAL (Sistema de Marcas MADRE)
+    // Persistir config en backend (fuente de verdad para Gerente)
     try {
-      const nuevasMarcas = marcas.map(marca => ({
-        id: marca.marcaCodigo,
-        codigo: marca.marcaCodigo,
-        nombre: marca.marcaNombre,
-        color: marca.colorIdentidad,
-        logo: marca.logoUrl || '',
-        empresaId: empresaId,
-        empresaNombre: nombreComercial || nombreFiscal,
+      await gerenteConfigApi.empresas.upsert({
+        id: empresaId,
+        nombreFiscal,
+        cif,
+        domicilioFiscal,
+        nombreComercial,
+        logoComercial,
+        convenioColectivoId,
         activo: empresaActiva,
-        fechaCreacion: new Date().toISOString()
-      }));
-      
-      // Usar helper centralizado para guardar marcas
-      const guardado = guardarMarcasMultiples(nuevasMarcas);
-      
-      if (guardado) {
-        console.log('✅ Marcas MADRE guardadas correctamente');
-      } else {
-        console.error('❌ Error al guardar marcas');
-      }
+        marcas: marcas.map((m) => ({
+          id: m.marcaCodigo,
+          nombre: m.marcaNombre,
+          colorIdentidad: m.colorIdentidad,
+          logoUrl: m.logoUrl || undefined,
+        })),
+        puntosVenta: puntosVenta.map((pv) => ({
+          nombre: pv.pvNombreComercial,
+          direccion: pv.pvDireccion,
+          marcaId: pv.marcaId,
+        })),
+        cuentasBancarias: cuentasBancarias.map((c) => ({ numero: c.iban, alias: c.aliasCuenta })),
+      } as any);
     } catch (error) {
-      console.error('❌ Error al guardar marcas en localStorage:', error);
+      console.error('❌ Error guardando empresa en backend:', error);
+      toast.error('No se pudo guardar la empresa en el backend');
+      return;
     }
-    
+
     // TODO: Aquí el programador debe enviar datosEmpresa a la API/Base de datos
     // await api.post('/empresas', datosEmpresa);
 
     toast.success('Empresa creada correctamente');
     onOpenChange(false);
     resetearFormulario();
+    onCreated?.();
   };
 
   // Resetear formulario

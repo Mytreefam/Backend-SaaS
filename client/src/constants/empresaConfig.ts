@@ -4,13 +4,13 @@
  * 
  * IMPORTANTE: Este archivo es la fuente única de verdad para:
  * - Información de empresas
- * - Marcas disponibles (lee desde localStorage 'udar_marcas_sistema')
+ * - Marcas disponibles
  * - Puntos de venta (PDV)
  * - Relaciones jerárquicas: Empresa → Marcas → PDVs
  * 
  * ⭐ SISTEMA DE MARCAS MADRE:
  * Las marcas se crean desde Gerente → Empresas → Crear/Editar Empresa
- * y se almacenan en localStorage como única fuente de verdad.
+ * y se gestionan desde backend (BD).
  * 
  * USAR EN: Todos los filtros, cálculos, visualizaciones y componentes
  * 
@@ -74,7 +74,7 @@ export interface Empresa {
 // ============================================
 
 /**
- * MARCAS POR DEFECTO (Fallback si localStorage está vacío)
+ * MARCAS POR DEFECTO (Fallback si backend aún no tiene datos)
  */
 const MARCAS_DEFAULT: Record<string, Marca> = {
   'MRC-001': {
@@ -100,73 +100,19 @@ const MARCAS_DEFAULT: Record<string, Marca> = {
 };
 
 /**
- * FUNCIÓN PARA CARGAR MARCAS DESDE LOCALSTORAGE
- * ⭐ Sistema de Marcas MADRE - Lee desde 'udar_marcas_sistema'
- */
-function cargarMarcasDesdeLocalStorage(): Record<string, Marca> {
-  // Verificar si estamos en el navegador
-  if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
-    console.log('📦 No hay localStorage disponible, usando marcas por defecto');
-    return MARCAS_DEFAULT;
-  }
-
-  try {
-    const marcasJSON = localStorage.getItem('udar_marcas_sistema');
-    if (!marcasJSON) {
-      console.log('📦 No hay marcas en localStorage, usando marcas por defecto');
-      return MARCAS_DEFAULT;
-    }
-
-    const marcasArray: Marca[] = JSON.parse(marcasJSON);
-    const marcasRecord: Record<string, Marca> = {};
-    
-    marcasArray.forEach(marca => {
-      // Normalizar el objeto marca para asegurar compatibilidad
-      marcasRecord[marca.id] = {
-        id: marca.id,
-        codigo: marca.codigo,
-        nombre: marca.nombre,
-        colorIdentidad: marca.colorIdentidad || (marca as any).color || '#0d9488',
-        icono: marca.icono,
-        logoUrl: marca.logoUrl || marca.logo || '',
-        logo: marca.logo || marca.logoUrl || '',
-        empresaId: marca.empresaId,
-        empresaNombre: marca.empresaNombre,
-        activo: marca.activo !== false,
-        fechaCreacion: marca.fechaCreacion
-      };
-    });
-
-    console.log('✅ Marcas cargadas desde localStorage:', marcasRecord);
-    return Object.keys(marcasRecord).length > 0 ? marcasRecord : MARCAS_DEFAULT;
-  } catch (error) {
-    console.error('❌ Error al cargar marcas desde localStorage:', error);
-    return MARCAS_DEFAULT;
-  }
-}
-
-/**
  * MARCAS DISPONIBLES EN EL SISTEMA
- * ⭐ Se cargan dinámicamente desde localStorage
+ * ⭐ Fuente de verdad: backend (migración en progreso). Aquí solo fallback.
  */
-export let MARCAS: Record<string, Marca> = typeof window !== 'undefined' 
-  ? cargarMarcasDesdeLocalStorage() 
-  : MARCAS_DEFAULT;
+export let MARCAS: Record<string, Marca> = MARCAS_DEFAULT;
 
 /**
  * FUNCIÓN PARA RECARGAR MARCAS
  * Se debe llamar cuando se actualicen las marcas en el sistema
  */
 export function recargarMarcas() {
-  MARCAS = cargarMarcasDesdeLocalStorage();
-  console.log('🔄 Marcas recargadas:', MARCAS);
-}
-
-// Escuchar eventos de actualización de marcas
-if (typeof window !== 'undefined') {
-  window.addEventListener('marcas-sistema-updated', () => {
-    recargarMarcas();
-  });
+  // Nota: se mantiene por compatibilidad con UI legacy.
+  // La recarga real de empresas/marcas/pdv se realiza desde el backend.
+  MARCAS = MARCAS_DEFAULT;
 }
 
 /**

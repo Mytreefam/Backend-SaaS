@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Sidebar, type MenuItem } from './navigation/Sidebar';
@@ -15,11 +15,14 @@ import { NotificationCenter } from './NotificationCenter';
 import { ConfiguracionCliente } from './ConfiguracionCliente';
 import { LoadingFallback } from './LoadingFallback';
 import { MisCupones } from './cliente/MisCupones';
-import { obtenerPedidosCliente, obtenerPedido, type Pedido } from '../services/pedidos.service';
+import type { PedidoConfirmacionData } from './cliente/PedidoConfirmacionModal';
 import type { User } from '../App';
 import { toast } from 'sonner@2.0.3';
 import { getConfig } from '../config/white-label.config';
 import udarLogo from 'figma:asset/841a58f721c551c9787f7d758f8005cf7dfb6bc5.png';
+import { clientesApi } from '../services/api/clientes.api';
+import { citasAPIService } from '../services/citasAPI.service';
+import { turnosApi } from '../services/api/turnos.api';
 
 // ⚡ Lazy Loading de modales pesados
 const MiPedido = lazy(() => import('./cliente/MiPedido').then(m => ({ default: m.MiPedido })));
@@ -46,30 +49,25 @@ export function ClienteDashboard({ user, onLogout, onCambiarRol }: ClienteDashbo
   const [cestaOpen, setCestaOpen] = useState(false); // PASO 3: Carrito final
   const [solicitudCitaModalOpen, setSolicitudCitaModalOpen] = useState(false);
   const [asistenciaModalOpen, setAsistenciaModalOpen] = useState(false);
-  const [citasProgramadas, setCitasProgramadas] = useState(2);
+  const [citasProgramadas, setCitasProgramadas] = useState(0);
+  const [pedidosActivos, setPedidosActivos] = useState(0);
   
   // 🛒 Carrito de compra - Contador dinámico
   const { totalItems: itemsEnCesta } = useCart();
   
   // 📦 Modal de confirmación de pedido
   const [pedidoConfirmacionOpen, setPedidoConfirmacionOpen] = useState(false);
-  const [pedidoActual, setPedidoActual] = useState<Pedido | null>(null);
+  const [pedidoActual, setPedidoActual] = useState<PedidoConfirmacionData | null>(null);
   
   // Estado para "Ya estoy aquí"
   const [yaEstoyAquiModalOpen, setYaEstoyAquiModalOpen] = useState(false);
   const [turnoActivo, setTurnoActivo] = useState<{
+    id?: number;
     numero: string;
     personasEspera: number;
     tiempoEstimado: string;
   } | null>(null);
   const [turnoDetallesModalOpen, setTurnoDetallesModalOpen] = useState(false);
-
-  // 📊 Obtener estadísticas reales de pedidos
-  const pedidosCliente = obtenerPedidosCliente(user.id);
-  const pedidosActivos = pedidosCliente.filter(p => 
-    p.estado === 'pendiente' || p.estado === 'en_preparacion' || p.estado === 'listo'
-  ).length;
-  const pedidosCompletados = pedidosCliente.filter(p => p.estado === 'entregado').length;
 
   // Número de aseguradora (simulado - debería venir de la configuración del usuario)
   const [numeroAseguradora, setNumeroAseguradora] = useState<string | null>(null); // null = no configurado
@@ -81,7 +79,62 @@ export function ClienteDashboard({ user, onLogout, onCambiarRol }: ClienteDashbo
   ];
   
   // Notificaciones no leídas
-  const [notificacionesNoLeidas, setNotificacionesNoLeidas] = useState(2);
+  const [notificacionesNoLeidas, setNotificacionesNoLeidas] = useState(0);
+
+  // Cargar contadores reales (pedidos / notificaciones / citas / turno activo)
+  useEffect(() => {
+    let cancelled = false;
+    const clienteId = String(user.id);
+
+    const load = async () => {
+      try {
+        const [pedidos, notifs, turno] = await Promise.all([
+          clientesApi.getPedidos(clienteId),
+          clientesApi.getNotificaciones(clienteId),
+          clientesApi.getTurnoActivo(clienteId),
+        ]);
+
+        if (cancelled) return;
+
+        const activos = (pedidos || []).filter((p: any) =>
+          p?.estado === 'pendiente' || p?.estado === 'en_preparacion' || p?.estado === 'listo'
+        ).length;
+        setPedidosActivos(activos);
+
+        const unread = (notifs || []).filter((n: any) => !n?.leida).length;
+        setNotificacionesNoLeidas(unread);
+
+        if (turno?.numero) {
+          setTurnoActivo({
+            id: Number(turno.id),
+            numero: String(turno.numero),
+            personasEspera: 0,
+            tiempoEstimado: String(turno.tiempoEstimado || '—'),
+          });
+        } else {
+          setTurnoActivo(null);
+        }
+      } catch {
+        // Keep safe fallbacks
+      }
+
+      try {
+        const citas = await citasAPIService.obtenerCitas({ clienteId });
+        if (cancelled) return;
+        const activas = (citas || []).filter((c) =>
+          c.estado === 'solicitada' || c.estado === 'confirmada' || c.estado === 'en-progreso'
+        ).length;
+        setCitasProgramadas(activas);
+      } catch {
+        // ignore
+      }
+    };
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [user.id]);
 
   // Handler para Asistencia 24/7
   const handleAsistencia247 = () => {
@@ -99,21 +152,23 @@ export function ClienteDashboard({ user, onLogout, onCambiarRol }: ClienteDashbo
   };
 
   // Handler para confirmar ubicación y asignar turno
-  const handleConfirmarUbicacion = () => {
-    const turno = {
-      numero: 'A-24',
-      personasEspera: 2,
-      tiempoEstimado: '8 min'
-    };
-    
-    setTurnoActivo(turno);
-    toast.success(`¡Turno asignado! Tu turno es ${turno.numero}`);
-    
-    setTimeout(() => {
-      toast.info('Tu turno se acerca. Prepárate para ser atendido.', {
-        duration: 5000
-      });
-    }, 15000);
+  const handleConfirmarUbicacion = async () => {
+    const clienteId = String(user.id);
+    const turno = await clientesApi.getTurnoActivo(clienteId);
+
+    if (turno?.numero) {
+      const data = {
+        id: Number(turno.id),
+        numero: String(turno.numero),
+        personasEspera: 0,
+        tiempoEstimado: String(turno.tiempoEstimado || '—'),
+      };
+      setTurnoActivo(data);
+      toast.success(`¡Ubicación confirmada! Tu turno es ${data.numero}`);
+      setTimeout(() => {
+        toast.info('Tu turno se acerca. Prepárate para ser atendido.', { duration: 5000 });
+      }, 15000);
+    }
   };
 
   // Handler para ver detalles del turno
@@ -122,18 +177,32 @@ export function ClienteDashboard({ user, onLogout, onCambiarRol }: ClienteDashbo
   };
 
   // Handler para cuando se completa un pedido exitosamente
-  const handlePedidoCompletado = (pedidoId: string, facturaId: string) => {
-    const pedido = obtenerPedido(pedidoId);
-    if (pedido) {
-      setPedidoActual(pedido);
-      setPedidoConfirmacionOpen(true);
-    }
+  const handlePedidoCompletado = (pedido: PedidoConfirmacionData | null) => {
+    if (!pedido) return;
+    setPedidoActual(pedido);
+    setPedidoConfirmacionOpen(true);
   };
 
   // Handler para cancelar turno
   const handleCancelarTurno = () => {
+    const current = turnoActivo;
+    if (current?.id) {
+      turnosApi
+        .delete(current.id)
+        .then((ok) => {
+          if (ok) {
+            setTurnoActivo(null);
+            toast.success('Tu turno ha sido cancelado');
+          } else {
+            toast.error('No se pudo cancelar el turno');
+          }
+        })
+        .catch(() => {
+          toast.error('No se pudo cancelar el turno');
+        });
+      return;
+    }
     setTurnoActivo(null);
-    toast.success('Tu turno ha sido cancelado');
   };
 
   const menuItems: MenuItem[] = [

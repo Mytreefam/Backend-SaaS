@@ -37,15 +37,7 @@ import {
 import { OnboardingWidget } from '../OnboardingWidget';
 import { FiltroContextoJerarquico, SelectedContext } from './FiltroContextoJerarquico';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { 
-  EMPRESAS_ARRAY, 
-  MARCAS_ARRAY, 
-  PUNTOS_VENTA_ARRAY,
-  getNombreEmpresa,
-  getNombrePDVConMarcas,
-  getNombreMarca,
-  getIconoMarca
-} from '../../constants/empresaConfig';
+import { gerenteConfigApi } from '../../services/api';
 import { onboardingService } from '../../services/onboarding.service';
 import type { EstadisticasOnboarding } from '../../types/onboarding.types';
 import { 
@@ -186,6 +178,92 @@ export function Dashboard360() {
   const [filtroActivo, setFiltroActivo] = useState('resumen' as 'resumen' | 'ventas' | 'ebitda' | 'cierres' | 'operativa' | 'alertas' | 'escandallo');
   const [filtroResultados, setFiltroResultados] = useState('Estructura');
   const [selectedContext, setSelectedContext] = useState([]);
+
+  // Fuente de verdad: Empresa/Marca/PDV desde backend (sin localStorage)
+  const [empresasConfig, setEmpresasConfig] = useState<any[]>([]);
+  const [loadingEmpresasConfig, setLoadingEmpresasConfig] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      setLoadingEmpresasConfig(true);
+      try {
+        const data = await gerenteConfigApi.empresas.list();
+        if (!cancelled) setEmpresasConfig(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.error('Error cargando empresas config:', e);
+        if (!cancelled) setEmpresasConfig([]);
+      } finally {
+        if (!cancelled) setLoadingEmpresasConfig(false);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const empresasArray = useMemo(() => {
+    return (empresasConfig || []).map((e: any) => ({
+      id: String(e?.id || '').trim(),
+      codigo: String(e?.codigo || e?.id || '').trim(),
+      nombre: String(e?.nombreComercial || e?.nombreFiscal || e?.id || '').trim(),
+    })).filter((x: any) => x.id);
+  }, [empresasConfig]);
+
+  const marcasArray = useMemo(() => {
+    const out: any[] = [];
+    for (const e of empresasConfig || []) {
+      const empresaId = String(e?.id || '').trim();
+      const marcas = Array.isArray(e?.marcas) ? e.marcas : [];
+      for (const m of marcas) {
+        out.push({
+          id: String(m?.id || '').trim(),
+          codigo: String(m?.codigo || m?.id || '').trim(),
+          nombre: String(m?.nombre || '').trim(),
+          icono: String(m?.icono || '').trim() || undefined,
+          empresaId,
+        });
+      }
+    }
+    return out.filter((x) => x.id);
+  }, [empresasConfig]);
+
+  const puntosVentaArray = useMemo(() => {
+    const out: any[] = [];
+    for (const e of empresasConfig || []) {
+      const empresaId = String(e?.id || '').trim();
+      const pdvs = Array.isArray(e?.puntosVenta) ? e.puntosVenta : [];
+      for (const pv of pdvs) {
+        out.push({
+          id: String(pv?.id || '').trim(),
+          codigo: String(pv?.id || '').trim(),
+          nombre: String(pv?.nombre || '').trim(),
+          empresaId,
+          marcasIds: Array.isArray(pv?.marcasIds) ? pv.marcasIds : [],
+        });
+      }
+    }
+    return out.filter((x) => x.id);
+  }, [empresasConfig]);
+
+  const empresaNameMap = useMemo(() => new Map(empresasArray.map((e: any) => [e.id, e.nombre])), [empresasArray]);
+  const marcaNameMap = useMemo(() => new Map(marcasArray.map((m: any) => [m.id, m.nombre])), [marcasArray]);
+  const pdvNameMap = useMemo(() => new Map(puntosVentaArray.map((p: any) => [p.id, p.nombre])), [puntosVentaArray]);
+
+  const getNombreEmpresa = (id: string) => empresaNameMap.get(id) || id;
+  const getNombreMarca = (id: string) => marcaNameMap.get(id) || id;
+  const getNombrePDV = (id: string) => pdvNameMap.get(id) || id;
+  const getNombrePDVConMarcas = (id: string) => {
+    const pdv = puntosVentaArray.find((p: any) => p.id === id);
+    if (!pdv) return getNombrePDV(id);
+    const marcas = (pdv.marcasIds || []).map((mid: string) => getNombreMarca(mid)).filter(Boolean);
+    return marcas.length ? `${pdv.nombre} (${marcas.join(', ')})` : pdv.nombre;
+  };
+  const getIconoMarca = (id: string) => {
+    const m = marcasArray.find((x: any) => x.id === id);
+    return (m?.icono || '🏷️') as string;
+  };
   
   // Nuevo estado para filtro PDV simple (estilo Clientes)
   const [filtroPDV, setFiltroPDV] = useState([]);
@@ -2202,7 +2280,7 @@ export function Dashboard360() {
                     {/* Empresa */}
                     <div>
                       <Label className="text-xs font-medium text-gray-700 mb-2 block">Empresa</Label>
-                      {EMPRESAS_ARRAY.map(empresa => (
+                      {empresasArray.map(empresa => (
                         <div key={empresa.id} className="flex items-center gap-2 mb-2">
                           <Checkbox 
                             id={`empresa-${empresa.id}`}
@@ -2226,7 +2304,7 @@ export function Dashboard360() {
                     <div>
                       <Label className="text-xs font-medium text-gray-700 mb-2 block">Puntos de Venta</Label>
                       <div className="space-y-2">
-                        {PUNTOS_VENTA_ARRAY.map(pdv => (
+                        {puntosVentaArray.map(pdv => (
                           <div key={pdv.id} className="flex items-center gap-2">
                             <Checkbox 
                               id={`pdv-${pdv.id}`}
@@ -2251,7 +2329,7 @@ export function Dashboard360() {
                     <div>
                       <Label className="text-xs font-medium text-gray-700 mb-2 block">Marcas</Label>
                       <div className="space-y-2">
-                        {MARCAS_ARRAY.map(marca => (
+                        {marcasArray.map(marca => (
                           <div key={marca.id} className="flex items-center gap-2">
                             <Checkbox 
                               id={`marca-${marca.id}`}
@@ -2399,7 +2477,7 @@ export function Dashboard360() {
                     {/* Empresa */}
                     <div>
                       <Label className="text-xs font-medium text-gray-700 mb-2 block">Empresa</Label>
-                      {EMPRESAS_ARRAY.map(empresa => (
+                      {empresasArray.map(empresa => (
                         <div key={empresa.id} className="flex items-center gap-2 mb-2">
                           <Checkbox 
                             id={`cierres-empresa-${empresa.id}`}
@@ -2423,7 +2501,7 @@ export function Dashboard360() {
                     <div>
                       <Label className="text-xs font-medium text-gray-700 mb-2 block">Puntos de Venta</Label>
                       <div className="space-y-2">
-                        {PUNTOS_VENTA_ARRAY.map(pdv => (
+                        {puntosVentaArray.map(pdv => (
                           <div key={pdv.id} className="flex items-center gap-2">
                             <Checkbox 
                               id={`cierres-pdv-${pdv.id}`}
@@ -2448,7 +2526,7 @@ export function Dashboard360() {
                     <div>
                       <Label className="text-xs font-medium text-gray-700 mb-2 block">Marcas</Label>
                       <div className="space-y-2">
-                        {MARCAS_ARRAY.map(marca => (
+                        {marcasArray.map(marca => (
                           <div key={marca.id} className="flex items-center gap-2">
                             <Checkbox 
                               id={`cierres-marca-${marca.id}`}
@@ -2597,7 +2675,7 @@ export function Dashboard360() {
                       {/* Empresa */}
                       <div>
                         <Label className="text-xs font-medium text-gray-700 mb-2 block">Empresa</Label>
-                        {EMPRESAS_ARRAY.map(empresa => (
+                        {empresasArray.map(empresa => (
                           <div key={empresa.id} className="flex items-center gap-2 mb-2">
                             <Checkbox 
                               id={`ebitda-empresa-${empresa.id}`}
@@ -2621,7 +2699,7 @@ export function Dashboard360() {
                       <div>
                         <Label className="text-xs font-medium text-gray-700 mb-2 block">Puntos de Venta</Label>
                         <div className="space-y-2">
-                          {PUNTOS_VENTA_ARRAY.map(pdv => (
+                          {puntosVentaArray.map(pdv => (
                             <div key={pdv.id} className="flex items-center gap-2">
                               <Checkbox 
                                 id={`ebitda-pdv-${pdv.id}`}
@@ -2646,7 +2724,7 @@ export function Dashboard360() {
                       <div>
                         <Label className="text-xs font-medium text-gray-700 mb-2 block">Marcas</Label>
                         <div className="space-y-2">
-                          {MARCAS_ARRAY.map(marca => (
+                          {marcasArray.map(marca => (
                             <div key={marca.id} className="flex items-center gap-2">
                               <Checkbox 
                                 id={`ebitda-marca-${marca.id}`}

@@ -43,15 +43,12 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import {
-  obtenerTurnosSemanaActual,
-  obtenerTurnosMesActual,
-  obtenerSolicitudesTrabajador,
-  crearSolicitudCambio,
   TIPOS_TURNO,
   type Turno,
   type SolicitudCambioHorario,
   type TipoSolicitud,
 } from '../../services/horarios.service';
+import { horariosApi } from '../../services/api/horarios.api';
 
 interface HorarioTrabajadorProps {
   trabajadorId: string;
@@ -75,21 +72,42 @@ export function HorarioTrabajador({ trabajadorId, trabajadorNombre }: HorarioTra
     cargarDatos();
   }, [trabajadorId]);
 
-  const cargarDatos = () => {
-    // Obtener turnos de la semana actual
-    const turnosSem = obtenerTurnosSemanaActual(trabajadorId);
-    setTurnosSemana(turnosSem);
+  const cargarDatos = async () => {
+    try {
+      // Semana actual (UTC) - lunes a domingo
+      const now = new Date();
+      const day = now.getUTCDay(); // 0..6
+      const diffToMonday = (day + 6) % 7;
+      const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - diffToMonday));
+      const sunday = new Date(Date.UTC(monday.getUTCFullYear(), monday.getUTCMonth(), monday.getUTCDate() + 6));
 
-    // Obtener turnos del mes completo
-    const turnosMes = obtenerTurnosMesActual(trabajadorId);
-    setTurnosMes(turnosMes);
+      const fromWeek = monday.toISOString().split('T')[0];
+      const toWeek = sunday.toISOString().split('T')[0];
 
-    // Obtener solicitudes
-    const sols = obtenerSolicitudesTrabajador(trabajadorId);
-    setSolicitudes(sols);
+      const [turnosSem, turnosMesAll, sols] = await Promise.all([
+        horariosApi.getTurnos({ from: fromWeek, to: toWeek }),
+        // Mes actual
+        (async () => {
+          const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+          const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0));
+          const from = start.toISOString().split('T')[0];
+          const to = end.toISOString().split('T')[0];
+          return await horariosApi.getTurnos({ from, to });
+        })(),
+        horariosApi.getSolicitudes(),
+      ]);
+
+      // Backend ya devuelve el shape Turno/SolicitudCambioHorario
+      setTurnosSemana(turnosSem.filter((t) => String(t.trabajadorId) === String(trabajadorId)));
+      setTurnosMes(turnosMesAll.filter((t) => String(t.trabajadorId) === String(trabajadorId)));
+      setSolicitudes(sols.filter((s) => String(s.trabajadorId) === String(trabajadorId)));
+    } catch (error) {
+      console.error('Error cargando horario:', error);
+      toast.error('Error al cargar horario');
+    }
   };
 
-  const handleCrearSolicitud = () => {
+  const handleCrearSolicitud = async () => {
     if (!motivoSolicitud.trim()) {
       toast.error('Debes proporcionar un motivo');
       return;
@@ -100,14 +118,17 @@ export function HorarioTrabajador({ trabajadorId, trabajadorNombre }: HorarioTra
       return;
     }
 
-    const nuevaSolicitud = crearSolicitudCambio({
-      trabajadorId,
-      trabajadorNombre,
+    const nuevaSolicitud = await horariosApi.crearSolicitud({
       tipo: tipoSolicitud,
       fechaSolicitada,
       motivoSolicitud,
       detalles: detallesSolicitud || undefined,
     });
+
+    if (!nuevaSolicitud) {
+      toast.error('No se pudo enviar la solicitud');
+      return;
+    }
 
     toast.success('Solicitud enviada', {
       description: 'Tu gerente revisará la solicitud pronto',

@@ -46,83 +46,110 @@ import {
 import { toast } from 'sonner';
 import { ebitdaApi } from '../../services/api';
 
-// Datos mock - En producción vendrían del backend
-const datosEBITDA = {
+type DatosEbitdaUi = {
   mesActual: {
-    ingresos: 45890.50,
-    costesDirectos: 18356.20,
-    margenBruto: 27534.30,
-    gastosOperativos: 15200.00,
-    ebitda: 12334.30,
-    ebitdaMargen: 26.9
-  },
+    ingresos: number;
+    costesDirectos: number;
+    margenBruto: number;
+    gastosOperativos: number;
+    ebitda: number;
+    ebitdaMargen: number;
+  };
   mesAnterior: {
-    ingresos: 41200.00,
-    costesDirectos: 16800.00,
-    margenBruto: 24400.00,
-    gastosOperativos: 14500.00,
-    ebitda: 9900.00,
-    ebitdaMargen: 24.0
-  },
-  historico: [
-    { mes: 'Jul', ingresos: 38000, costes: 15200, ebitda: 10500, margen: 27.6 },
-    { mes: 'Ago', ingresos: 41000, costes: 16400, ebitda: 11200, margen: 27.3 },
-    { mes: 'Sep', ingresos: 39500, costes: 15800, ebitda: 10800, margen: 27.3 },
-    { mes: 'Oct', ingresos: 43000, costes: 17200, ebitda: 11500, margen: 26.7 },
-    { mes: 'Nov', ingresos: 45890, costes: 18356, ebitda: 12334, margen: 26.9 }
-  ],
+    ingresos: number;
+    costesDirectos: number;
+    margenBruto: number;
+    gastosOperativos: number;
+    ebitda: number;
+    ebitdaMargen: number;
+  };
+  historico: { mes: string; ingresos: number; costes: number; ebitda: number; margen: number }[];
   desglose: {
-    costesDirectos: [
-      { concepto: 'Materia Prima', valor: 12450.20, pct: 67.8 },
-      { concepto: 'Comisiones TPV', valor: 1148.26, pct: 6.3 },
-      { concepto: 'Comisiones Plataformas', valor: 2294.53, pct: 12.5 },
-      { concepto: 'Comisiones Pasarela', valor: 458.91, pct: 2.5 },
-      { concepto: 'Otros Costes Variables', valor: 2004.30, pct: 10.9 }
-    ],
-    gastosOperativos: [
-      { concepto: 'Nóminas', valor: 8500.00, pct: 55.9 },
-      { concepto: 'Alquiler', valor: 3200.00, pct: 21.1 },
-      { concepto: 'Suministros', valor: 1800.00, pct: 11.8 },
-      { concepto: 'Marketing', valor: 1200.00, pct: 7.9 },
-      { concepto: 'Otros Gastos', valor: 500.00, pct: 3.3 }
-    ]
-  }
+    costesDirectos: { concepto: string; valor: number; pct: number }[];
+    gastosOperativos: { concepto: string; valor: number; pct: number }[];
+  };
+};
+
+const emptyDatos: DatosEbitdaUi = {
+  mesActual: { ingresos: 0, costesDirectos: 0, margenBruto: 0, gastosOperativos: 0, ebitda: 0, ebitdaMargen: 0 },
+  mesAnterior: { ingresos: 0, costesDirectos: 0, margenBruto: 0, gastosOperativos: 0, ebitda: 0, ebitdaMargen: 0 },
+  historico: [],
+  desglose: { costesDirectos: [], gastosOperativos: [] },
 };
 
 export function EBITDAInteractivo() {
   const [periodoSeleccionado, setPeriodoSeleccionado] = useState<'mes' | 'trimestre' | 'año'>('mes');
   const [vistaActiva, setVistaActiva] = useState<'resumen' | 'tendencia' | 'desglose'>('resumen');
   const [_cargando, setCargando] = useState(true);
-  const [_usandoMock, setUsandoMock] = useState(false);
-  const [datos, setDatos] = useState(datosEBITDA);
+  const [datos, setDatos] = useState<DatosEbitdaUi>(emptyDatos);
 
   // Cargar datos desde API
   useEffect(() => {
     const cargarDatos = async () => {
       setCargando(true);
       try {
-        const cuentaResultados = await ebitdaApi.getCuentaResultados();
-        
-        if (cuentaResultados) {
-          // Actualizar datos con respuesta de API
-          setDatos(prev => ({
-            ...prev,
-            mesActual: {
-              ingresos: cuentaResultados.ingresosNetos || prev.mesActual.ingresos,
-              costesDirectos: cuentaResultados.costeVentas || prev.mesActual.costesDirectos,
-              margenBruto: cuentaResultados.margenBruto || prev.mesActual.margenBruto,
-              gastosOperativos: cuentaResultados.gastosOperativos || prev.mesActual.gastosOperativos,
-              ebitda: cuentaResultados.ebitda || prev.mesActual.ebitda,
-              ebitdaMargen: cuentaResultados.margenEbitda || prev.mesActual.ebitdaMargen
-            }
-          }));
-          setUsandoMock(false);
-        } else {
-          setUsandoMock(true);
-        }
+        const hoy = new Date();
+        const mes = hoy.getMonth() + 1;
+        const año = hoy.getFullYear();
+        const prevDate = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
+        const prevMes = prevDate.getMonth() + 1;
+        const prevAño = prevDate.getFullYear();
+
+        const [cuentaActual, ebitdaActual, ebitdaAnterior, historico] = await Promise.all([
+          ebitdaApi.getCuentaResultados(),
+          ebitdaApi.getEBITDA({ mes, año }),
+          ebitdaApi.getEBITDA({ mes: prevMes, año: prevAño }),
+          ebitdaApi.getHistoricoEBITDA({ meses: 6 }),
+        ]);
+
+        const cuenta = cuentaActual;
+
+        const desgloseCostes = cuenta?.desglose?.costes || [];
+        const desgloseGastos = cuenta?.desglose?.gastos || [];
+        const totalCostes = desgloseCostes.reduce((s, x) => s + (Number(x.importe) || 0), 0);
+        const totalGastos = desgloseGastos.reduce((s, x) => s + (Number(x.importe) || 0), 0);
+
+        setDatos({
+          mesActual: {
+            ingresos: Number(cuenta?.ingresosNetos || ebitdaActual.ingresos || 0),
+            costesDirectos: Number(cuenta?.costeVentas || 0),
+            margenBruto: Number(cuenta?.margenBruto || 0),
+            gastosOperativos: Number(cuenta?.gastosOperativos || 0),
+            ebitda: Number(cuenta?.ebitda || ebitdaActual.ebitda || 0),
+            ebitdaMargen: Number(cuenta?.margenEbitda || ebitdaActual.margen || 0),
+          },
+          mesAnterior: {
+            ingresos: Number(ebitdaAnterior.ingresos || 0),
+            costesDirectos: 0,
+            margenBruto: 0,
+            gastosOperativos: 0,
+            ebitda: Number(ebitdaAnterior.ebitda || 0),
+            ebitdaMargen: Number(ebitdaAnterior.margen || 0),
+          },
+          historico: (historico || []).map((h) => ({
+            mes: h.mes,
+            ingresos: 0,
+            costes: 0,
+            ebitda: Number(h.ebitda || 0),
+            margen: Number(h.margen || 0),
+          })),
+          desglose: {
+            costesDirectos: desgloseCostes.map((c) => ({
+              concepto: c.concepto,
+              valor: Number(c.importe || 0),
+              pct: totalCostes > 0 ? (Number(c.importe || 0) / totalCostes) * 100 : 0,
+            })),
+            gastosOperativos: desgloseGastos.map((g) => ({
+              concepto: g.concepto,
+              valor: Number(g.importe || 0),
+              pct: totalGastos > 0 ? (Number(g.importe || 0) / totalGastos) * 100 : 0,
+            })),
+          },
+        });
       } catch (error) {
-        console.warn('Error cargando EBITDA desde API, usando datos mock:', error);
-        setUsandoMock(true);
+        console.warn('Error cargando EBITDA desde API:', error);
+        toast.error('No se pudo cargar EBITDA desde el backend');
+        setDatos(emptyDatos);
       } finally {
         setCargando(false);
       }

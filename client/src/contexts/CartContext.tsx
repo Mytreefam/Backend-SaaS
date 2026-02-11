@@ -17,6 +17,7 @@ import type { Cupon as CuponReal } from '../types/cupon.types';
 import { useProductos } from './ProductosContext';
 import { stockReservationService } from '../services/stock-reservation.service';
 import { pedidosApi, type PedidoCreate } from '../services/api/pedidos.api';
+import { cuponesApi } from '../services/api/cupones.api';
 
 // ============================================================================
 // TIPOS
@@ -68,7 +69,7 @@ interface CartContextType {
   updateObservaciones: (itemId: string, observaciones: string) => void;
   updateItemOptions: (itemId: string, opciones: any) => void;
   clearCart: () => void;
-  aplicarCupon: (codigo: string) => boolean;
+  aplicarCupon: (codigo: string) => Promise<boolean>;
   eliminarCupon: () => void;
   
   // ✅ NUEVO: Crear pedido con API backend
@@ -77,6 +78,7 @@ interface CartContextType {
     tipoEntrega?: 'recogida' | 'domicilio';
     direccionEntrega?: string;
     metodoPago?: 'tarjeta' | 'efectivo' | 'bizum';
+    puntoVentaId?: string;
   }) => Promise<any | null>;
   
   // Cálculos
@@ -86,17 +88,6 @@ interface CartContextType {
   total: number;
   totalItems: number;
 }
-
-// ============================================================================
-// CUPONES DISPONIBLES (MOCK - En producción vendrían de la API)
-// ============================================================================
-
-const CUPONES_DISPONIBLES: Cupon[] = [
-  { codigo: 'BIENVENIDO10', tipo: 'porcentaje', valor: 10, descripcion: '10% de descuento' },
-  { codigo: 'VERANO2024', tipo: 'porcentaje', valor: 15, descripcion: '15% de descuento' },
-  { codigo: 'PRIMERACOMPRA', tipo: 'fijo', valor: 5, descripcion: '5€ de descuento' },
-  { codigo: 'BLACK20', tipo: 'porcentaje', valor: 20, descripcion: '20% de descuento' },
-];
 
 // ============================================================================
 // CONTEXTO
@@ -374,37 +365,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   // APLICAR CUPÓN
   // ============================================================================
 
-  const aplicarCupon = useCallback((codigo: string): boolean => {
-    const cupon = CUPONES_DISPONIBLES.find(c => 
-      c.codigo.toLowerCase() === codigo.toLowerCase()
-    );
-
-    if (!cupon) {
-      toast.error('Cupón no válido');
-      return false;
-    }
-
-    if (cuponAplicado?.codigo === cupon.codigo) {
-      toast.info('Este cupón ya está aplicado');
-      return false;
-    }
-
-    setCuponAplicado(cupon);
-    toast.success(`Cupón "${cupon.codigo}" aplicado: ${cupon.descripcion}`);
-    return true;
-  }, [cuponAplicado]);
-
   // ============================================================================
-  // ELIMINAR CUPÓN
-  // ============================================================================
-
-  const eliminarCupon = useCallback(() => {
-    setCuponAplicado(null);
-    toast.info('Cupón eliminado');
-  }, []);
-
-  // ============================================================================
-  // CÁLCULOS (MOVIDOS ANTES DEL useCallback)
+  // CÁLCULOS (deben ir antes de callbacks que los usan)
   // ============================================================================
 
   // 🎯 FUNCIÓN AUXILIAR: Calcular precio unitario de un item (precio base + extras)
@@ -443,6 +405,42 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   
   const totalItems = items.reduce((acc, item) => acc + item.cantidad, 0);
 
+  const aplicarCupon = useCallback(async (codigo: string): Promise<boolean> => {
+    const code = (codigo || '').trim();
+    if (!code) {
+      toast.error('Cupón no válido');
+      return false;
+    }
+
+    if (cuponAplicado?.codigo?.toLowerCase() === code.toLowerCase()) {
+      toast.info('Este cupón ya está aplicado');
+      return false;
+    }
+
+    const result = await cuponesApi.validar({ codigo: code, total: subtotal });
+    if (!result?.valido) return false;
+
+    const descuento = Number(result.descuentoCalculado ?? 0);
+    const descuentoSafe = Number.isFinite(descuento) ? descuento : 0;
+
+    setCuponAplicado({
+      codigo: code.toUpperCase(),
+      tipo: 'fijo',
+      valor: Math.max(0, descuentoSafe),
+      descripcion: result.mensaje || result.cupon?.descripcion || 'Descuento aplicado',
+    });
+    return true;
+  }, [cuponAplicado, subtotal]);
+
+  // ============================================================================
+  // ELIMINAR CUPÓN
+  // ============================================================================
+
+  const eliminarCupon = useCallback(() => {
+    setCuponAplicado(null);
+    toast.info('Cupón eliminado');
+  }, []);
+
   // ============================================================================
   // FUNCIÓN: Crear pedido con API backend
   // ============================================================================
@@ -452,6 +450,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     tipoEntrega?: 'recogida' | 'domicilio';
     direccionEntrega?: string;
     metodoPago?: 'tarjeta' | 'efectivo' | 'bizum';
+    puntoVentaId?: string;
   }) => {
     try {
       if (items.length === 0) {
@@ -475,6 +474,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         tipoEntrega: datosAdicionales.tipoEntrega || 'recogida',
         direccionEntrega: datosAdicionales.direccionEntrega,
         metodoPago: datosAdicionales.metodoPago || 'tarjeta',
+        puntoVentaId: datosAdicionales.puntoVentaId,
       };
 
       const pedidoCreado = await pedidosApi.create(pedidoData);

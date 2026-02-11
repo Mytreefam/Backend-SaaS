@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getTicketsSoporte, createTicketSoporte } from '../../services/api/gerente.api';
-import { buildUrl, getAuthToken, API_CONFIG } from '../../config/api.config';
+import { chatApi } from '../../services/api/chat.api';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -130,41 +130,46 @@ export function AyudaGerente() {
   };
 
   useEffect(() => {
+    let cancelled = false;
     setLoadingChats(true);
-    fetch(buildUrl('/chats'), {
-      headers: {
-        ...API_CONFIG.HEADERS,
-        'Authorization': `Bearer ${getAuthToken()}`,
-      },
-    })
-      .then(res => res.json())
+    chatApi
+      .getAll()
       .then((data) => {
-        if (Array.isArray(data)) {
-          setChats(data.map((chat) => ({
-            id: chat.id?.toString() ?? '',
-            titulo: chat.asunto || chat.titulo || '',
-            descripcion: chat.descripcion || chat.asunto || '',
-            categoria: chat.categoria || 'clientes',
-            estado: chat.estado || 'abierto',
-            prioridad: chat.prioridad || 'media',
-            creador: chat.cliente?.nombre || chat.creador || '',
-            asignadoA: chat.asignadoA || '',
-            fechaCreacion: chat.creadoEn || chat.fechaCreacion || '',
-            fechaActualizacion: chat.actualizadoEn || chat.fechaActualizacion || chat.creadoEn || '',
+        if (cancelled) return;
+        setChats(
+          (Array.isArray(data) ? data : []).map((chat) => ({
+            id: chat.id?.toString?.() ?? String(chat.id ?? ''),
+            titulo: (chat.asunto || '').toString(),
+            descripcion: (chat.asunto || '').toString(),
+            categoria: ((chat as any).tipo || 'clientes') as any,
+            estado: (chat.estado || 'abierto') as any,
+            prioridad: 'media',
+            creador: chat.cliente?.nombre || '',
+            asignadoA: '',
+            fechaCreacion: (chat.creadoEn || '') as any,
+            fechaActualizacion: (chat.creadoEn || '') as any,
             mensajes: (chat.mensajes || []).map((msg: any) => ({
-              id: msg.id?.toString() ?? '',
+              id: msg.id?.toString?.() ?? String(msg.id ?? ''),
               autor: msg.autor || '',
               mensaje: msg.texto || msg.mensaje || '',
               fecha: msg.fecha || '',
-              esGerente: msg.esGerente || false,
+              esGerente: (msg.autor || '') === 'Gerente',
             })),
-          })));
-        } else {
-          setChats([]);
-        }
+          }))
+        );
       })
-      .catch(() => setChats([]))
-      .finally(() => setLoadingChats(false));
+      .catch(() => {
+        if (cancelled) return;
+        setChats([]);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoadingChats(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Fetch tickets reales
@@ -180,39 +185,30 @@ export function AyudaGerente() {
   const handleEnviarMensaje = async () => {
     if (!nuevoMensaje.trim() || !chatSeleccionado) return;
     try {
-      const res = await fetch(buildUrl(`/chats/${chatSeleccionado.id}/mensajes`), {
-        method: 'POST',
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-        body: JSON.stringify({
-          autor: 'Gerente',
-          texto: nuevoMensaje,
-        }),
+      const sent = await chatApi.sendMessage(Number(chatSeleccionado.id), {
+        contenido: nuevoMensaje,
+        remitente: 'Gerente',
       });
-      if (!res.ok) throw new Error('Error al enviar mensaje');
+      if (!sent) throw new Error('Error al enviar mensaje');
       toast.success('Mensaje enviado correctamente');
       setNuevoMensaje('');
       // Refrescar mensajes del chat seleccionado
-      const chatRes = await fetch(buildUrl(`/chats/${chatSeleccionado.id}`), {
-        headers: {
-          ...API_CONFIG.HEADERS,
-          'Authorization': `Bearer ${getAuthToken()}`,
-        },
-      });
-      if (chatRes.ok) {
-        const chatData = await chatRes.json();
-        setChatSeleccionado((prev) => prev ? {
-          ...prev,
-          mensajes: (chatData.mensajes || []).map((msg: any) => ({
-            id: msg.id?.toString() ?? '',
-            autor: msg.autor || '',
-            mensaje: msg.texto || msg.mensaje || '',
-            fecha: msg.fecha || '',
-            esGerente: msg.esGerente || false,
-          })),
-        } : prev);
+      const chatData = await chatApi.getById(Number(chatSeleccionado.id));
+      if (chatData) {
+        setChatSeleccionado((prev) =>
+          prev
+            ? {
+                ...prev,
+                mensajes: (chatData.mensajes || []).map((msg: any) => ({
+                  id: msg.id?.toString?.() ?? String(msg.id ?? ''),
+                  autor: msg.autor || '',
+                  mensaje: msg.texto || msg.mensaje || '',
+                  fecha: msg.fecha || '',
+                  esGerente: (msg.autor || '') === 'Gerente',
+                })),
+              }
+            : prev
+        );
       }
     } catch (e) {
       toast.error('No se pudo enviar el mensaje');

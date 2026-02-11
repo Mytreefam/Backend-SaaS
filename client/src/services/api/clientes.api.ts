@@ -45,12 +45,30 @@ export interface Cliente {
 export interface Direccion {
   id: number;
   clienteId: number;
+  tipo: 'casa' | 'trabajo' | 'otro';
+  alias?: string | null;
   calle: string;
+  numero: string;
+  piso?: string | null;
+  puerta?: string | null;
   ciudad: string;
-  provincia: string;
+  provincia?: string | null;
   pais: string;
   codigoPostal: string;
+  notas?: string | null;
+  latitud?: number | null;
+  longitud?: number | null;
+  esPredeterminada: boolean;
+  fechaCreacion: string;
+  fechaUltimoUso?: string | null;
 }
+
+export type DireccionCreateInput = Omit<
+  Direccion,
+  'id' | 'clienteId' | 'fechaCreacion' | 'fechaUltimoUso'
+>;
+
+export type DireccionUpdateInput = Partial<Omit<Direccion, 'id' | 'clienteId' | 'fechaCreacion'>>;
 
 export interface ClienteCreate {
   nombre: string;
@@ -245,6 +263,85 @@ export const clientesApi = {
     } catch (error) {
       console.error('Error al obtener turno activo:', error);
       return null;
+    }
+  },
+
+  /**
+   * Direcciones: obtener direcciones del cliente
+   */
+  async getDirecciones(clienteId: string | number): Promise<Direccion[]> {
+    try {
+      const response = await envelopedFetch<Direccion[]>(API_CONFIG.ENDPOINTS.CLIENTE_DIRECCIONES(String(clienteId)), {
+        headers: API_CONFIG.HEADERS,
+      });
+      return response.data.data ?? [];
+    } catch (error) {
+      console.error('Error al obtener direcciones:', error);
+      toast.error('Error al cargar direcciones');
+      return [];
+    }
+  },
+
+  /**
+   * Direcciones: crear dirección
+   */
+  async createDireccion(
+    clienteId: string | number,
+    data: DireccionCreateInput,
+  ): Promise<Direccion | null> {
+    try {
+      const response = await envelopedFetch<Direccion>(API_CONFIG.ENDPOINTS.CLIENTE_DIRECCIONES(String(clienteId)), {
+        method: 'POST',
+        headers: API_CONFIG.HEADERS,
+        body: JSON.stringify(data),
+      });
+      return response.data.data ?? null;
+    } catch (error) {
+      console.error('Error al crear dirección:', error);
+      toast.error('Error al añadir dirección');
+      return null;
+    }
+  },
+
+  /**
+   * Direcciones: actualizar dirección
+   */
+  async updateDireccion(
+    clienteId: string | number,
+    direccionId: string | number,
+    data: DireccionUpdateInput,
+  ): Promise<Direccion | null> {
+    try {
+      const response = await envelopedFetch<Direccion>(
+        API_CONFIG.ENDPOINTS.CLIENTE_DIRECCION_BY_ID(String(clienteId), String(direccionId)),
+        {
+          method: 'PUT',
+          headers: API_CONFIG.HEADERS,
+          body: JSON.stringify(data),
+        },
+      );
+      return response.data.data ?? null;
+    } catch (error) {
+      console.error('Error al actualizar dirección:', error);
+      toast.error('Error al actualizar dirección');
+      return null;
+    }
+  },
+
+  /**
+   * Direcciones: eliminar dirección
+   */
+  async deleteDireccion(clienteId: string | number, direccionId: string | number): Promise<boolean> {
+    try {
+      await envelopedFetch<unknown>(API_CONFIG.ENDPOINTS.CLIENTE_DIRECCION_BY_ID(String(clienteId), String(direccionId)), {
+        method: 'DELETE',
+        headers: API_CONFIG.HEADERS,
+      });
+      return true;
+    } catch (error) {
+      console.error('Error al eliminar dirección:', error);
+      toast.error('Error al eliminar dirección');
+      return false;
     }
   },
 };

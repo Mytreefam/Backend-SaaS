@@ -10,7 +10,21 @@
 
 export const API_CONFIG = {
   // URL base del backend
-  BASE_URL: 'http://localhost:4000',
+  BASE_URL: (() => {
+    const envBase = (import.meta as any)?.env?.VITE_API_BASE_URL as string | undefined;
+    const isProd = Boolean((import.meta as any)?.env?.PROD);
+
+    const defaultProdBase =
+      typeof window !== 'undefined' && window.location?.origin
+        ? `${window.location.origin}/sass/api`
+        : 'https://mytreefam.com/sass/api';
+
+    const defaultDevBase = 'http://localhost:4000';
+
+    const raw = (envBase || (isProd ? defaultProdBase : defaultDevBase)).trim();
+    // Avoid double slashes when concatenating with endpoints like "/auth/login"
+    return raw.endsWith('/') ? raw.slice(0, -1) : raw;
+  })(),
   
   // Timeout de peticiones (30 segundos)
   TIMEOUT: 30000,
@@ -34,6 +48,9 @@ export const API_CONFIG = {
     LOGIN: '/auth/login',
     LOGOUT: '/auth/logout',
     REFRESH: '/auth/refresh',
+    CHANGE_PASSWORD: '/auth/change-password',
+    AUTH_SESSIONS: '/auth/sessions',
+    AUTH_SESSIONS_REVOKE_ALL: '/auth/sessions/revoke-all',
     
     // Clientes
     CLIENTES: '/clientes',
@@ -42,6 +59,8 @@ export const API_CONFIG = {
     CLIENTE_PROMOCIONES: (id: string) => `/clientes/${id}/promociones`,
     CLIENTE_NOTIFICACIONES: (id: string) => `/clientes/${id}/notificaciones`,
     CLIENTE_TURNO_ACTIVO: (id: string) => `/clientes/${id}/turno-activo`,
+    CLIENTE_DIRECCIONES: (id: string) => `/clientes/${id}/direcciones`,
+    CLIENTE_DIRECCION_BY_ID: (id: string, direccionId: string) => `/clientes/${id}/direcciones/${direccionId}`,
     
     // Productos
     PRODUCTOS: '/productos',
@@ -68,6 +87,9 @@ export const API_CONFIG = {
     
     // Notificaciones
     NOTIFICACIONES: '/notificaciones',
+    NOTIFICACIONES_PREFERENCIAS: '/notificaciones/preferences',
+    NOTIFICACIONES_DEVICES: '/notificaciones/devices',
+    NOTIFICACIONES_TEST: '/notificaciones/test',
     
     // Mensajes/Chat
     MENSAJES: '/mensajes',
@@ -75,6 +97,9 @@ export const API_CONFIG = {
     
     // Turnos
     TURNOS: '/turnos',
+
+    // Uploads
+    UPLOAD: '/upload',
     
     // Garaje
     GARAJES: '/garajes',
@@ -85,9 +110,6 @@ export const API_CONFIG = {
     // Presupuestos
     PRESUPUESTOS: '/presupuestos',
     
-    // Upload
-    UPLOAD: '/upload',
-
     // Caja
     CIERRE_CAJA: '/caja',
   }
@@ -108,14 +130,20 @@ export function buildUrl(endpoint: string): string {
  * Obtiene el token de autenticación almacenado
  */
 export function getAuthToken(): string | null {
+  const keys = ['auth_token', 'taller360_auth_token', 'token', 'access_token'] as const;
+
   // Intentar desde localStorage primero
-  const token = localStorage.getItem('auth_token');
-  if (token) return token;
-  
+  for (const k of keys) {
+    const token = localStorage.getItem(k);
+    if (token) return token;
+  }
+
   // Luego desde sessionStorage
-  const sessionToken = sessionStorage.getItem('auth_token');
-  if (sessionToken) return sessionToken;
-  
+  for (const k of keys) {
+    const token = sessionStorage.getItem(k);
+    if (token) return token;
+  }
+
   return null;
 }
 
@@ -125,8 +153,13 @@ export function getAuthToken(): string | null {
 export function setAuthToken(token: string, remember: boolean = false): void {
   if (remember) {
     localStorage.setItem('auth_token', token);
+    // Legacy compat keys (some flows stored token under 'token')
+    localStorage.setItem('token', token);
+    localStorage.setItem('taller360_auth_token', token);
   } else {
     sessionStorage.setItem('auth_token', token);
+    sessionStorage.setItem('token', token);
+    sessionStorage.setItem('taller360_auth_token', token);
   }
 }
 
@@ -136,6 +169,15 @@ export function setAuthToken(token: string, remember: boolean = false): void {
 export function clearAuthToken(): void {
   localStorage.removeItem('auth_token');
   sessionStorage.removeItem('auth_token');
+  localStorage.removeItem('token');
+  sessionStorage.removeItem('token');
+  localStorage.removeItem('access_token');
+  sessionStorage.removeItem('access_token');
+  localStorage.removeItem('taller360_auth_token');
+  sessionStorage.removeItem('taller360_auth_token');
+  // OAuth legacy
+  localStorage.removeItem('refreshToken');
+  sessionStorage.removeItem('refreshToken');
 }
 
 /**

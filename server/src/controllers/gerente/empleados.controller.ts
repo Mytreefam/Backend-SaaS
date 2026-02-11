@@ -5,6 +5,7 @@
 
 import { Request, Response } from 'express';
 import prisma from '../../prisma/client';
+import bcrypt from 'bcryptjs';
 
 /**
  * @swagger
@@ -102,29 +103,40 @@ export const obtenerEmpleadoPorId = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    // TODO: Implementar con Prisma cuando exista modelo Empleado
-    const empleado = {
-      id,
-      nombre: 'Carlos Ruiz',
-      email: 'carlos.ruiz@example.com',
-      telefono: '+34 612 345 678',
-      foto: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Carlos',
-      puesto: 'Panadero',
-      empresa_id: 'EMP-001',
-      punto_venta_id: 'PDV-001',
-      desempeño: 94,
-      horas_mes: '160h',
-      estado: 'activo',
-      fecha_alta: new Date('2024-01-15'),
-      horario_entrada: '09:00',
-      horario_salida: '17:00',
-      salario_base: 1800,
-      tareas_asignadas: 12,
-      tareas_completadas: 10,
-      fichajes_mes: 22
-    };
+    const empleadoId = Number(id);
+    if (!Number.isFinite(empleadoId)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
 
-    res.json(empleado);
+    const empleado = await prisma.empleado.findUnique({
+      where: { id: empleadoId },
+    });
+    if (!empleado) {
+      return res.status(404).json({ error: 'Empleado no encontrado' });
+    }
+
+    const startMonth = new Date();
+    startMonth.setDate(1);
+    startMonth.setHours(0, 0, 0, 0);
+
+    const [fichajesMes, tareasAsignadas, tareasCompletadas] = await Promise.all([
+      prisma.fichaje.count({
+        where: { empleadoId, fecha: { gte: startMonth } },
+      }),
+      prisma.tarea.count({
+        where: { empleadoId },
+      }),
+      prisma.tarea.count({
+        where: { empleadoId, estado: 'completada' },
+      }),
+    ]);
+
+    return res.json({
+      ...empleado,
+      tareasAsignadas,
+      tareasCompletadas,
+      fichajesMes,
+    });
   } catch (error) {
     console.error('Error al obtener empleado:', error);
     res.status(500).json({ error: 'Error al obtener empleado' });
@@ -194,7 +206,46 @@ export const crearEmpleado = async (req: Request, res: Response) => {
     }
 
     // Generar contraseña básica automática
-    const passwordBasica = 'udar2026';
+    const passwordBasica = String(req.body?.password || 'udar2026');
+    const passwordProvided = typeof req.body?.password === 'string' && req.body.password.trim().length > 0;
+    const passwordHash = await bcrypt.hash(passwordBasica, 12);
+
+    // Crear (o actualizar) identidad de login en `Cliente` para que pueda iniciar sesión como trabajador
+    // Nota: el sistema de auth actual usa `Cliente` para todos los roles.
+    const clienteExistente = await prisma.cliente.findUnique({ where: { email } });
+    if (!clienteExistente) {
+      await prisma.cliente.create({
+        data: {
+          codigo: `CLI-${Date.now()}`,
+          nombre: nombre.trim(),
+          email: email.trim(),
+          password: passwordHash,
+          telefono: telefono?.toString().trim() || null,
+          role: 'trabajador',
+          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${nombre.trim()}`,
+        },
+      });
+    } else {
+      // Evitar “convertir” un cliente real en trabajador sin intención explícita
+      if (clienteExistente.role === 'cliente') {
+        return res.status(400).json({ error: 'El email ya existe como cliente. Usa otro email para el empleado.' });
+      }
+      // Si ya existe, al menos garantizamos que tenga role trabajador/gerente/cliente coherente
+      // (no forzamos downgrade de gerente)
+      if (clienteExistente.role !== 'gerente') {
+        await prisma.cliente.update({
+          where: { id: clienteExistente.id },
+          data: {
+            role: 'trabajador',
+            nombre: clienteExistente.nombre || nombre.trim(),
+            telefono: clienteExistente.telefono || (telefono?.toString().trim() || null),
+            avatar: clienteExistente.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${nombre.trim()}`,
+            // Solo actualizar password si el gerente lo proveyó explícitamente
+            ...(passwordProvided ? { password: passwordHash } : {}),
+          },
+        });
+      }
+    }
 
     // Crear empleado
     const nuevoEmpleado = await prisma.empleado.create({
@@ -216,7 +267,10 @@ export const crearEmpleado = async (req: Request, res: Response) => {
     });
 
     console.log('✅ Empleado creado:', nuevoEmpleado.id);
-    res.status(201).json(nuevoEmpleado);
+    res.status(201).json({
+      ...nuevoEmpleado,
+      password: passwordBasica, // se devuelve solo para UI de alta rápida (no persistir en frontend)
+    });
   } catch (error) {
     console.error('❌ Error al crear empleado:', error);
     res.status(500).json({ error: 'Error al crear empleado' });
@@ -252,16 +306,42 @@ export const crearEmpleado = async (req: Request, res: Response) => {
 export const actualizarEmpleado = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const datosActualizados = req.body;
+    const empleadoId = Number(id);
+    if (!Number.isFinite(empleadoId)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
 
-    // TODO: Actualizar en base de datos
-    const empleadoActualizado = {
-      id,
-      ...datosActualizados,
-      fecha_modificacion: new Date()
-    };
+    // Whitelist para prevenir mass assignment
+    const allowed = [
+      'nombre',
+      'email',
+      'telefono',
+      'foto',
+      'puesto',
+      'empresaId',
+      'marcaId',
+      'puntoVentaId',
+      'horarioEntrada',
+      'horarioSalida',
+      'turno',
+      'salarioBase',
+      'estado',
+      'fechaBaja',
+    ] as const;
 
-    res.json(empleadoActualizado);
+    const data: any = {};
+    for (const key of allowed) {
+      if (Object.prototype.hasOwnProperty.call(req.body, key)) {
+        data[key] = (req.body as any)[key];
+      }
+    }
+
+    const updated = await prisma.empleado.update({
+      where: { id: empleadoId },
+      data,
+    });
+
+    return res.json(updated);
   } catch (error) {
     console.error('Error al actualizar empleado:', error);
     res.status(500).json({ error: 'Error al actualizar empleado' });
@@ -275,9 +355,17 @@ export const actualizarEmpleado = async (req: Request, res: Response) => {
 export const eliminarEmpleado = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const empleadoId = Number(id);
+    if (!Number.isFinite(empleadoId)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
 
-    // TODO: Soft delete - cambiar estado a 'inactivo'
-    res.json({ message: 'Empleado desactivado correctamente' });
+    const updated = await prisma.empleado.update({
+      where: { id: empleadoId },
+      data: { estado: 'inactivo', fechaBaja: new Date() },
+    });
+
+    return res.json({ ok: true, empleado: updated });
   } catch (error) {
     console.error('Error al eliminar empleado:', error);
     res.status(500).json({ error: 'Error al eliminar empleado' });
@@ -293,22 +381,53 @@ export const obtenerFichajesEmpleado = async (req: Request, res: Response) => {
     const { id } = req.params;
     const { fecha_inicio, fecha_fin } = req.query;
 
-    // TODO: Implementar con modelo Fichaje
-    const fichajes = [
-      {
-        id: 'F-001',
-        empleado_id: id,
-        tipo: 'entrada', // entrada, salida, descanso
-        fecha: new Date(),
-        hora: '09:05',
-        hora_teorica: '09:00',
-        diferencia_minutos: 5,
-        punto_venta_id: 'PDV-001',
-        validado: true
-      }
-    ];
+    const empleadoId = Number(id);
+    if (!Number.isFinite(empleadoId)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
 
-    res.json(fichajes);
+    const where: any = { empleadoId };
+    if (fecha_inicio || fecha_fin) {
+      where.fecha = {};
+      if (fecha_inicio) {
+        const inicio = new Date(fecha_inicio as string);
+        inicio.setUTCHours(0, 0, 0, 0);
+        where.fecha.gte = inicio;
+      }
+      if (fecha_fin) {
+        const fin = new Date(fecha_fin as string);
+        fin.setUTCHours(23, 59, 59, 999);
+        where.fecha.lte = fin;
+      }
+    }
+
+    const fichajes = await prisma.fichaje.findMany({
+      where,
+      include: {
+        empleado: { select: { id: true, nombre: true, puesto: true, foto: true } },
+      },
+      orderBy: { fecha: 'desc' },
+    });
+
+    const fichajesFormato = fichajes.map((f: any) => ({
+      id: f.id,
+      empleadoId: f.empleadoId,
+      empleadoNombre: f.empleado?.nombre,
+      empleadoPuesto: f.empleado?.puesto,
+      empleadoFoto: f.empleado?.foto || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(f.empleado?.nombre || 'Empleado')}`,
+      puntoVentaId: f.puntoVentaId,
+      puntoVentaNombre: f.puntoVentaId,
+      tipo: f.tipo,
+      fecha: f.fecha.toISOString().split('T')[0],
+      horaTeorica: f.horaTeorica,
+      horaReal: f.hora,
+      diferenciaMinutos: f.diferenciaMinutos,
+      validado: f.validado,
+      observaciones: f.observaciones,
+      creadoEn: f.creadoEn.toISOString(),
+    }));
+
+    return res.json(fichajesFormato);
   } catch (error) {
     console.error('Error al obtener fichajes:', error);
     res.status(500).json({ error: 'Error al obtener fichajes' });
@@ -410,20 +529,30 @@ export const asignarTarea = async (req: Request, res: Response) => {
       requiere_reporte
     } = req.body;
 
-    // TODO: Crear en tabla Tareas
-    const tarea = {
-      id: `T-${Date.now()}`,
-      empleado_id: id,
-      titulo,
-      descripcion,
-      prioridad,
-      fecha_limite,
-      requiere_reporte,
-      estado: 'pendiente',
-      fecha_asignacion: new Date()
-    };
+    const empleadoId = Number(id);
+    if (!Number.isFinite(empleadoId)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
+    if (!titulo) {
+      return res.status(400).json({ error: 'titulo requerido' });
+    }
 
-    res.status(201).json(tarea);
+    const asignadoPor = Number((req as any).user?.id || 0) || 0;
+    const tarea = await prisma.tarea.create({
+      data: {
+        empleadoId,
+        titulo: String(titulo),
+        descripcion: descripcion ? String(descripcion) : null,
+        prioridad: prioridad ? String(prioridad) : 'media',
+        estado: 'pendiente',
+        fechaLimite: fecha_limite ? new Date(String(fecha_limite)) : null,
+        requiereReporte: Boolean(requiere_reporte),
+        asignadoPor,
+        requiereAprobacion: false,
+      },
+    });
+
+    return res.status(201).json(tarea);
   } catch (error) {
     console.error('Error al asignar tarea:', error);
     res.status(500).json({ error: 'Error al asignar tarea' });
@@ -437,22 +566,44 @@ export const asignarTarea = async (req: Request, res: Response) => {
 export const obtenerDesempeño = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const empleadoId = Number(id);
+    if (!Number.isFinite(empleadoId)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
 
-    const desempeño = {
-      empleado_id: id,
-      puntuacion_global: 94,
-      puntualidad: 92,
-      productividad: 95,
-      calidad_trabajo: 96,
-      tareas_completadas: 48,
-      tareas_pendientes: 2,
-      horas_trabajadas_mes: 160,
-      horas_extra: 5,
-      incidencias: 1,
-      valoraciones_clientes: 4.8
-    };
+    const startMonth = new Date();
+    startMonth.setDate(1);
+    startMonth.setHours(0, 0, 0, 0);
 
-    res.json(desempeño);
+    const [tareasPendientes, tareasCompletadas, fichajes] = await Promise.all([
+      prisma.tarea.count({ where: { empleadoId, estado: { in: ['pendiente', 'en_progreso'] } } }),
+      prisma.tarea.count({ where: { empleadoId, estado: 'completada' } }),
+      prisma.fichaje.findMany({
+        where: { empleadoId, fecha: { gte: startMonth } },
+        select: { diferenciaMinutos: true },
+      }),
+    ]);
+
+    const diffs = fichajes.map((f) => Math.abs(f.diferenciaMinutos || 0));
+    const avgDiff = diffs.length ? diffs.reduce((a, b) => a + b, 0) / diffs.length : 0;
+    const puntualidad = Math.max(0, 100 - Math.min(100, avgDiff * 2)); // heuristic basada en retraso medio
+    const productividad = Math.min(100, tareasCompletadas * 2);
+    const calidad_trabajo = Math.min(100, 80 + Math.floor((tareasCompletadas / Math.max(1, tareasCompletadas + tareasPendientes)) * 20));
+    const puntuacion_global = Math.round((puntualidad + productividad + calidad_trabajo) / 3);
+
+    return res.json({
+      empleado_id: empleadoId,
+      puntuacion_global,
+      puntualidad: Math.round(puntualidad),
+      productividad: Math.round(productividad),
+      calidad_trabajo: Math.round(calidad_trabajo),
+      tareas_completadas: tareasCompletadas,
+      tareas_pendientes: tareasPendientes,
+      horas_trabajadas_mes: null,
+      horas_extra: null,
+      incidencias: 0,
+      valoraciones_clientes: null,
+    });
   } catch (error) {
     console.error('Error al obtener desempeño:', error);
     res.status(500).json({ error: 'Error al obtener desempeño' });
@@ -466,20 +617,38 @@ export const obtenerDesempeño = async (req: Request, res: Response) => {
 export const obtenerEstadisticasEquipo = async (req: Request, res: Response) => {
   try {
     const { empresa_id, punto_venta_id } = req.query;
+    const where: any = {};
+    if (empresa_id && empresa_id !== 'todas') where.empresaId = empresa_id;
+    if (punto_venta_id && punto_venta_id !== 'todas') where.puntoVentaId = punto_venta_id;
 
-    const estadisticas = {
-      total_empleados: 8,
-      empleados_activos: 8,
-      empleados_inactivos: 0,
-      desempeño_promedio: 91,
-      horas_totales_mes: 1280,
-      tareas_pendientes: 5,
-      tareas_completadas: 85,
-      fichajes_hoy: 8,
-      ausencias_mes: 2
-    };
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setUTCHours(23, 59, 59, 999);
 
-    res.json(estadisticas);
+    const [total, activos, inactivos, avgDesempeno, sumHorasMes, tareasPendientes, tareasCompletadas, fichajesHoy] =
+      await Promise.all([
+        prisma.empleado.count({ where }),
+        prisma.empleado.count({ where: { ...where, estado: 'activo' } }),
+        prisma.empleado.count({ where: { ...where, estado: 'inactivo' } }),
+        prisma.empleado.aggregate({ where, _avg: { desempeno: true } }),
+        prisma.empleado.aggregate({ where, _sum: { horasMes: true } }),
+        prisma.tarea.count({ where: { estado: { in: ['pendiente', 'en_progreso'] } } }),
+        prisma.tarea.count({ where: { estado: 'completada' } }),
+        prisma.fichaje.count({ where: { fecha: { gte: todayStart, lte: todayEnd } } }),
+      ]);
+
+    return res.json({
+      total_empleados: total,
+      empleados_activos: activos,
+      empleados_inactivos: inactivos,
+      desempeño_promedio: Math.round((avgDesempeno._avg.desempeno || 0) * 100) / 100,
+      horas_totales_mes: sumHorasMes._sum.horasMes || 0,
+      tareas_pendientes: tareasPendientes,
+      tareas_completadas: tareasCompletadas,
+      fichajes_hoy: fichajesHoy,
+      ausencias_mes: 0,
+    });
   } catch (error) {
     console.error('Error al obtener estadísticas:', error);
     res.status(500).json({ error: 'Error al obtener estadísticas' });
@@ -530,19 +699,21 @@ export const crearModificacionContrato = async (req: Request, res: Response) => 
       return res.status(400).json({ error: 'Fecha de inicio requerida' });
     }
 
-    // TODO: Guardar en BD con Prisma
-    const modificacion = {
-      id: `MOD-${Date.now()}`,
-      empleado_id: id,
-      fecha_inicio,
-      nuevo_salario,
-      nuevas_funciones,
-      motivo,
-      estado: 'registrado',
-      fecha_registro: new Date()
-    };
+    const empleadoId = Number(id);
+    if (!Number.isFinite(empleadoId)) return res.status(400).json({ error: 'ID inválido' });
 
-    res.status(201).json(modificacion);
+    const created = await prisma.empleadoModificacionContrato.create({
+      data: {
+        empleadoId,
+        fechaInicio: new Date(String(fecha_inicio)),
+        nuevoSalario: nuevo_salario != null ? Number(nuevo_salario) : null,
+        nuevasFunciones: nuevas_funciones ? String(nuevas_funciones) : null,
+        motivo: motivo ? String(motivo) : null,
+        estado: 'registrado',
+      },
+    });
+
+    res.status(201).json(created);
   } catch (error) {
     console.error('Error al crear modificación:', error);
     res.status(500).json({ error: 'Error al registrar modificación' });
@@ -590,17 +761,26 @@ export const crearFinalizacionContrato = async (req: Request, res: Response) => 
       return res.status(400).json({ error: 'Fecha de finalización requerida' });
     }
 
-    // TODO: Cambiar estado del empleado a 'inactivo' en BD
-    const finalizacion = {
-      id: `FIN-${Date.now()}`,
-      empleado_id: id,
-      fecha_finalizacion,
-      motivo,
-      estado: 'registrado',
-      fecha_registro: new Date()
-    };
+    const empleadoId = Number(id);
+    if (!Number.isFinite(empleadoId)) return res.status(400).json({ error: 'ID inválido' });
 
-    res.status(201).json(finalizacion);
+    const created = await prisma.$transaction(async (tx) => {
+      const fin = await tx.empleadoFinalizacionContrato.create({
+        data: {
+          empleadoId,
+          fechaFinalizacion: new Date(String(fecha_finalizacion)),
+          motivo: motivo ? String(motivo) : null,
+          estado: 'registrado',
+        },
+      });
+      await tx.empleado.update({
+        where: { id: empleadoId },
+        data: { estado: 'inactivo', fechaBaja: new Date(String(fecha_finalizacion)) },
+      });
+      return fin;
+    });
+
+    res.status(201).json(created);
   } catch (error) {
     console.error('Error al crear finalización:', error);
     res.status(500).json({ error: 'Error al registrar finalización' });
@@ -647,17 +827,19 @@ export const crearRemuneracion = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Motivo e importe requeridos' });
     }
 
-    // TODO: Guardar en BD con Prisma
-    const remuneracion = {
-      id: `REM-${Date.now()}`,
-      empleado_id: id,
-      motivo,
-      importe: parseFloat(importe),
-      estado: 'registrado',
-      fecha_registro: new Date()
-    };
+    const empleadoId = Number(id);
+    if (!Number.isFinite(empleadoId)) return res.status(400).json({ error: 'ID inválido' });
 
-    res.status(201).json(remuneracion);
+    const created = await prisma.empleadoRemuneracion.create({
+      data: {
+        empleadoId,
+        motivo: String(motivo),
+        importe: Number(importe),
+        estado: 'registrado',
+      },
+    });
+
+    res.status(201).json(created);
   } catch (error) {
     console.error('Error al crear remuneración:', error);
     res.status(500).json({ error: 'Error al registrar remuneración' });

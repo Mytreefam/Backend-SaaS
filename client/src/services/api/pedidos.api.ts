@@ -14,6 +14,21 @@ function isNotFoundMessage(message: string): boolean {
   return m.includes('no encontrado') || m.includes('not_found') || m.includes('not found');
 }
 
+function getLocalRole(): string | null {
+  try {
+    const raw = localStorage.getItem('user');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return typeof parsed?.role === 'string' ? parsed.role : null;
+  } catch {
+    return null;
+  }
+}
+
+function useGerenteEndpoints(): boolean {
+  return getLocalRole() === 'gerente';
+}
+
 // ============================================================================
 // TIPOS
 // ============================================================================
@@ -30,6 +45,7 @@ export interface PedidoCreate {
   tipoEntrega?: 'recogida' | 'domicilio';
   direccionEntrega?: string;
   metodoPago?: 'tarjeta' | 'efectivo' | 'bizum';
+  puntoVentaId?: string;
 }
 
 export interface Pedido {
@@ -38,6 +54,16 @@ export interface Pedido {
   fecha: string;
   estado: string;
   total: number;
+  tipoEntrega?: string | null;
+  direccionEntrega?: string | null;
+  metodoPago?: string | null;
+  puntoVentaId?: string | null;
+  cliente?: {
+    id: number;
+    nombre: string;
+    email?: string;
+    telefono?: string;
+  };
   items: Array<{
     id: number;
     pedidoId: number;
@@ -64,7 +90,8 @@ export const pedidosApi = {
    */
   async getAll(): Promise<Pedido[]> {
     try {
-      const response = await envelopedFetch<Pedido[]>(API_CONFIG.ENDPOINTS.PEDIDOS, {
+      const endpoint = useGerenteEndpoints() ? API_CONFIG.ENDPOINTS.PEDIDOS : '/trabajador/pedidos';
+      const response = await envelopedFetch<Pedido[]>(endpoint, {
         headers: API_CONFIG.HEADERS,
       });
 
@@ -124,7 +151,10 @@ export const pedidosApi = {
    */
   async update(id: string | number, data: Partial<Pedido>): Promise<Pedido | null> {
     try {
-      const response = await envelopedFetch<Pedido>(API_CONFIG.ENDPOINTS.PEDIDO_BY_ID(String(id)), {
+      const endpoint = useGerenteEndpoints()
+        ? API_CONFIG.ENDPOINTS.PEDIDO_BY_ID(String(id))
+        : `/trabajador/pedidos/${String(id)}`;
+      const response = await envelopedFetch<Pedido>(endpoint, {
         method: 'PUT',
         headers: API_CONFIG.HEADERS,
         body: JSON.stringify(data),
@@ -136,6 +166,25 @@ export const pedidosApi = {
     } catch (error) {
       console.error('Error al actualizar pedido:', error);
       toast.error('Error al actualizar pedido');
+      return null;
+    }
+  },
+
+  async cobrar(id: string | number): Promise<Pedido | null> {
+    try {
+      const endpoint = useGerenteEndpoints()
+        ? `${API_CONFIG.ENDPOINTS.PEDIDO_BY_ID(String(id))}/cobrar`
+        : `/trabajador/pedidos/${String(id)}/cobrar`;
+      const response = await envelopedFetch<Pedido>(endpoint, {
+        method: 'POST',
+        headers: API_CONFIG.HEADERS,
+      });
+      const pedido = response.data.data;
+      toast.success('Pedido cobrado');
+      return pedido || null;
+    } catch (error) {
+      console.error('Error al cobrar pedido:', error);
+      toast.error('Error al cobrar pedido');
       return null;
     }
   },

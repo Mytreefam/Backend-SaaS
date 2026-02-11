@@ -60,8 +60,8 @@ export const ebitdaApi = {
    * Obtener cuenta de resultados
    */
   async getCuentaResultados(params?: {
-    empresaId?: number;
-    puntoVentaId?: number;
+    empresaId?: string;
+    puntoVentaId?: string;
     fechaInicio?: string;
     fechaFin?: string;
   }): Promise<CuentaResultados | null> {
@@ -86,8 +86,8 @@ export const ebitdaApi = {
    * Obtener EBITDA del periodo
    */
   async getEBITDA(params?: {
-    empresaId?: number;
-    puntoVentaId?: number;
+    empresaId?: string;
+    puntoVentaId?: string;
     mes?: number;
     año?: number;
   }): Promise<{ebitda: number; margen: number; ingresos: number; gastos: number}> {
@@ -115,8 +115,8 @@ export const ebitdaApi = {
    * Obtener comparativa entre periodos
    */
   async getComparativa(params: {
-    empresaId?: number;
-    puntoVentaId?: number;
+    empresaId?: string;
+    puntoVentaId?: string;
     periodoActual: { inicio: string; fin: string };
     periodoAnterior: { inicio: string; fin: string };
   }): Promise<ComparativaEBITDA | null> {
@@ -178,8 +178,8 @@ export const ebitdaApi = {
    * Obtener histórico de EBITDA
    */
   async getHistoricoEBITDA(params?: {
-    empresaId?: number;
-    puntoVentaId?: number;
+    empresaId?: string;
+    puntoVentaId?: string;
     meses?: number;
   }): Promise<{mes: string; ebitda: number; margen: number}[]> {
     try {

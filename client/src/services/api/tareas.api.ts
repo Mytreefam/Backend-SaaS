@@ -6,6 +6,21 @@
 
 import { envelopedFetch } from '../http/envelopedFetch';
 
+function getLocalRole(): string | null {
+  try {
+    const raw = localStorage.getItem('user');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return typeof parsed?.role === 'string' ? parsed.role : null;
+  } catch {
+    return null;
+  }
+}
+
+function useGerenteEndpoints(): boolean {
+  return getLocalRole() === 'gerente';
+}
+
 // ============================================================================
 // TIPOS
 // ============================================================================
@@ -16,13 +31,18 @@ export interface TareaTrabajador {
   descripcion?: string;
   estado: 'pendiente' | 'en_progreso' | 'completada' | 'cancelada';
   prioridad: 'alta' | 'media' | 'baja';
-  tipo: 'operativa' | 'administrativa' | 'limpieza' | 'inventario' | 'otra';
+  tipo: 'operativa' | 'formacion' | 'administrativa' | 'limpieza' | 'inventario' | 'otra';
   empleadoId: number;
   empresaId: number;
   fechaCreacion: string;
   fechaLimite?: string;
   fechaCompletada?: string;
   notas?: string;
+  // Formación (opcional)
+  esFormacion?: boolean;
+  moduloFormacionId?: string;
+  duracionEstimada?: number;
+  urlRecurso?: string;
   empleado?: {
     id: number;
     nombre: string;
@@ -56,10 +76,11 @@ export const tareasApi = {
    */
   async getByEmpleadoId(empleadoId: number): Promise<TareaTrabajador[]> {
     try {
-      const response = await envelopedFetch<TareaTrabajador[]>(
-        `/gerente/operativa/tareas?empleadoId=${empleadoId}`,
-        { method: 'GET' },
-      );
+      const url = useGerenteEndpoints()
+        ? `/gerente/operativa/tareas?asignado_a_id=${empleadoId}`
+        : `/trabajador/tareas`;
+
+      const response = await envelopedFetch<TareaTrabajador[]>(url, { method: 'GET' });
       return response.data.data ?? [];
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
@@ -80,14 +101,12 @@ export const tareasApi = {
    */
   async getTareasHoy(empleadoId: number): Promise<TareaTrabajador[]> {
     try {
-      const tareas = await this.getByEmpleadoId(empleadoId);
       const hoy = new Date().toISOString().split('T')[0];
-      
-      return tareas.filter(t => 
-        t.estado !== 'completada' && 
-        t.estado !== 'cancelada' &&
-        (!t.fechaLimite || t.fechaLimite >= hoy)
-      );
+      const url = useGerenteEndpoints()
+        ? `/gerente/operativa/tareas?asignado_a_id=${empleadoId}`
+        : `/trabajador/tareas?fecha=${hoy}`;
+      const response = await envelopedFetch<TareaTrabajador[]>(url, { method: 'GET' });
+      return response.data.data ?? [];
     } catch (error) {
       console.error('Error al obtener tareas de hoy:', error);
       return [];
@@ -119,7 +138,10 @@ export const tareasApi = {
    */
   async update(id: number, data: TareaUpdate): Promise<TareaTrabajador | null> {
     try {
-      const response = await envelopedFetch<TareaTrabajador>(`/gerente/operativa/tareas/${id}`, {
+      const url = useGerenteEndpoints()
+        ? `/gerente/operativa/tareas/${id}`
+        : `/trabajador/tareas/${id}`;
+      const response = await envelopedFetch<TareaTrabajador>(url, {
         method: 'PUT',
         body: JSON.stringify(data),
       });
@@ -135,7 +157,10 @@ export const tareasApi = {
    */
   async completar(id: number): Promise<TareaTrabajador | null> {
     try {
-      const response = await envelopedFetch<TareaTrabajador>(`/gerente/operativa/tareas/${id}/completar`, {
+      const url = useGerenteEndpoints()
+        ? `/gerente/operativa/tareas/${id}/completar`
+        : `/trabajador/tareas/${id}/completar`;
+      const response = await envelopedFetch<TareaTrabajador>(url, {
         method: 'PUT',
         body: JSON.stringify({ estado: 'completada' }),
       });

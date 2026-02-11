@@ -22,10 +22,13 @@ import promocionRoutes from './routes/promocion';
 import cuponRoutes from './routes/cupon';
 import productoRoutes from './routes/producto';
 import turnoRoutes from './routes/turno';
+import puntoVentaRoutes from './routes/puntoVenta';
 import gerenteRoutes from './routes/gerente';
 import onboardingRoutes from './routes/onboarding';
 import cajaRoutes from './routes/caja';
+import trabajadorRoutes from './routes/trabajador';
 import healthRoutes from './routes/health';
+import publicRoutes from './routes/public';
 import { authenticate, requireAuth, requireRole } from './middleware/auth.middleware';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware';
 import { responseEnvelope } from './middleware/response.middleware';
@@ -106,6 +109,7 @@ app.use('/auth', authRoutes);
 // Public routes (as designed today)
 app.use('/clientes', clienteRoutes);
 app.use('/chats', chatRoutes);
+app.use('/public', publicRoutes);
 
 // Auth-required routes (ownership/role checks are applied at route level)
 app.use('/notificaciones', requireAuth, notificacionRoutes);
@@ -121,6 +125,7 @@ app.use('/cupones', requireAuth, cuponRoutes);
 app.use('/productos', requireAuth, productoRoutes);
 app.use('/upload', requireAuth, uploadRoutes);
 app.use('/turnos', requireAuth, turnoRoutes);
+app.use('/puntos-venta', requireAuth, puntoVentaRoutes);
 
 // Manager (RBAC enforced here)
 app.use('/gerente', requireAuth, requireRole('gerente'), gerenteRoutes);
@@ -129,6 +134,7 @@ app.use('/api/gerente', requireAuth, requireRole('gerente'), gerenteRoutes);
 
 app.use('/onboarding', requireAuth, requireRole('trabajador', 'gerente'), onboardingRoutes);
 app.use('/caja', requireAuth, requireRole('trabajador', 'gerente'), cajaRoutes);
+app.use('/trabajador', requireAuth, requireRole('trabajador', 'gerente'), trabajadorRoutes);
 
 // 404 + error handler (last)
 app.use(notFoundHandler);

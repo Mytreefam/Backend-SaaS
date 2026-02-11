@@ -2,9 +2,13 @@ import { envelopedFetch } from '../http/envelopedFetch';
 
 export interface NotificacionBackend {
   id: number;
+  titulo?: string | null;
+  tipo?: string | null;
+  prioridad?: string | null;
   mensaje: string;
   leida: boolean;
   clienteId: number;
+  creadoEn?: string;
 }
 
 export const notificacionesApi = {

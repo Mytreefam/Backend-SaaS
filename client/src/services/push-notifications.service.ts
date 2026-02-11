@@ -13,6 +13,7 @@ import { PushNotifications } from '@capacitor/push-notifications';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 import { toast } from 'sonner@2.0.3';
+import { notificationsService } from './notifications.service';
 
 // ============================================================================
 // TIPOS
@@ -381,25 +382,13 @@ export function getFCMToken(): string | null {
  */
 async function sendTokenToServer(token: string): Promise<void> {
   try {
-    // TODO: Conectar con API
     console.log('📤 Enviando token al servidor:', token);
     
-    // const response = await fetch('/api/devices/register', {
-    //   method: 'POST',
-    //   headers: {
-    //     'Content-Type': 'application/json',
-    //     'Authorization': `Bearer ${localStorage.getItem('token')}`,
-    //   },
-    //   body: JSON.stringify({
-    //     token,
-    //     platform: Capacitor.getPlatform(),
-    //     userId: getCurrentUserId(),
-    //   }),
-    // });
-    
-    // if (response.ok) {
-    //   console.log('✅ Token registrado en servidor');
-    // }
+    const ok = await notificationsService.registerDeviceToken({
+      token,
+      platform: Capacitor.getPlatform(),
+    });
+    if (ok) console.log('✅ Token registrado en servidor');
   } catch (error) {
     console.error('Error enviando token al servidor:', error);
   }

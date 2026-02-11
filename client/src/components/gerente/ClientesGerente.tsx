@@ -237,11 +237,7 @@ import { StatsCard } from '../ui/stats-card';
 import { SkeletonCard } from '../ui/skeleton-card';
 import { SkeletonList } from '../ui/skeleton-list';
 import { toast } from 'sonner';
-import { stockIngredientes } from '../../data/stock-ingredientes';
-import { promocionesDisponibles } from '../../data/promociones-disponibles';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
-import { productosPanaderia, type ProductoPanaderia } from '../../data/productos-panaderia';
-import { articulosStock, type ArticuloStock } from '../../data/articulos-stock';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { clientesApi } from '../../services/api/clientes.api';
 import { productosApi } from '../../services/api/productos.api';
@@ -1608,7 +1604,7 @@ export function ClientesGerente() {
   // Función para exportar productos filtrados
   const handleExportarProductosFiltrados = (formato: 'excel' | 'csv' | 'pdf') => {
     // Filtrar productos según búsquedas de tabla
-    let productosFiltrados = [...productosPanaderia];
+    let productosFiltrados = [...productosState];
 
     // Aplicar búsqueda por PRD
     if (busquedaPRD.trim()) {

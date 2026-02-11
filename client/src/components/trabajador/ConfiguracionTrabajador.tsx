@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
@@ -49,6 +49,8 @@ import {
 } from '../ui/collapsible';
 import { Badge } from '../ui/badge';
 import type { User as UserType } from '../../App';
+import { API_CONFIG } from '../../config/api.config';
+import { authApi, clientesApi, uploadsApi } from '../../services/api';
 
 interface ConfiguracionTrabajadorProps {
   user?: UserType;
@@ -64,8 +66,98 @@ export function ConfiguracionTrabajador({ user, onCambiarRol }: ConfiguracionTra
     { id: 3, nombre: 'Vida Laboral', tipo: 'application/pdf', fecha: '2024-02-28', size: '1.1 MB' },
   ]);
 
-  const handleGuardar = () => {
-    toast.success('Configuración guardada correctamente');
+  const [perfilNombre, setPerfilNombre] = useState<string>(user?.name || '');
+  const [perfilTelefono, setPerfilTelefono] = useState<string>('');
+  const [perfilEmail, setPerfilEmail] = useState<string>(user?.email || '');
+  const [perfilAvatar, setPerfilAvatar] = useState<string | null>(null);
+  const [guardandoPerfil, setGuardandoPerfil] = useState(false);
+
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [guardandoPassword, setGuardandoPassword] = useState(false);
+
+  const fileAvatarRef = useRef<HTMLInputElement | null>(null);
+
+  const resolveUrl = (url: string | null | undefined): string | undefined => {
+    if (!url) return undefined;
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    const base = API_CONFIG.BASE_URL.replace(/\/$/, '');
+    return `${base}${url.startsWith('/') ? '' : '/'}${url}`;
+  };
+
+  useEffect(() => {
+    const loadPerfil = async () => {
+      if (!user?.id) return;
+      const full = await clientesApi.getById(user.id);
+      if (!full) return;
+      setPerfilNombre(full.nombre || user.name);
+      setPerfilTelefono(full.telefono || '');
+      setPerfilEmail(full.email || user.email);
+      setPerfilAvatar(full.avatar || null);
+    };
+    loadPerfil();
+  }, [user?.id]);
+
+  const handleGuardar = async () => {
+    if (!user?.id) return;
+    try {
+      setGuardandoPerfil(true);
+      const updated = await clientesApi.update(user.id, {
+        nombre: perfilNombre,
+        telefono: perfilTelefono || undefined,
+        avatar: perfilAvatar,
+      });
+      if (!updated) throw new Error('No se pudo guardar');
+      toast.success('Configuración guardada correctamente');
+    } catch (error) {
+      console.error(error);
+      toast.error('Error al guardar configuración');
+    } finally {
+      setGuardandoPerfil(false);
+    }
+  };
+
+  const handleCambiarFotoPerfil = () => {
+    fileAvatarRef.current?.click();
+  };
+
+  const handleAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user?.id) return;
+    try {
+      const url = await uploadsApi.uploadImage(file);
+      setPerfilAvatar(url);
+      const updated = await clientesApi.update(user.id, { avatar: url });
+      if (!updated) throw new Error('No se pudo guardar avatar');
+      toast.success('Foto de perfil actualizada');
+    } catch (error) {
+      console.error(error);
+      toast.error('Error al actualizar foto');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const handleActualizarPassword = async () => {
+    if (!currentPassword || !newPassword) {
+      toast.error('Completa la contraseña actual y la nueva');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error('Las contraseñas no coinciden');
+      return;
+    }
+    try {
+      setGuardandoPassword(true);
+      const ok = await authApi.changePassword({ currentPassword, newPassword });
+      if (!ok) return;
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } finally {
+      setGuardandoPassword(false);
+    }
   };
 
   const handleCambiarRol = () => {
@@ -264,14 +356,15 @@ export function ConfiguracionTrabajador({ user, onCambiarRol }: ConfiguracionTra
               <div className="flex flex-col items-center gap-4 pb-6 border-b">
               <div className="relative">
                 <Avatar className="w-24 h-24">
-                  <AvatarImage src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHw1fHxtYW4lMjBwb3J0cmFpdHxlbnwwfHx8fDE3MzE2MTMyMDh8MA&ixlib=rb-4.0.3&q=80&w=200" />
+                  <AvatarImage src={resolveUrl(perfilAvatar) || undefined} />
                   <AvatarFallback className="bg-teal-100 text-teal-700 text-2xl">
-                    JP
+                    {(perfilNombre || user?.name || 'U').slice(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
+                <input ref={fileAvatarRef} type="file" className="hidden" accept="image/*" onChange={handleAvatarFile} />
                 <button
                   onClick={() => {
-                    toast.info('Abriendo selector de imagen...');
+                    handleCambiarFotoPerfil();
                   }}
                   className="absolute bottom-0 right-0 w-8 h-8 bg-teal-600 hover:bg-teal-700 rounded-full flex items-center justify-center text-white shadow-lg transition-colors"
                 >
@@ -279,12 +372,12 @@ export function ConfiguracionTrabajador({ user, onCambiarRol }: ConfiguracionTra
                 </button>
               </div>
               <div className="text-center">
-                <p className="font-medium text-gray-900">Juan Pérez</p>
-                <p className="text-sm text-gray-600">Panadero</p>
+                <p className="font-medium text-gray-900">{perfilNombre || user?.name || 'Usuario'}</p>
+                <p className="text-sm text-gray-600">Trabajador</p>
               </div>
               <Button
                 onClick={() => {
-                  toast.info('Selecciona una nueva foto de perfil');
+                  handleCambiarFotoPerfil();
                 }}
                 variant="outline"
                 size="sm"
@@ -303,7 +396,8 @@ export function ConfiguracionTrabajador({ user, onCambiarRol }: ConfiguracionTra
                   <Input 
                     id="nombre" 
                     placeholder="Juan Pérez" 
-                    defaultValue="Juan Pérez" 
+                    value={perfilNombre}
+                    onChange={(e) => setPerfilNombre(e.target.value)}
                     className="pl-10"
                   />
                 </div>
@@ -348,7 +442,8 @@ export function ConfiguracionTrabajador({ user, onCambiarRol }: ConfiguracionTra
                       id="telefono" 
                       type="tel" 
                       placeholder="+34 600 123 456" 
-                      defaultValue="+34 612 345 678"
+                      value={perfilTelefono}
+                      onChange={(e) => setPerfilTelefono(e.target.value)}
                       className="pl-10"
                     />
                   </div>
@@ -362,8 +457,10 @@ export function ConfiguracionTrabajador({ user, onCambiarRol }: ConfiguracionTra
                     <Input 
                       id="email" 
                       type="email" 
-                      placeholder="juan.perez@canfarines.com" 
-                      defaultValue="juan.perez@canfarines.com"
+                      placeholder="juan.perez@canfarines.com"
+                      value={perfilEmail}
+                      onChange={(e) => setPerfilEmail(e.target.value)}
+                      disabled
                       className="pl-10"
                     />
                   </div>
@@ -466,8 +563,12 @@ export function ConfiguracionTrabajador({ user, onCambiarRol }: ConfiguracionTra
 
             <div className="flex justify-end gap-2">
               <Button variant="outline">Cancelar</Button>
-              <Button onClick={handleGuardar} className="bg-teal-600 hover:bg-teal-700">
-                Guardar Cambios
+              <Button
+                onClick={handleGuardar}
+                disabled={guardandoPerfil}
+                className="bg-teal-600 hover:bg-teal-700"
+              >
+                {guardandoPerfil ? 'Guardando...' : 'Guardar Cambios'}
               </Button>
             </div>
           </CardContent>
@@ -830,17 +931,35 @@ export function ConfiguracionTrabajador({ user, onCambiarRol }: ConfiguracionTra
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="password-actual">Contraseña Actual</Label>
-                <Input id="password-actual" type="password" placeholder="••••••••" />
+                <Input
+                  id="password-actual"
+                  type="password"
+                  placeholder="••••••••"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="password-nueva">Nueva Contraseña</Label>
-                <Input id="password-nueva" type="password" placeholder="••••••••" />
+                <Input
+                  id="password-nueva"
+                  type="password"
+                  placeholder="••••••••"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="password-confirmar">Confirmar Nueva Contraseña</Label>
-                <Input id="password-confirmar" type="password" placeholder="••••••••" />
+                <Input
+                  id="password-confirmar"
+                  type="password"
+                  placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
               </div>
 
               <Separator />
@@ -874,8 +993,12 @@ export function ConfiguracionTrabajador({ user, onCambiarRol }: ConfiguracionTra
 
             <div className="flex justify-end gap-2">
               <Button variant="outline">Cancelar</Button>
-              <Button onClick={handleGuardar} className="bg-teal-600 hover:bg-teal-700">
-                Actualizar Contraseña
+              <Button
+                onClick={handleActualizarPassword}
+                disabled={guardandoPassword}
+                className="bg-teal-600 hover:bg-teal-700"
+              >
+                {guardandoPassword ? 'Actualizando...' : 'Actualizar Contraseña'}
               </Button>
             </div>
           </CardContent>

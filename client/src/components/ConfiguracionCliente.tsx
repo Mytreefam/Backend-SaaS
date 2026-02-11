@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -49,6 +49,9 @@ import { toast } from 'sonner';
 import { LegalLinks } from './legal/LegalLinks';
 import { NotificationPreferences } from './NotificationPreferences';
 import { MisDirecciones } from './cliente/MisDirecciones';
+import { authApi, clientesApi, uploadsApi, type AuthSession } from '../services/api';
+import { dispatchAuthExpired } from '../observability/authExpiry';
+import { API_CONFIG } from '../config/api.config';
 
 interface ConfiguracionClienteProps {
   user: UserType;
@@ -59,7 +62,25 @@ interface ConfiguracionClienteProps {
 export function ConfiguracionCliente({ user, onCambiarRol, onNavigateToChat }: ConfiguracionClienteProps) {
   const [eliminarCuentaModalOpen, setEliminarCuentaModalOpen] = useState(false);
   const [confirmacionEliminar, setConfirmacionEliminar] = useState('');
-  const [fotoPerfil, setFotoPerfil] = useState(user.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=Cliente');
+  const resolveAvatar = (value?: string | null) => {
+    if (!value) return 'https://api.dicebear.com/7.x/avataaars/svg?seed=Cliente';
+    if (/^https?:\/\//i.test(value)) return value;
+    if (value.startsWith('/')) return `${API_CONFIG.BASE_URL}${value}`;
+    return `${API_CONFIG.BASE_URL}/${value}`;
+  };
+  const [fotoPerfil, setFotoPerfil] = useState(resolveAvatar(user.avatar));
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [subiendoFoto, setSubiendoFoto] = useState(false);
+
+  const [cambiarPassOpen, setCambiarPassOpen] = useState(false);
+  const [passActual, setPassActual] = useState('');
+  const [passNueva, setPassNueva] = useState('');
+  const [passNueva2, setPassNueva2] = useState('');
+  const [cambiandoPass, setCambiandoPass] = useState(false);
+
+  const [sesionesOpen, setSesionesOpen] = useState(false);
+  const [sesiones, setSesiones] = useState<AuthSession[]>([]);
+  const [sesionesLoading, setSesionesLoading] = useState(false);
   const [isEmpresa, setIsEmpresa] = useState(false);
   const [infoAbierta, setInfoAbierta] = useState(false); // Cerrado por defecto
   const [direccionesAbierta, setDireccionesAbierta] = useState(false); // Cerrado por defecto
@@ -87,9 +108,116 @@ export function ConfiguracionCliente({ user, onCambiarRol, onNavigateToChat }: C
   };
 
   const handleCambiarFoto = () => {
-    // En una aplicación real, aquí se abriría un selector de archivos
-    toast.info('Selecciona una nueva foto de perfil');
-    console.log('[FOTO PERFIL] Abrir selector de archivos');
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelected = async (file?: File | null) => {
+    if (!file) return;
+    if (!user?.id) {
+      toast.error('No se pudo determinar el usuario');
+      return;
+    }
+    if (!file.type.startsWith('image/')) {
+      toast.error('Selecciona una imagen válida');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('La imagen es demasiado grande (máx 5MB)');
+      return;
+    }
+
+    setSubiendoFoto(true);
+    try {
+      const url = await uploadsApi.uploadImage(file);
+      const updated = await clientesApi.update(user.id, { avatar: url });
+      if (updated) {
+        // Store relative path in DB/localStorage; resolve absolute for UI
+        setFotoPerfil(resolveAvatar(url));
+        try {
+          const stored = localStorage.getItem('user');
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            localStorage.setItem('user', JSON.stringify({ ...parsed, avatar: url }));
+          }
+        } catch {}
+        toast.success('Foto de perfil actualizada');
+      } else {
+        toast.error('No se pudo guardar la foto de perfil');
+      }
+    } catch (e) {
+      console.error('Error subiendo foto:', e);
+      toast.error('No se pudo subir la foto');
+    } finally {
+      setSubiendoFoto(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleEliminarFoto = async () => {
+    if (!user?.id) return;
+    const fallback = 'https://api.dicebear.com/7.x/avataaars/svg?seed=Cliente';
+    try {
+      await clientesApi.update(user.id, { avatar: null as any });
+    } catch {
+      // ignore
+    }
+    setFotoPerfil(fallback);
+    try {
+      const stored = localStorage.getItem('user');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        localStorage.setItem('user', JSON.stringify({ ...parsed, avatar: null }));
+      }
+    } catch {}
+    toast.success('Foto de perfil eliminada');
+  };
+
+  const handleCambiarPassword = async () => {
+    if (!passActual || !passNueva || !passNueva2) {
+      toast.error('Completa todos los campos');
+      return;
+    }
+    if (passNueva !== passNueva2) {
+      toast.error('Las contraseñas no coinciden');
+      return;
+    }
+    if (passNueva.length < 8) {
+      toast.error('La nueva contraseña debe tener al menos 8 caracteres');
+      return;
+    }
+
+    setCambiandoPass(true);
+    try {
+      const ok = await authApi.changePassword({ currentPassword: passActual, newPassword: passNueva });
+      if (ok) {
+        setCambiarPassOpen(false);
+        setPassActual('');
+        setPassNueva('');
+        setPassNueva2('');
+        dispatchAuthExpired({ reason: 'password_changed' });
+      }
+    } finally {
+      setCambiandoPass(false);
+    }
+  };
+
+  const handleOpenSesiones = async () => {
+    setSesionesOpen(true);
+    setSesionesLoading(true);
+    try {
+      const list = await authApi.getSessions();
+      setSesiones(list);
+    } finally {
+      setSesionesLoading(false);
+    }
+  };
+
+  const handleCerrarSesiones = async () => {
+    const ok = await authApi.revokeAllSessions();
+    if (ok) {
+      // Access token may still exist; force safe re-login
+      dispatchAuthExpired({ reason: 'sessions_revoked' });
+    }
   };
 
   const handleCambiarRol = () => {
@@ -245,18 +373,17 @@ export function ConfiguracionCliente({ user, onCambiarRol, onNavigateToChat }: C
                       onClick={handleCambiarFoto}
                       variant="outline"
                       className="border-teal-600 text-teal-600 hover:bg-teal-50 h-9 sm:h-10 text-xs sm:text-sm"
+                      disabled={subiendoFoto}
                     >
                       <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
-                      <span className="hidden sm:inline">Subir nueva foto</span>
-                      <span className="sm:hidden">Subir foto</span>
+                      <span className="hidden sm:inline">{subiendoFoto ? 'Subiendo...' : 'Subir nueva foto'}</span>
+                      <span className="sm:hidden">{subiendoFoto ? 'Subiendo...' : 'Subir foto'}</span>
                     </Button>
                     <Button 
                       variant="outline"
-                      onClick={() => {
-                        setFotoPerfil('https://api.dicebear.com/7.x/avataaars/svg?seed=Cliente');
-                        toast.success('Foto de perfil eliminada');
-                      }}
+                      onClick={handleEliminarFoto}
                       className="h-9 sm:h-10 text-xs sm:text-sm"
+                      disabled={subiendoFoto}
                     >
                       <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
                       Eliminar
@@ -264,6 +391,14 @@ export function ConfiguracionCliente({ user, onCambiarRol, onNavigateToChat }: C
                   </div>
                 </div>
               </div>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => handleFileSelected(e.target.files?.[0])}
+              />
             </CardContent>
           </Card>
 
@@ -397,7 +532,7 @@ export function ConfiguracionCliente({ user, onCambiarRol, onNavigateToChat }: C
               </CardHeader>
               <CollapsibleContent>
                 <CardContent className="p-0 sm:p-0">
-                  <MisDirecciones />
+                  <MisDirecciones clienteId={user.id} />
                 </CardContent>
               </CollapsibleContent>
             </Collapsible>
@@ -423,7 +558,13 @@ export function ConfiguracionCliente({ user, onCambiarRol, onNavigateToChat }: C
                       <p className="text-xs sm:text-sm text-gray-600">Actualiza tu contraseña regularmente</p>
                     </div>
                   </div>
-                  <Button variant="outline" className="w-full sm:w-auto h-9 text-sm">Cambiar</Button>
+                  <Button
+                    variant="outline"
+                    className="w-full sm:w-auto h-9 text-sm"
+                    onClick={() => setCambiarPassOpen(true)}
+                  >
+                    Cambiar
+                  </Button>
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 sm:p-4 border rounded-lg">
@@ -445,7 +586,7 @@ export function ConfiguracionCliente({ user, onCambiarRol, onNavigateToChat }: C
                       <p className="text-xs sm:text-sm text-gray-600">Gestiona los dispositivos con acceso</p>
                     </div>
                   </div>
-                  <Button variant="outline" className="w-full sm:w-auto h-9 text-sm">
+                  <Button variant="outline" className="w-full sm:w-auto h-9 text-sm" onClick={handleOpenSesiones}>
                     <span className="hidden sm:inline">Ver Sesiones</span>
                     <span className="sm:hidden">Ver</span>
                   </Button>
@@ -694,6 +835,121 @@ export function ConfiguracionCliente({ user, onCambiarRol, onNavigateToChat }: C
               className="w-full sm:w-auto h-9 sm:h-10 text-sm"
             >
               Eliminar Cuenta
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Cambiar Contraseña */}
+      <Dialog open={cambiarPassOpen} onOpenChange={setCambiarPassOpen}>
+        <DialogContent className="max-w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader className="space-y-2 sm:space-y-3">
+            <DialogTitle className="text-sm sm:text-base md:text-lg">Cambiar contraseña</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">
+              Introduce tu contraseña actual y define una nueva.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 sm:space-y-4 py-2">
+            <div className="space-y-1.5 sm:space-y-2">
+              <Label htmlFor="pass-actual" className="text-xs sm:text-sm">Contraseña actual</Label>
+              <Input
+                id="pass-actual"
+                type="password"
+                value={passActual}
+                onChange={(e) => setPassActual(e.target.value)}
+                className="h-9 sm:h-10 text-sm"
+              />
+            </div>
+            <div className="space-y-1.5 sm:space-y-2">
+              <Label htmlFor="pass-nueva" className="text-xs sm:text-sm">Nueva contraseña</Label>
+              <Input
+                id="pass-nueva"
+                type="password"
+                value={passNueva}
+                onChange={(e) => setPassNueva(e.target.value)}
+                className="h-9 sm:h-10 text-sm"
+              />
+            </div>
+            <div className="space-y-1.5 sm:space-y-2">
+              <Label htmlFor="pass-nueva2" className="text-xs sm:text-sm">Confirmar nueva contraseña</Label>
+              <Input
+                id="pass-nueva2"
+                type="password"
+                value={passNueva2}
+                onChange={(e) => setPassNueva2(e.target.value)}
+                className="h-9 sm:h-10 text-sm"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setCambiarPassOpen(false)}
+              disabled={cambiandoPass}
+              className="w-full sm:w-auto h-9 sm:h-10 text-sm"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleCambiarPassword}
+              disabled={cambiandoPass}
+              className="w-full sm:w-auto h-9 sm:h-10 text-sm bg-teal-600 hover:bg-teal-700"
+            >
+              {cambiandoPass ? 'Guardando...' : 'Guardar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Sesiones Activas */}
+      <Dialog open={sesionesOpen} onOpenChange={setSesionesOpen}>
+        <DialogContent className="max-w-[95vw] sm:max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader className="space-y-2 sm:space-y-3">
+            <DialogTitle className="text-sm sm:text-base md:text-lg">Sesiones activas</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">
+              Lista de sesiones (refresh tokens) activas. Puedes cerrar todas si detectas actividad sospechosa.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 py-2">
+            {sesionesLoading ? (
+              <div className="text-sm text-gray-600">Cargando sesiones...</div>
+            ) : sesiones.length === 0 ? (
+              <div className="text-sm text-gray-600">No hay sesiones activas.</div>
+            ) : (
+              <div className="space-y-2">
+                {sesiones.map((s) => (
+                  <div key={s.id} className="border rounded-lg p-3">
+                    <div className="text-sm text-gray-900">Sesión #{s.id}</div>
+                    <div className="text-xs text-gray-600 break-words">
+                      {s.userAgent || 'User-Agent desconocido'}
+                    </div>
+                    <div className="text-xs text-gray-600">
+                      IP: {s.ip || '—'} · Creada: {new Date(s.createdAt).toLocaleString()} · Expira: {new Date(s.expiresAt).toLocaleString()}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setSesionesOpen(false)}
+              className="w-full sm:w-auto h-9 sm:h-10 text-sm"
+            >
+              Cerrar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleCerrarSesiones}
+              className="w-full sm:w-auto h-9 sm:h-10 text-sm"
+              disabled={sesionesLoading}
+            >
+              Cerrar todas las sesiones
             </Button>
           </DialogFooter>
         </DialogContent>

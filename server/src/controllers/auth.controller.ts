@@ -114,3 +114,32 @@ export const logout = async (req: Request, res: Response) => {
     return res.status(200).json({ success: true, data: { ok: true }, ok: true });
   }
 };
+
+export const changePassword = async (req: any, res: Response) => {
+  if (!req.user) return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
+  const { currentPassword, newPassword } = req.body || {};
+
+  try {
+    const ok = await AuthService.changePassword({
+      clienteId: Number(req.user.id),
+      currentPassword,
+      newPassword,
+    });
+    if (!ok) return res.status(400).json({ success: false, error: 'INVALID_CREDENTIALS' });
+    return res.status(200).json({ success: true, data: { ok: true }, ok: true });
+  } catch {
+    return res.status(500).json({ success: false, error: 'CHANGE_PASSWORD_FAILED' });
+  }
+};
+
+export const listSessions = async (req: any, res: Response) => {
+  if (!req.user) return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
+  const sessions = await AuthService.listSessions({ clienteId: Number(req.user.id) });
+  return res.status(200).json({ success: true, data: { sessions } });
+};
+
+export const revokeAllSessions = async (req: any, res: Response) => {
+  if (!req.user) return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
+  const result = await AuthService.revokeAllSessions({ clienteId: Number(req.user.id) });
+  return res.status(200).json({ success: true, data: result });
+};

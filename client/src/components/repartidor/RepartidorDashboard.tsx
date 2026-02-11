@@ -13,7 +13,7 @@
  * - KPIs del repartidor
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -40,14 +40,7 @@ import {
 import { toast } from 'sonner@2.0.3';
 import { usePuntoVentaActivo } from '../../hooks/usePuntoVentaActivo';
 import { EscanerQR } from '../pedidos/EscanerQR';
-import { 
-  obtenerPedido,
-  marcarEnReparto,
-  marcarEntregado,
-  obtenerPedidosPendientesReparto,
-  type Pedido,
-  type OrigenPedido
-} from '../../services/pedidos.service';
+import { pedidosApi, type Pedido } from '../../services/api';
 
 export function RepartidorDashboard() {
   const { puntoVentaId, puntoVentaNombre, fichado } = usePuntoVentaActivo();
@@ -55,10 +48,6 @@ export function RepartidorDashboard() {
   const [modalEscanear, setModalEscanear] = useState(false);
   const [pedidoSeleccionado, setPedidoSeleccionado] = useState<Pedido | null>(null);
   const [modalDetalle, setModalDetalle] = useState(false);
-
-  // ID del repartidor (en producción vendría del usuario logueado)
-  const repartidorId = 'REPARTIDOR-001';
-  const repartidorNombre = 'Juan Repartidor';
 
   useEffect(() => {
     if (fichado && puntoVentaId) {
@@ -74,22 +63,18 @@ export function RepartidorDashboard() {
     return () => clearInterval(interval);
   }, [fichado]);
 
-  const cargarPedidos = () => {
+  const cargarPedidos = useCallback(async () => {
     if (!puntoVentaId) return;
 
-    // Obtener pedidos pendientes de reparto
-    const pendientes = obtenerPedidosPendientesReparto(puntoVentaId);
-    
-    // Filtrar los que están asignados a este repartidor o en camino
-    const asignados = pendientes.filter(p => 
-      p.repartidorId === repartidorId || p.estadoEntrega === 'en_camino'
-    );
+    // Backend: no existe asignación nativa de repartidor todavía.
+    // Mostramos pedidos a domicilio listos para entregar.
+    const all = await pedidosApi.getAll();
+    const domicilioListos = all.filter((p) => String(p.tipoEntrega || '') === 'domicilio' && p.estado === 'listo');
+    setPedidosAsignados(domicilioListos);
+  }, [puntoVentaId]);
 
-    setPedidosAsignados(asignados);
-  };
-
-  const handleEscaneoExitoso = (datos: any) => {
-    const pedido = obtenerPedido(datos.pedidoId);
+  const handleEscaneoExitoso = async (datos: any) => {
+    const pedido = await pedidosApi.getById(datos.pedidoId);
     
     if (!pedido) {
       toast.error('Pedido no encontrado');
@@ -98,22 +83,17 @@ export function RepartidorDashboard() {
     }
 
     // Verificar que el pedido esté listo para reparto
-    if (pedido.estadoEntrega !== 'listo') {
+    if (pedido.estado !== 'listo') {
       toast.error('Este pedido no está listo para reparto');
       setModalEscanear(false);
       return;
     }
 
-    // Marcar como en reparto
-    const resultado = marcarEnReparto(pedido.id, repartidorId, repartidorNombre);
-    
-    if (resultado) {
-      toast.success('Pedido asignado correctamente', {
-        description: `Pedido #${pedido.numero} - ${pedido.cliente.nombre}`,
-      });
-      setModalEscanear(false);
-      cargarPedidos();
-    }
+    toast.success('Pedido asignado correctamente', {
+      description: `Pedido #${pedido.id} - ${pedido.cliente?.nombre || 'Cliente'}`,
+    });
+    setModalEscanear(false);
+    cargarPedidos();
   };
 
   const handleVerDetalle = (pedido: Pedido) => {
@@ -136,9 +116,9 @@ export function RepartidorDashboard() {
     toast.success('Navegación iniciada');
   };
 
-  const handleMarcarEntregado = (pedido: Pedido) => {
+  const handleMarcarEntregado = async (pedido: Pedido) => {
     // Si es pago en efectivo, confirmar cobro
-    if (pedido.pagoEnEfectivo) {
+    if (pedido.metodoPago === 'efectivo') {
       const confirmar = window.confirm(
         `¿Confirmas que has cobrado ${pedido.total.toFixed(2)}€ en efectivo?`
       );
@@ -146,16 +126,17 @@ export function RepartidorDashboard() {
       if (!confirmar) return;
     }
 
-    const resultado = marcarEntregado(pedido.id, repartidorId);
-    
-    if (resultado) {
-      toast.success('Pedido marcado como entregado', {
-        description: `Pedido #${pedido.numero}`,
-      });
-      cargarPedidos();
-      setModalDetalle(false);
-      setPedidoSeleccionado(null);
+    const updated = await pedidosApi.update(pedido.id, { estado: 'entregado' });
+    if (!updated) {
+      toast.error('No se pudo marcar como entregado');
+      return;
     }
+    toast.success('Pedido marcado como entregado', {
+      description: `Pedido #${pedido.id}`,
+    });
+    cargarPedidos();
+    setModalDetalle(false);
+    setPedidoSeleccionado(null);
   };
 
   // Si no está fichado
@@ -178,9 +159,9 @@ export function RepartidorDashboard() {
   }
 
   // Calcular estadísticas
-  const pedidosEnCamino = pedidosAsignados.filter(p => p.estadoEntrega === 'en_camino').length;
+  const pedidosEnCamino = pedidosAsignados.length;
   const totalACobrar = pedidosAsignados
-    .filter(p => p.pagoEnEfectivo && p.estadoPago === 'pendiente_cobro')
+    .filter((p) => p.metodoPago === 'efectivo')
     .reduce((sum, p) => sum + p.total, 0);
 
   return (

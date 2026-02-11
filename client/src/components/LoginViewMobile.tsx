@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import { ACTIVE_TENANT } from '../config/tenant.config';
+import { setAuthToken } from '../config/api.config';
 import {
   signInWithGoogle,
   signInWithFacebook,
@@ -209,9 +210,11 @@ export function LoginViewMobile({ onLogin }: LoginViewMobileProps) {
       // Enviar token al backend y obtener JWT
       const { token, refreshToken } = await sendOAuthTokenToBackend(oauthUser);
       
-      // Guardar tokens
-      localStorage.setItem('token', token);
-      localStorage.setItem('refreshToken', refreshToken);
+      // Guardar tokens (compat con envelopedFetch)
+      setAuthToken(token, true);
+      if (refreshToken) {
+        localStorage.setItem('refreshToken', refreshToken);
+      }
 
       // Convertir a User de la app
       const user: UserType = {

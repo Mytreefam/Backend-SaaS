@@ -57,6 +57,7 @@ import { ModalEntregarPedido } from './trabajador/ModalEntregarPedido';
 import { RepartidorDashboard } from './repartidor/RepartidorDashboard';
 import type { User } from '../App';
 import { toast } from 'sonner@2.0.3';
+import { tareasApi, notificacionesApi } from '../services/api';
 
 interface TrabajadorDashboardProps {
   user: User;
@@ -83,9 +84,42 @@ export function TrabajadorDashboard({ user, onLogout, onCambiarRol }: Trabajador
   const [showModalEntregarPedido, setShowModalEntregarPedido] = useState(false);
 
   // Badges
-  const tareasPendientes = 5;
-  const mensajesNoLeidos = 3;
-  const cursosPendientes = 2;
+  const [tareasPendientes, setTareasPendientes] = useState(0);
+  const [mensajesNoLeidos] = useState(0); // TODO: conectar a chatApi cuando exista endpoint de unread
+  const [cursosPendientes, setCursosPendientes] = useState(0);
+  const [notificacionesNoLeidas, setNotificacionesNoLeidas] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const empleadoId = Number(user.id);
+    if (!Number.isFinite(empleadoId)) return;
+    const load = async () => {
+      try {
+        const [tareas, notifs] = await Promise.all([
+          tareasApi.getByEmpleadoId(empleadoId),
+          notificacionesApi.getAll(),
+        ]);
+        if (cancelled) return;
+        const pendientes = (tareas || []).filter((t) => t.estado !== 'completada' && t.estado !== 'cancelada').length;
+        setTareasPendientes(pendientes);
+        const cursos = (tareas || []).filter((t: any) => t.tipo === 'formacion' || Boolean(t.esFormacion)).filter((t) => t.estado !== 'completada')
+          .length;
+        setCursosPendientes(cursos);
+        const unread = (notifs || []).filter((n) => !n.leida).length;
+        setNotificacionesNoLeidas(unread);
+      } catch {
+        if (!cancelled) {
+          setTareasPendientes(0);
+          setCursosPendientes(0);
+          setNotificacionesNoLeidas(0);
+        }
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [user.id]);
 
   // Callback para recibir notificación de cambios en el fichaje
   const handleFichajeChange = (fichado: boolean) => {
@@ -410,9 +444,9 @@ export function TrabajadorDashboard({ user, onLogout, onCambiarRol }: Trabajador
                   className="relative min-w-[44px] min-h-[44px] p-0 flex items-center justify-center"
                 >
                   <Bell className="w-5 h-5" />
-                  {tareasPendientes > 0 && (
+                  {notificacionesNoLeidas > 0 && (
                     <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center px-1">
-                      {tareasPendientes > 9 ? '9+' : tareasPendientes}
+                      {notificacionesNoLeidas > 9 ? '9+' : notificacionesNoLeidas}
                     </span>
                   )}
                 </Button>

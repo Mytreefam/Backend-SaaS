@@ -73,6 +73,12 @@ export const createFactura = async (req: any, res: any) => {
     notas: req.body?.notas ?? null,
   };
 
+  // Ensure required unique "numero"
+  if (!payload.numero) {
+    const yyyy = new Date().getFullYear();
+    payload.numero = `FAC-${yyyy}-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  }
+
   if (req.user.role === 'gerente' && req.body?.clienteId) {
     payload.clienteId = Number(req.body.clienteId);
   } else {

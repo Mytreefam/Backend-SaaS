@@ -45,7 +45,7 @@ router.put(
       nombre: z.string().min(1).optional(),
       email: z.string().email().optional(),
       telefono: z.string().min(3).optional(),
-      avatar: z.string().min(1).optional(),
+      avatar: z.string().min(1).nullable().optional(),
       ciudad: z.string().min(1).optional(),
       idioma: z.string().min(1).optional(),
       // role/password changes disallowed here
@@ -148,6 +148,168 @@ router.get('/:id/turno-activo', requireClientOwnership, async (req, res) => {
 		res.status(500).json({ error: 'Error consultando turno' });
 	}
 });
+
+// ============================================
+// DIRECCIONES (Entrega)
+// ============================================
+router.get(
+  '/:id/direcciones',
+  requireClientOwnership,
+  validate({ params: z.object({ id: z.string().min(1) }) }),
+  async (req, res) => {
+    const clienteId = Number(req.params.id);
+    const direcciones = await prisma.direccion.findMany({
+      where: { clienteId },
+      orderBy: [{ esPredeterminada: 'desc' }, { fechaCreacion: 'desc' }],
+    });
+    res.json(direcciones);
+  },
+);
+
+router.post(
+  '/:id/direcciones',
+  requireClientOwnership,
+  validate({
+    params: z.object({ id: z.string().min(1) }),
+    body: z.object({
+      tipo: z.enum(['casa', 'trabajo', 'otro']).optional(),
+      alias: z.string().min(1).optional(),
+      calle: z.string().min(1),
+      numero: z.string().min(1),
+      piso: z.string().min(1).optional(),
+      puerta: z.string().min(1).optional(),
+      codigoPostal: z.string().min(3),
+      ciudad: z.string().min(1),
+      provincia: z.string().min(1).optional(),
+      pais: z.string().min(1).optional(),
+      notas: z.string().min(1).optional(),
+      latitud: z.number().optional(),
+      longitud: z.number().optional(),
+      esPredeterminada: z.boolean().optional(),
+    }),
+  }),
+  async (req, res) => {
+    const clienteId = Number(req.params.id);
+
+    const existingCount = await prisma.direccion.count({ where: { clienteId } });
+    const makeDefault = Boolean(req.body.esPredeterminada) || existingCount === 0;
+
+    const data = {
+      clienteId,
+      tipo: req.body.tipo ?? 'casa',
+      alias: req.body.alias,
+      calle: req.body.calle,
+      numero: req.body.numero,
+      piso: req.body.piso,
+      puerta: req.body.puerta,
+      codigoPostal: req.body.codigoPostal,
+      ciudad: req.body.ciudad,
+      provincia: req.body.provincia ?? req.body.ciudad,
+      pais: req.body.pais ?? 'España',
+      notas: req.body.notas,
+      latitud: req.body.latitud,
+      longitud: req.body.longitud,
+      esPredeterminada: makeDefault,
+    };
+
+    const created = await prisma.$transaction(async (tx) => {
+      if (makeDefault) {
+        await tx.direccion.updateMany({
+          where: { clienteId },
+          data: { esPredeterminada: false },
+        });
+      }
+      return tx.direccion.create({ data });
+    });
+
+    res.status(201).json(created);
+  },
+);
+
+router.put(
+  '/:id/direcciones/:direccionId',
+  requireClientOwnership,
+  validate({
+    params: z.object({ id: z.string().min(1), direccionId: z.string().min(1) }),
+    body: z.object({
+      tipo: z.enum(['casa', 'trabajo', 'otro']).optional(),
+      alias: z.string().optional(),
+      calle: z.string().min(1).optional(),
+      numero: z.string().min(1).optional(),
+      piso: z.string().optional(),
+      puerta: z.string().optional(),
+      codigoPostal: z.string().min(3).optional(),
+      ciudad: z.string().min(1).optional(),
+      provincia: z.string().optional(),
+      pais: z.string().optional(),
+      notas: z.string().optional(),
+      latitud: z.number().optional(),
+      longitud: z.number().optional(),
+      esPredeterminada: z.boolean().optional(),
+    }),
+  }),
+  async (req, res) => {
+    const clienteId = Number(req.params.id);
+    const direccionId = Number(req.params.direccionId);
+
+    const existing = await prisma.direccion.findUnique({ where: { id: direccionId } });
+    if (!existing || existing.clienteId !== clienteId) {
+      return res.status(404).json({ error: 'No encontrado' });
+    }
+
+    const makeDefault = req.body.esPredeterminada === true;
+
+    const updated = await prisma.$transaction(async (tx) => {
+      if (makeDefault) {
+        await tx.direccion.updateMany({
+          where: { clienteId },
+          data: { esPredeterminada: false },
+        });
+      }
+
+      return tx.direccion.update({
+        where: { id: direccionId },
+        data: {
+          tipo: req.body.tipo,
+          alias: req.body.alias,
+          calle: req.body.calle,
+          numero: req.body.numero,
+          piso: req.body.piso,
+          puerta: req.body.puerta,
+          codigoPostal: req.body.codigoPostal,
+          ciudad: req.body.ciudad,
+          provincia: req.body.provincia,
+          pais: req.body.pais,
+          notas: req.body.notas,
+          latitud: req.body.latitud,
+          longitud: req.body.longitud,
+          esPredeterminada: makeDefault ? true : undefined,
+          fechaUltimoUso: new Date(),
+        },
+      });
+    });
+
+    res.json(updated);
+  },
+);
+
+router.delete(
+  '/:id/direcciones/:direccionId',
+  requireClientOwnership,
+  validate({ params: z.object({ id: z.string().min(1), direccionId: z.string().min(1) }) }),
+  async (req, res) => {
+    const clienteId = Number(req.params.id);
+    const direccionId = Number(req.params.direccionId);
+
+    const existing = await prisma.direccion.findUnique({ where: { id: direccionId } });
+    if (!existing || existing.clienteId !== clienteId) {
+      return res.status(404).json({ error: 'No encontrado' });
+    }
+
+    await prisma.direccion.delete({ where: { id: direccionId } });
+    res.status(204).end();
+  },
+);
 
 
 export default router;

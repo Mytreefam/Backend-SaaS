@@ -67,6 +67,7 @@ export function GestionHorarios({ gerenteId, gerenteNombre }: GestionHorariosPro
   const [activeTab, setActiveTab] = useState('horarios');
   const [horarios, setHorarios] = useState<Horario[]>([]);
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
+  const [solicitudes, setSolicitudes] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
   // Estados para crear horario
@@ -95,18 +96,33 @@ export function GestionHorarios({ gerenteId, gerenteNombre }: GestionHorariosPro
   const cargarDatos = async () => {
     setLoading(true);
     try {
-      const [horariosData, empleadosData] = await Promise.all([
+      const [horariosData, empleadosData, solicitudesData] = await Promise.all([
         gerenteApi.horarios.obtenerHorarios('EMP-001'),
-        gerenteApi.empleados.obtenerEmpleados()
+        gerenteApi.empleados.obtenerEmpleados(),
+        gerenteApi.horarios.obtenerSolicitudesCambioHorario({ estado: 'pendiente' }),
       ]);
       
       setHorarios(horariosData || []);
       setEmpleados(empleadosData || []);
+      setSolicitudes(Array.isArray(solicitudesData) ? solicitudesData : []);
     } catch (error) {
       console.error('Error al cargar datos:', error);
       toast.error('Error al cargar los datos');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResolverSolicitud = async (solicitudId: number, estado: 'aprobada' | 'rechazada') => {
+    try {
+      await gerenteApi.horarios.resolverSolicitudCambioHorario(solicitudId, {
+        estado,
+      });
+      toast.success(`Solicitud ${estado === 'aprobada' ? 'aprobada' : 'rechazada'} correctamente`);
+      cargarDatos();
+    } catch (error) {
+      console.error('Error al resolver solicitud:', error);
+      toast.error('Error al resolver la solicitud');
     }
   };
 
@@ -191,7 +207,7 @@ export function GestionHorarios({ gerenteId, gerenteNombre }: GestionHorariosPro
 
   // Calcs estadisticas
   const turnosConfirmados = horarios.filter(h => h.activo).length;
-  const turnosPendientes = 0; // Por ahora
+  const turnosPendientes = solicitudes.length;
   const totalTurnos = horarios.length;
 
   return (
@@ -203,7 +219,7 @@ export function GestionHorarios({ gerenteId, gerenteNombre }: GestionHorariosPro
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Solicitudes Totales</p>
-                <p className="text-2xl font-bold">2</p>
+                <p className="text-2xl font-bold">{solicitudes.length}</p>
               </div>
               <AlertCircle className="w-8 h-8 text-gray-400" />
             </div>
@@ -352,10 +368,49 @@ export function GestionHorarios({ gerenteId, gerenteNombre }: GestionHorariosPro
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-12">
-                <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600">No hay solicitudes pendientes</p>
-              </div>
+              {loading ? (
+                <div className="text-center py-12">
+                  <p className="text-gray-600">Cargando solicitudes...</p>
+                </div>
+              ) : solicitudes.length === 0 ? (
+                <div className="text-center py-12">
+                  <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600">No hay solicitudes pendientes</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {solicitudes.map((s: any) => (
+                    <div key={s.id} className="p-3 border rounded-lg flex items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <p className="font-medium">
+                          {s.empleado?.nombre || 'Empleado'} — {s.tipo}
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          {new Date(s.fechaSolicitada).toLocaleDateString()} · {s.motivoSolicitud}
+                        </p>
+                        {s.detalles ? (
+                          <p className="text-sm text-gray-600">{s.detalles}</p>
+                        ) : null}
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleResolverSolicitud(Number(s.id), 'rechazada')}
+                        >
+                          Rechazar
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => handleResolverSolicitud(Number(s.id), 'aprobada')}
+                        >
+                          Aprobar
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

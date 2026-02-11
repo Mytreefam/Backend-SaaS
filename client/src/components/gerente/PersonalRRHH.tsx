@@ -84,17 +84,17 @@ export function PersonalRRHH() {
         ]);
         
         // Mapear datos de la API al formato del componente
-        const empleadosMapeados = empleadosData.map(emp => ({
-          id: emp.id,
+        const empleadosMapeados = empleadosData.map((emp: any) => ({
+          id: String(emp.id),
           nombre: emp.nombre,
           foto: emp.foto || `https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.nombre}`,
           puesto: emp.puesto as 'Panadero' | 'Cajero' | 'Repartidor',
-          desempeño: emp.desempeno || 0,
-          horasMes: emp.horas_mes || '0h',
+          desempeño: emp.desempeno ?? 0,
+          horasMes: `${emp.horasMes ?? 0}h`,
           estado: emp.estado as 'activo' | 'inactivo',
           ultimoFichaje: new Date().toISOString(),
-          horaEntrada: emp.horario_entrada,
-          horaSalida: emp.horario_salida
+          horaEntrada: emp.horarioEntrada,
+          horaSalida: emp.horarioSalida,
         }));
         
         setEmpleados(empleadosMapeados);

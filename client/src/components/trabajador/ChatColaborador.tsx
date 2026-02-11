@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
@@ -47,6 +47,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import { useConfiguracionChats } from '../../contexts/ConfiguracionChatsContext';
+import { authApi, chatApi } from '../../services/api';
 
 interface Mensaje {
   id: string;
@@ -100,274 +101,62 @@ export function ChatColaborador() {
     'Can Farines - El Born'
   ];
 
-  // Nombre del colaborador actual (vendría de props o contexto)
-  const colaboradorActual = 'Carlos Méndez';
-  const colaboradorAvatar = 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100';
+  const currentUser = authApi.getCurrentUser();
+  const colaboradorActual = currentUser?.name || (currentUser as any)?.nombre || 'Colaborador';
+  const colaboradorAvatar = (currentUser as any)?.avatar || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100';
 
-  const [conversaciones, setConversaciones] = useState<Conversacion[]>([
-    {
-      id: 'CHAT-001',
-      tipo: 'pedido',
-      asunto: 'Consulta sobre pedido PED-002',
-      cliente: 'María González',
-      clienteAvatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100',
-      estado: 'en-curso',
-      fechaCreacion: '2025-11-10T09:00:00',
-      fechaUltimoMensaje: '2025-11-10T14:30:00',
-      asignadoA: 'Carlos Méndez',
-      mensajes: [
-        {
-          id: 'M1',
-          contenido: '¿Cuándo estará lista mi pizza? Llevo esperando 20 minutos',
-          autor: 'María González',
-          rol: 'cliente',
-          timestamp: '2025-11-10T09:00:00',
-          leido: true
-        },
-        {
-          id: 'M2',
-          contenido: 'Hola María, disculpa la espera. Tu Pizza Pepperoni está saliendo del horno ahora mismo. Estará lista en 2 minutos.',
-          autor: 'Carlos Méndez',
-          rol: 'colaborador',
-          avatar: colaboradorAvatar,
-          timestamp: '2025-11-10T10:15:00',
-          leido: true
-        },
-        {
-          id: 'M3',
-          contenido: 'Perfecto, gracias por la información',
-          autor: 'María González',
-          rol: 'cliente',
-          timestamp: '2025-11-10T10:20:00',
-          leido: true
-        },
-        {
-          id: 'M4',
-          contenido: 'De nada, disfruta tu pizza!',
-          autor: 'Carlos Méndez',
-          rol: 'colaborador',
-          avatar: colaboradorAvatar,
-          timestamp: '2025-11-10T14:30:00',
-          leido: true
-        }
-      ],
-      categoria: 'clientes'
-    },
-    {
-      id: 'CHAT-004',
-      tipo: 'informacion',
-      asunto: 'Ingredientes de la hamburguesa vegetariana',
-      cliente: 'Roberto Sánchez',
-      estado: 'abierto',
-      fechaCreacion: '2025-11-11T08:00:00',
-      fechaUltimoMensaje: '2025-11-11T08:00:00',
-      mensajes: [
-        {
-          id: 'M10',
-          contenido: 'Buenos días, soy alérgico a los frutos secos. ¿La hamburguesa vegetariana contiene nueces?',
-          autor: 'Roberto Sánchez',
-          rol: 'cliente',
-          timestamp: '2025-11-11T08:00:00',
-          leido: false
-        }
-      ],
-      categoria: 'clientes'
-    },
-    {
-      id: 'CHAT-005',
-      tipo: 'pedido',
-      asunto: 'Cambio en el pedido',
-      cliente: 'Laura Martínez',
-      estado: 'abierto',
-      fechaCreacion: '2025-11-11T09:30:00',
-      fechaUltimoMensaje: '2025-11-11T09:30:00',
-      mensajes: [
-        {
-          id: 'M11',
-          contenido: 'Hola, hice un pedido pero me olvidé de pedir extra de queso. ¿Puedo agregarlo?',
-          autor: 'Laura Martínez',
-          rol: 'cliente',
-          timestamp: '2025-11-11T09:30:00',
-          leido: false
-        }
-      ],
-      categoria: 'clientes'
-    },
-    {
-      id: 'CHAT-006',
-      tipo: 'reclamacion',
-      asunto: 'Pizza llegó fría',
-      cliente: 'Pedro López',
-      estado: 'abierto',
-      fechaCreacion: '2025-11-11T10:00:00',
-      fechaUltimoMensaje: '2025-11-11T10:00:00',
-      mensajes: [
-        {
-          id: 'M12',
-          contenido: 'Mi pizza llegó fría. Me gustaría una solución por favor.',
-          autor: 'Pedro López',
-          rol: 'cliente',
-          timestamp: '2025-11-11T10:00:00',
-          leido: false
-        }
-      ],
-      categoria: 'clientes'
-    },
-    {
-      id: 'CHAT-007',
-      tipo: 'informacion',
-      asunto: 'Consulta sobre promociones',
-      cliente: 'Tienda Badalona Centro',
-      estado: 'abierto',
-      fechaCreacion: '2025-11-11T11:00:00',
-      fechaUltimoMensaje: '2025-11-11T11:00:00',
-      mensajes: [
-        {
-          id: 'M13',
-          contenido: 'Hola, ¿tenéis disponibles las promociones de pan de payés para esta semana?',
-          autor: 'Tienda Badalona Centro',
-          rol: 'colaborador',
-          timestamp: '2025-11-11T11:00:00',
-          leido: false
-        }
-      ],
-      categoria: 'otras-tiendas',
-      tienda: 'Tienda Badalona Centro'
-    },
-    {
-      id: 'CHAT-008',
-      tipo: 'pedido',
-      asunto: 'Solicitud de inventario',
-      cliente: 'Jorge Martín - Gerente',
-      clienteAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
-      estado: 'abierto',
-      fechaCreacion: '2025-11-11T12:00:00',
-      fechaUltimoMensaje: '2025-11-11T12:00:00',
-      mensajes: [
-        {
-          id: 'M14',
-          contenido: 'Buenos días, necesito el reporte de inventario actualizado para la reunión de las 15:00h',
-          autor: 'Jorge Martín - Gerente',
-          rol: 'gerente',
-          timestamp: '2025-11-11T12:00:00',
-          leido: false
-        }
-      ],
-      categoria: 'gerente'
-    },
-    {
-      id: 'CHAT-009',
-      tipo: 'informacion',
-      asunto: 'Transferencia de productos',
-      cliente: 'Tienda Poblenou',
-      estado: 'en-curso',
-      fechaCreacion: '2025-11-10T16:00:00',
-      fechaUltimoMensaje: '2025-11-11T09:00:00',
-      asignadoA: 'Carlos Méndez',
-      mensajes: [
-        {
-          id: 'M15',
-          contenido: 'Necesitamos 20 baguettes para mañana temprano, ¿podéis enviarnos?',
-          autor: 'Tienda Poblenou',
-          rol: 'colaborador',
-          timestamp: '2025-11-10T16:00:00',
-          leido: true
-        },
-        {
-          id: 'M16',
-          contenido: 'Sí, sin problema. Las tendremos listas antes de las 7:00h',
-          autor: 'Carlos Méndez',
-          rol: 'colaborador',
-          avatar: colaboradorAvatar,
-          timestamp: '2025-11-11T09:00:00',
-          leido: true
-        }
-      ],
-      categoria: 'otras-tiendas',
-      tienda: 'Tienda Poblenou'
-    },
-    {
-      id: 'CHAT-010',
-      tipo: 'reclamacion',
-      asunto: 'Revisión de procedimientos',
-      cliente: 'Jorge Martín - Gerente',
-      clienteAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
-      estado: 'en-curso',
-      fechaCreacion: '2025-11-09T10:00:00',
-      fechaUltimoMensaje: '2025-11-11T08:30:00',
-      asignadoA: 'Carlos Méndez',
-      mensajes: [
-        {
-          id: 'M17',
-          contenido: 'Carlos, he recibido comentarios sobre los tiempos de espera. Necesitamos revisar el proceso del TPV.',
-          autor: 'Jorge Martín - Gerente',
-          rol: 'gerente',
-          timestamp: '2025-11-09T10:00:00',
-          leido: true
-        },
-        {
-          id: 'M18',
-          contenido: 'Entendido. He implementado el nuevo sistema de Estado TPV que ayudará con las aperturas y cierres. ¿Podemos reunirnos para revisarlo?',
-          autor: 'Carlos Méndez',
-          rol: 'colaborador',
-          avatar: colaboradorAvatar,
-          timestamp: '2025-11-11T08:30:00',
-          leido: true
-        }
-      ],
-      categoria: 'gerente'
-    },
-    {
-      id: 'CHAT-011',
-      tipo: 'pedido',
-      asunto: 'Pedido de harina premium',
-      cliente: 'Harinas Selectas S.L.',
-      estado: 'abierto',
-      fechaCreacion: '2025-11-11T13:00:00',
-      fechaUltimoMensaje: '2025-11-11T13:00:00',
-      mensajes: [
-        {
-          id: 'M19',
-          contenido: 'Buenas tardes, nos gustaría confirmar el pedido de 50kg de harina de trigo integral para la próxima semana.',
-          autor: 'Harinas Selectas S.L.',
-          rol: 'colaborador',
-          timestamp: '2025-11-11T13:00:00',
-          leido: false
-        }
-      ],
-      categoria: 'agentes-externos'
-    },
-    {
-      id: 'CHAT-012',
-      tipo: 'informacion',
-      asunto: 'Consulta sobre instalación equipos',
-      cliente: 'TechnoHorno Industrial',
-      estado: 'en-curso',
-      fechaCreacion: '2025-11-10T11:00:00',
-      fechaUltimoMensaje: '2025-11-11T10:00:00',
-      asignadoA: 'Carlos Méndez',
-      mensajes: [
-        {
-          id: 'M20',
-          contenido: 'Hola, necesitamos coordinar la instalación del nuevo horno para el próximo mes.',
-          autor: 'TechnoHorno Industrial',
-          rol: 'colaborador',
-          timestamp: '2025-11-10T11:00:00',
-          leido: true
-        },
-        {
-          id: 'M21',
-          contenido: 'Perfecto, ¿podríamos agendar la visita técnica para la semana del 25?',
-          autor: 'Carlos Méndez',
-          rol: 'colaborador',
-          avatar: colaboradorAvatar,
-          timestamp: '2025-11-11T10:00:00',
-          leido: true
-        }
-      ],
-      categoria: 'agentes-externos'
+  const [conversaciones, setConversaciones] = useState<Conversacion[]>([]);
+
+  const cargarChats = useCallback(async () => {
+    if (!currentUser?.id) return;
+    const chats = await chatApi.getAll(Number(currentUser.id));
+
+    const convs: Conversacion[] = chats.map((c) => {
+      const mensajes: Mensaje[] = (c.mensajes || []).map((m) => {
+        const autor = m.autor || 'Sistema';
+        const autorLower = autor.toLowerCase();
+        const rol: Mensaje['rol'] =
+          autorLower.includes('gerent') ? 'gerente' : autorLower.includes('cliente') ? 'cliente' : 'colaborador';
+        return {
+          id: String(m.id),
+          contenido: m.texto,
+          autor,
+          rol,
+          avatar: rol === 'colaborador' ? colaboradorAvatar : undefined,
+          timestamp: m.fecha,
+          leido: true,
+        };
+      });
+
+      const lastTs = mensajes.length > 0 ? mensajes[mensajes.length - 1].timestamp : c.creadoEn;
+
+      return {
+        id: String(c.id),
+        tipo: (['pedido', 'informacion', 'reclamacion', 'fallo-app', 'otro'].includes(String(c.tipo))
+          ? (c.tipo as any)
+          : 'informacion') as Conversacion['tipo'],
+        asunto: c.asunto || '(sin asunto)',
+        cliente: c.cliente?.nombre || colaboradorActual,
+        clienteAvatar: undefined,
+        estado: (c.estado === 'cerrado' ? 'cerrado' : c.estado === 'en-curso' ? 'en-curso' : 'abierto') as any,
+        fechaCreacion: c.creadoEn,
+        fechaUltimoMensaje: lastTs,
+        asignadoA: colaboradorActual,
+        mensajes,
+        categoria: 'gerente',
+      };
+    });
+
+    convs.sort((a, b) => (b.fechaUltimoMensaje || '').localeCompare(a.fechaUltimoMensaje || ''));
+    setConversaciones(convs);
+    if (!conversacionSeleccionada && convs.length > 0) {
+      setConversacionSeleccionada(convs[0].id);
     }
-  ]);
+  }, [currentUser?.id, colaboradorActual, colaboradorAvatar, conversacionSeleccionada]);
+
+  useEffect(() => {
+    cargarChats();
+  }, [cargarChats]);
 
   const conversacionActual = conversaciones.find(c => c.id === conversacionSeleccionada);
 
@@ -424,32 +213,50 @@ export function ChatColaborador() {
   const chatsPendientes = conversaciones.filter(c => c.estado === 'abierto').length;
   const chatsEnCurso = conversaciones.filter(c => c.estado === 'en-curso' && c.asignadoA === colaboradorActual).length;
 
-  const handleEnviarMensaje = () => {
+  const handleEnviarMensaje = async () => {
     if (!mensaje.trim() || !conversacionSeleccionada) return;
 
-    setConversaciones(prev => prev.map(conv => {
-      if (conv.id === conversacionSeleccionada) {
+    const chatId = Number(conversacionSeleccionada);
+    if (!Number.isFinite(chatId)) {
+      toast.error('Chat inválido');
+      return;
+    }
+
+    // Persistir en backend
+    const sent = await chatApi.sendMessage(chatId, {
+      contenido: mensaje.trim(),
+      remitente: colaboradorActual,
+      leido: true,
+    });
+
+    if (!sent) {
+      toast.error('No se pudo enviar el mensaje');
+      return;
+    }
+
+    setConversaciones((prev) =>
+      prev.map((conv) => {
+        if (conv.id !== conversacionSeleccionada) return conv;
         return {
           ...conv,
           mensajes: [
             ...conv.mensajes,
             {
-              id: `M${Date.now()}`,
-              contenido: mensaje,
-              autor: colaboradorActual,
+              id: String(sent.id),
+              contenido: sent.texto,
+              autor: sent.autor || colaboradorActual,
               rol: 'colaborador',
               avatar: colaboradorAvatar,
-              timestamp: new Date().toISOString(),
-              leido: true
-            }
+              timestamp: sent.fecha,
+              leido: true,
+            },
           ],
-          fechaUltimoMensaje: new Date().toISOString(),
+          fechaUltimoMensaje: sent.fecha,
           estado: conv.estado === 'abierto' ? 'en-curso' : conv.estado,
-          asignadoA: conv.estado === 'abierto' ? colaboradorActual : conv.asignadoA
+          asignadoA: conv.estado === 'abierto' ? colaboradorActual : conv.asignadoA,
         };
-      }
-      return conv;
-    }));
+      }),
+    );
 
     setMensaje('');
     toast.success('Mensaje enviado al cliente');
@@ -1107,44 +914,37 @@ export function ChatColaborador() {
                 !asuntoChat.trim() ||
                 !mensajeChat.trim()
               }
-              onClick={() => {
-                // Crear el chat
-                const nuevoChat: Conversacion = {
-                  id: `CHAT-${Date.now()}`,
-                  tipo: 'informacion',
-                  asunto: asuntoChat,
-                  cliente: colaboradorActual,
-                  clienteAvatar: colaboradorAvatar,
+              onClick={async () => {
+                if (!currentUser?.id) {
+                  toast.error('Usuario no autenticado');
+                  return;
+                }
+
+                const created = await chatApi.create({
+                  asunto: asuntoChat.trim(),
                   estado: 'abierto',
-                  fechaCreacion: new Date().toISOString(),
-                  fechaUltimoMensaje: new Date().toISOString(),
+                  clienteId: Number(currentUser.id),
+                  tipo: 'informacion',
                   mensajes: [
                     {
-                      id: `M${Date.now()}`,
-                      contenido: mensajeChat,
-                      autor: colaboradorActual,
-                      rol: 'colaborador',
-                      avatar: colaboradorAvatar,
-                      timestamp: new Date().toISOString(),
-                      leido: false
-                    }
+                      contenido: mensajeChat.trim(),
+                      remitente: colaboradorActual,
+                      leido: false,
+                    },
                   ],
-                  categoria: accionSeleccionada === 'otra-tienda' ? 'otras-tiendas' : 'gerente',
-                  tienda: accionSeleccionada === 'otra-tienda' ? tiendaSeleccionada : undefined,
-                  accionTipo: accionSeleccionada as 'averia-maquinaria' | 'consulta-rrhh' | 'consulta-material' | 'problema-cliente' | 'otros'
-                };
+                });
 
-                // Añadir a la lista de conversaciones
-                setConversaciones(prev => [nuevoChat, ...prev]);
+                if (!created) {
+                  toast.error('No se pudo crear el chat');
+                  return;
+                }
 
-                // Mostrar notificación
-                const categoriaSeleccionadaData = categoriasTrabajadores.find(c => c.accionId === accionSeleccionada);
-                const destinatario = accionSeleccionada === 'otra-tienda' 
-                  ? tiendaSeleccionada 
-                  : (categoriaSeleccionadaData?.nombre || 'Gerencia');
-                  
+                const categoriaSeleccionadaData = categoriasTrabajadores.find((c) => c.accionId === accionSeleccionada);
+                const destinatario =
+                  accionSeleccionada === 'otra-tienda' ? tiendaSeleccionada : categoriaSeleccionadaData?.nombre || 'Gerencia';
+
                 toast.success(`Chat creado: ${asuntoChat}`, {
-                  description: `Destinatario: ${destinatario}`
+                  description: `Destinatario: ${destinatario}`,
                 });
 
                 // Reset y cerrar
@@ -1155,8 +955,8 @@ export function ChatColaborador() {
                 setMensajeChat('');
                 setArchivoAdjunto(null);
 
-                // Abrir el chat recién creado
-                setConversacionSeleccionada(nuevoChat.id);
+                await cargarChats();
+                setConversacionSeleccionada(String(created.id));
               }}
             >
               Crear Chat

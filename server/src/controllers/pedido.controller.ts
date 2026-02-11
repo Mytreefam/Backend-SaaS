@@ -81,7 +81,11 @@ export const updatePedido = async (req: any, res: any) => {
     estado: req.body?.estado,
     total: req.body?.total,
     tipoEntrega: req.body?.tipoEntrega,
+    direccionEntrega: req.body?.direccionEntrega,
     metodoPago: req.body?.metodoPago,
+    puntoVentaId: req.body?.puntoVentaId,
+    motivoCancelacion: req.body?.motivoCancelacion,
+    motivoDevolucion: req.body?.motivoDevolucion,
   };
 
   const actualizado = await PedidoModel.update(Number(id), payload);
@@ -98,4 +102,16 @@ export const deletePedido = async (req: any, res: any) => {
   }
   await PedidoModel.delete(Number(id));
   res.status(204).end();
+};
+
+export const cobrarPedido = async (req: any, res: any) => {
+  if (!req.user) return res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
+  if (req.user.role !== 'gerente') return res.status(403).json({ success: false, error: 'FORBIDDEN' });
+  const { id } = req.params;
+  const pedido = await PedidoModel.findById(Number(id));
+  if (!pedido) return res.status(404).json({ error: 'No encontrado' });
+
+  const nextEstado = pedido.estado === 'pendiente' ? 'recibido' : pedido.estado;
+  const actualizado = await PedidoModel.update(Number(id), { estado: nextEstado });
+  res.json(actualizado);
 };

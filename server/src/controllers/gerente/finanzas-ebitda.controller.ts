@@ -6,6 +6,86 @@
 import { Request, Response } from 'express';
 import prisma from '../../prisma/client';
 
+function safeNumber(val: any, decimals = 2) {
+  return Number.isFinite(val) ? parseFloat(Number(val).toFixed(decimals)) : 0;
+}
+
+async function resolvePdvIdsFromContext(params: { empresaId?: string; puntoVentaId?: string }) {
+  const { empresaId, puntoVentaId } = params;
+  if (puntoVentaId && puntoVentaId !== 'todas') return [puntoVentaId];
+  if (!empresaId || empresaId === 'todas') return null;
+  const pdvs = await prisma.puntoVenta.findMany({
+    where: { empresaId, activo: true },
+    select: { id: true },
+  });
+  return pdvs.map((p) => p.id);
+}
+
+async function calcularEbitdaPeriodo(params: {
+  from: Date;
+  to: Date;
+  empresaId?: string;
+  puntoVentaId?: string;
+}) {
+  const { from, to, empresaId, puntoVentaId } = params;
+  const pdvIds = await resolvePdvIdsFromContext({ empresaId, puntoVentaId });
+
+  const ingresosAgg = await prisma.pedido.aggregate({
+    where: {
+      fecha: { gte: from, lte: to },
+      estado: { notIn: ['cancelado'] },
+      ...(pdvIds && pdvIds.length > 0 ? { puntoVentaId: { in: pdvIds } } : {}),
+    },
+    _sum: { total: true },
+  });
+  const ingresos = Number(ingresosAgg._sum.total) || 0;
+
+  const comprasAgg = await prisma.pedidoProveedor.aggregate({
+    where: {
+      fechaPedido: { gte: from, lte: to },
+      estado: { notIn: ['cancelado'] },
+      ...(empresaId ? { empresaId } : {}),
+      ...(puntoVentaId ? { puntoVentaId } : {}),
+    } as any,
+    _sum: { total: true },
+  });
+  const compras = Number(comprasAgg._sum.total) || 0;
+
+  const gastosEmpresaAgg = await prisma.gastoEmpresa.aggregate({
+    where: {
+      fechaGasto: { gte: from, lte: to },
+      ...(empresaId ? { empresaId } : {}),
+      ...(puntoVentaId ? { puntoVentaId } : {}),
+    } as any,
+    _sum: { total: true },
+  });
+  const gastosEmpresa = Number(gastosEmpresaAgg._sum.total) || 0;
+
+  const personalExtraAgg = await prisma.empleadoRemuneracion.aggregate({
+    where: { creadoEn: { gte: from, lte: to } },
+    _sum: { importe: true },
+  });
+  const personalExtra = Number(personalExtraAgg._sum.importe) || 0;
+
+  const empleados = await prisma.empleado.findMany({
+    where: {
+      estado: 'activo',
+      fechaAlta: { lte: to },
+      OR: [{ fechaBaja: null }, { fechaBaja: { gte: from } }],
+      ...(empresaId ? { empresaId } : {}),
+      ...(puntoVentaId ? { puntoVentaId } : {}),
+    } as any,
+    select: { salarioBase: true },
+  });
+  const salariosBase = empleados.reduce((sum, e) => sum + (Number(e.salarioBase) || 0), 0);
+
+  const gastos = compras + gastosEmpresa + personalExtra + salariosBase;
+  const ebitda = ingresos - gastos;
+  const margen = ingresos > 0 ? (ebitda / ingresos) * 100 : 0;
+
+  return { ingresos, compras, gastosEmpresa, personalExtra, salariosBase, gastos, ebitda, margen };
+}
+
 /**
  * GET /api/gerente/finanzas/cuenta-resultados
  * Obtener cuenta de resultados del periodo
@@ -32,6 +112,11 @@ export const obtenerCuentaResultados = async (req: Request, res: Response) => {
       },
     };
 
+    const empresaId = empresa_id ? String(empresa_id) : undefined;
+    const puntoVentaId = punto_venta_id ? String(punto_venta_id) : undefined;
+    const pdvIds = await resolvePdvIdsFromContext({ empresaId, puntoVentaId });
+    if (pdvIds && pdvIds.length > 0) where.puntoVentaId = { in: pdvIds };
+
     // Obtener ingresos (pedidos)
     const pedidos = await prisma.pedido.findMany({
       where,
@@ -43,12 +128,12 @@ export const obtenerCuentaResultados = async (req: Request, res: Response) => {
 
     const ingresosNetos = pedidos.reduce((sum: number, p: any) => sum + (Number(p.total) || 0), 0);
 
-    // TODO: Obtener costes y gastos de tablas correspondientes
-    // Por ahora usamos estimaciones basadas en porcentajes típicos del sector
-    const costeVentas = ingresosNetos * 0.35; // 35% coste de ventas típico
+    const calc = await calcularEbitdaPeriodo({ from: fechaInicio, to: fechaFin, empresaId, puntoVentaId });
+
+    const costeVentas = calc.compras; // proxy: compras del periodo
     const margenBruto = ingresosNetos - costeVentas;
-    const gastosOperativos = ingresosNetos * 0.45; // 45% gastos operativos
-    const ebitda = margenBruto - gastosOperativos;
+    const gastosOperativos = calc.gastosEmpresa + calc.personalExtra + calc.salariosBase;
+    const ebitda = ingresosNetos - costeVentas - gastosOperativos;
     const margenEbitda = ingresosNetos > 0 ? (ebitda / ingresosNetos) * 100 : 0;
 
     // Desglose por tipo de entrega
@@ -63,27 +148,24 @@ export const obtenerCuentaResultados = async (req: Request, res: Response) => {
       periodo: `${fechaInicio.toISOString().split('T')[0]} - ${fechaFin.toISOString().split('T')[0]}`,
       fechaInicio: fechaInicio.toISOString(),
       fechaFin: fechaFin.toISOString(),
-      ingresosNetos,
-      costeVentas,
-      margenBruto,
-      gastosOperativos,
-      ebitda,
-      margenEbitda: Math.round(margenEbitda * 100) / 100,
+      ingresosNetos: safeNumber(ingresosNetos),
+      costeVentas: safeNumber(costeVentas),
+      margenBruto: safeNumber(margenBruto),
+      gastosOperativos: safeNumber(gastosOperativos),
+      ebitda: safeNumber(ebitda),
+      margenEbitda: safeNumber(margenEbitda),
       desglose: {
         ingresos: Object.entries(ingresosPorOrigen).map(([concepto, importe]) => ({
           concepto,
-          importe,
-          porcentaje: ingresosNetos > 0 ? (importe / ingresosNetos) * 100 : 0,
+          importe: safeNumber(importe),
+          porcentaje: safeNumber(ingresosNetos > 0 ? (importe / ingresosNetos) * 100 : 0),
         })),
         costes: [
-          { concepto: 'Coste de materias primas', importe: costeVentas * 0.7 },
-          { concepto: 'Coste de personal producción', importe: costeVentas * 0.3 },
+          { concepto: 'Compras a proveedores (proxy COGS)', importe: safeNumber(costeVentas) },
         ],
         gastos: [
-          { concepto: 'Personal', importe: gastosOperativos * 0.5 },
-          { concepto: 'Alquiler y suministros', importe: gastosOperativos * 0.25 },
-          { concepto: 'Marketing', importe: gastosOperativos * 0.1 },
-          { concepto: 'Otros gastos', importe: gastosOperativos * 0.15 },
+          { concepto: 'Personal (estimado)', importe: safeNumber(calc.salariosBase + calc.personalExtra) },
+          { concepto: 'Gastos empresa', importe: safeNumber(calc.gastosEmpresa) },
         ],
       },
     };
@@ -109,36 +191,15 @@ export const obtenerEBITDA = async (req: Request, res: Response) => {
     const fechaInicio = new Date(añoActual, mesActual - 1, 1);
     const fechaFin = new Date(añoActual, mesActual, 0, 23, 59, 59);
 
-    const where: any = {
-      fechaCreacion: {
-        gte: fechaInicio,
-        lte: fechaFin,
-      },
-      estado: {
-        notIn: ['cancelado'],
-      },
-    };
-
-    if (empresa_id) where.empresaId = parseInt(empresa_id as string);
-    if (punto_venta_id) where.puntoVentaId = parseInt(punto_venta_id as string);
-
-    const pedidos = await prisma.pedido.aggregate({
-      where,
-      _sum: {
-        total: true,
-      },
-    });
-
-    const ingresos = Number(pedidos._sum.total) || 0;
-    const gastos = ingresos * 0.8; // 80% gastos totales (estimación)
-    const ebitda = ingresos - gastos;
-    const margen = ingresos > 0 ? (ebitda / ingresos) * 100 : 0;
+    const empresaId = empresa_id ? String(empresa_id) : undefined;
+    const puntoVentaId = punto_venta_id ? String(punto_venta_id) : undefined;
+    const calc = await calcularEbitdaPeriodo({ from: fechaInicio, to: fechaFin, empresaId, puntoVentaId });
 
     res.json({
-      ebitda: Math.round(ebitda * 100) / 100,
-      margen: Math.round(margen * 100) / 100,
-      ingresos: Math.round(ingresos * 100) / 100,
-      gastos: Math.round(gastos * 100) / 100,
+      ebitda: safeNumber(calc.ebitda),
+      margen: safeNumber(calc.margen, 1),
+      ingresos: safeNumber(calc.ingresos),
+      gastos: safeNumber(calc.gastos),
     });
   } catch (error) {
     console.error('Error al obtener EBITDA:', error);
@@ -153,6 +214,9 @@ export const obtenerEBITDA = async (req: Request, res: Response) => {
 export const obtenerIndicadores = async (req: Request, res: Response) => {
   try {
     const { empresa_id, punto_venta_id } = req.query;
+    const empresaId = empresa_id ? String(empresa_id) : undefined;
+    const puntoVentaId = punto_venta_id ? String(punto_venta_id) : undefined;
+    const pdvIds = await resolvePdvIdsFromContext({ empresaId, puntoVentaId });
 
     // Obtener datos del mes actual vs anterior para calcular variaciones
     const hoy = new Date();
@@ -160,24 +224,36 @@ export const obtenerIndicadores = async (req: Request, res: Response) => {
     const inicioMesAnterior = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
     const finMesAnterior = new Date(hoy.getFullYear(), hoy.getMonth(), 0);
 
-    const where: any = {};
-    if (empresa_id) where.empresaId = parseInt(empresa_id as string);
-    if (punto_venta_id) where.puntoVentaId = parseInt(punto_venta_id as string);
-
     const [ventasActual, ventasAnterior, pedidosActual, pedidosAnterior] = await Promise.all([
       prisma.pedido.aggregate({
-        where: { ...where, fechaCreacion: { gte: inicioMesActual }, estado: { notIn: ['cancelado'] } },
+        where: {
+          fecha: { gte: inicioMesActual },
+          estado: { notIn: ['cancelado'] },
+          ...(pdvIds && pdvIds.length > 0 ? { puntoVentaId: { in: pdvIds } } : {}),
+        } as any,
         _sum: { total: true },
       }),
       prisma.pedido.aggregate({
-        where: { ...where, fechaCreacion: { gte: inicioMesAnterior, lte: finMesAnterior }, estado: { notIn: ['cancelado'] } },
+        where: {
+          fecha: { gte: inicioMesAnterior, lte: finMesAnterior },
+          estado: { notIn: ['cancelado'] },
+          ...(pdvIds && pdvIds.length > 0 ? { puntoVentaId: { in: pdvIds } } : {}),
+        } as any,
         _sum: { total: true },
       }),
       prisma.pedido.count({
-        where: { ...where, fechaCreacion: { gte: inicioMesActual }, estado: { notIn: ['cancelado'] } },
+        where: {
+          fecha: { gte: inicioMesActual },
+          estado: { notIn: ['cancelado'] },
+          ...(pdvIds && pdvIds.length > 0 ? { puntoVentaId: { in: pdvIds } } : {}),
+        } as any,
       }),
       prisma.pedido.count({
-        where: { ...where, fechaCreacion: { gte: inicioMesAnterior, lte: finMesAnterior }, estado: { notIn: ['cancelado'] } },
+        where: {
+          fecha: { gte: inicioMesAnterior, lte: finMesAnterior },
+          estado: { notIn: ['cancelado'] },
+          ...(pdvIds && pdvIds.length > 0 ? { puntoVentaId: { in: pdvIds } } : {}),
+        } as any,
       }),
     ]);
 
@@ -192,6 +268,10 @@ export const obtenerIndicadores = async (req: Request, res: Response) => {
     const variacionTicket = ticketMedioAnterior > 0 
       ? ((ticketMedioActual - ticketMedioAnterior) / ticketMedioAnterior) * 100 
       : 0;
+
+    const ebitdaActual = await calcularEbitdaPeriodo({ from: inicioMesActual, to: hoy, empresaId, puntoVentaId });
+    const ebitdaAnterior = await calcularEbitdaPeriodo({ from: inicioMesAnterior, to: finMesAnterior, empresaId, puntoVentaId });
+    const variacionEbitda = ebitdaAnterior.margen !== 0 ? ((ebitdaActual.margen - ebitdaAnterior.margen) / Math.abs(ebitdaAnterior.margen)) * 100 : 0;
 
     const indicadores = [
       {
@@ -219,10 +299,10 @@ export const obtenerIndicadores = async (req: Request, res: Response) => {
       },
       {
         nombre: 'Margen EBITDA',
-        valor: 20.5, // TODO: Calcular real cuando haya datos de costes
+        valor: safeNumber(ebitdaActual.margen, 1),
         unidad: '%',
-        tendencia: 'positiva',
-        variacion: 2.3,
+        tendencia: variacionEbitda >= 0 ? 'positiva' : 'negativa',
+        variacion: safeNumber(variacionEbitda, 1),
       },
     ];
 
@@ -244,37 +324,18 @@ export const obtenerHistoricoEBITDA = async (req: Request, res: Response) => {
 
     const historico: { mes: string; ebitda: number; margen: number }[] = [];
     const hoy = new Date();
+    const empresaId = empresa_id ? String(empresa_id) : undefined;
+    const puntoVentaId = punto_venta_id ? String(punto_venta_id) : undefined;
 
     for (let i = numMeses - 1; i >= 0; i--) {
       const fecha = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
       const fechaFin = new Date(hoy.getFullYear(), hoy.getMonth() - i + 1, 0, 23, 59, 59);
-
-      const where: any = {
-        fechaCreacion: {
-          gte: fecha,
-          lte: fechaFin,
-        },
-        estado: {
-          notIn: ['cancelado'],
-        },
-      };
-
-      if (empresa_id) where.empresaId = parseInt(empresa_id as string);
-      if (punto_venta_id) where.puntoVentaId = parseInt(punto_venta_id as string);
-
-      const pedidos = await prisma.pedido.aggregate({
-        where,
-        _sum: { total: true },
-      });
-
-      const ingresos = Number(pedidos._sum.total) || 0;
-      const ebitda = ingresos * 0.2; // 20% margen estimado
-      const margen = 20;
+      const calc = await calcularEbitdaPeriodo({ from: fecha, to: fechaFin, empresaId, puntoVentaId });
 
       historico.push({
         mes: fecha.toLocaleDateString('es-ES', { month: 'short', year: 'numeric' }),
-        ebitda: Math.round(ebitda * 100) / 100,
-        margen,
+        ebitda: safeNumber(calc.ebitda),
+        margen: safeNumber(calc.margen, 1),
       });
     }
 

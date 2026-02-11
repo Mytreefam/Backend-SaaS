@@ -7,9 +7,11 @@ async function main() {
     where: { email: 'cliente@demo.com' },
     update: {},
     create: {
+      codigo: 'CLI-DEMO',
       nombre: 'Cliente Demo',
       email: 'cliente@demo.com',
       password: 'demo123',
+      role: 'cliente',
     },
   });
   const pedido = await prisma.pedido.create({

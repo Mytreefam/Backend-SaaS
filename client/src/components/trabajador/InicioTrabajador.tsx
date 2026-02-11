@@ -28,11 +28,11 @@ import { useHaptics } from '../../hooks/useHaptics';
 import { useAnalytics } from '../../services/analytics.service';
 import { OnboardingWidget } from '../OnboardingWidget';
 import { fichajesApi, tareasApi, TareaTrabajador } from '../../services/api';
-import { useAuth } from '../../hooks/useAuth';
+import { authApi } from '../../services/api';
 
 export function InicioTrabajador() {
-  const { user } = useAuth();
-  const empleadoId = user?.id || 1;
+  const user = authApi.getCurrentUser();
+  const empleadoId = Number(user?.id || 1);
   
   const [enTurno, setEnTurno] = useState(false);
   const [tiempoFichaje, setTiempoFichaje] = useState(0); // en segundos
@@ -40,6 +40,16 @@ export function InicioTrabajador() {
   const [cargando, setCargando] = useState(true);
   const [tareas, setTareas] = useState<TareaTrabajador[]>([]);
   const [proximaTarea, setProximaTarea] = useState<TareaTrabajador | null>(null);
+  const [ultimoFichajeHora, setUltimoFichajeHora] = useState<string | null>(null);
+
+  const [horasReales, setHorasReales] = useState(0);
+  const [proyeccionViernes, setProyeccionViernes] = useState(0);
+  const [rendimientoCalidad, setRendimientoCalidad] = useState(0);
+  const [tendenciaDelta, setTendenciaDelta] = useState<number | null>(null);
+
+  const [formacionPercent, setFormacionPercent] = useState(0);
+  const [formacionTitulo, setFormacionTitulo] = useState<string>('Sin cursos asignados');
+  const [formacionDetalle, setFormacionDetalle] = useState<string>('0% completado');
 
   // ✅ Hooks nativos
   const haptics = useHaptics();
@@ -55,6 +65,11 @@ export function InicioTrabajador() {
       setEnTurno(estadoFichaje.enTurno);
       setTiempoFichaje(estadoFichaje.tiempoTrabajado);
       setPausado(estadoFichaje.pausado);
+
+      // Último fichaje (para mostrar cuando está fuera de turno)
+      const fichajesHoy = await fichajesApi.getFichajesHoy(empleadoId);
+      const last = fichajesHoy.length > 0 ? fichajesHoy[fichajesHoy.length - 1] : null;
+      setUltimoFichajeHora(last?.hora || null);
       
       // Cargar tareas del día
       const tareasHoy = await tareasApi.getTareasHoy(empleadoId);
@@ -64,6 +79,85 @@ export function InicioTrabajador() {
       const tareasPendientes = tareasHoy.filter(t => t.estado === 'pendiente');
       const tareaAlta = tareasPendientes.find(t => t.prioridad === 'alta');
       setProximaTarea(tareaAlta || tareasPendientes[0] || null);
+
+      // Calcular horas semanales reales desde fichajes (BD)
+      const fichajesAll = await fichajesApi.getByEmpleadoId(empleadoId);
+      const tareasAll = await tareasApi.getByEmpleadoId(empleadoId);
+      const now = new Date();
+      const day = now.getDay(); // 0=Sun..6=Sat
+      const diffToMonday = (day + 6) % 7; // Monday=0
+      const monday = new Date(now);
+      monday.setHours(0, 0, 0, 0);
+      monday.setDate(now.getDate() - diffToMonday);
+
+      // Filtrar semana actual (por fecha "YYYY-MM-DD")
+      const inWeek = fichajesAll.filter((f) => {
+        const d = new Date(`${f.fecha}T00:00:00`);
+        return d >= monday && d <= now;
+      });
+      // State machine (aprox) para sumar tiempo trabajado
+      let workedMs = 0;
+      let currentStart: Date | null = null;
+      let isPaused = false;
+      for (const f of inWeek) {
+        const ts = new Date(`${f.fecha}T${f.hora}`);
+        if (f.tipo === 'entrada' || f.tipo === 'reanudacion') {
+          currentStart = ts;
+          isPaused = false;
+        } else if (f.tipo === 'pausa') {
+          if (currentStart && !isPaused) {
+            workedMs += ts.getTime() - currentStart.getTime();
+            isPaused = true;
+          }
+        } else if (f.tipo === 'salida') {
+          if (currentStart && !isPaused) {
+            workedMs += ts.getTime() - currentStart.getTime();
+          }
+          currentStart = null;
+          isPaused = false;
+        }
+      }
+      // Si sigue en turno esta semana, sumar hasta ahora
+      if (currentStart && !isPaused) {
+        workedMs += Date.now() - currentStart.getTime();
+      }
+
+      const workedHours = Math.max(0, workedMs / 3600000);
+      setHorasReales(Math.round(workedHours));
+
+      // Proyección viernes (pacing)
+      const weekday = now.getDay() === 0 ? 7 : now.getDay(); // 1..7
+      const daysElapsed = Math.min(5, Math.max(1, weekday)); // assume Mon-Fri
+      const projection = (workedHours / daysElapsed) * 5;
+      setProyeccionViernes(Math.round(projection));
+
+      // Rendimiento: basado en % tareas completadas hoy (real)
+      const total = tareasHoy.length || 0;
+      const completadas = tareasHoy.filter(t => t.estado === 'completada').length;
+      const calidad = total > 0 ? Math.round((completadas / total) * 100) : 0;
+      setRendimientoCalidad(calidad);
+
+      // Tendencia: comparar vs ayer usando tareas reales (últimos 30 días)
+      const ayerStr = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const tareasAyer = tareasAll.filter((t) => (t.fechaCreacion || '').startsWith(ayerStr));
+      const totalAyer = tareasAyer.length || 0;
+      const compAyer = tareasAyer.filter((t) => t.estado === 'completada').length;
+      const calidadAyer = totalAyer > 0 ? Math.round((compAyer / totalAyer) * 100) : 0;
+      setTendenciaDelta(calidad - calidadAyer);
+
+      // Formación: derivar de tareas tipo formacion (real si existen)
+      const formacion = tareasAll.filter((t) => (t.tipo as any) === 'formacion' || Boolean((t as any).esFormacion));
+      if (formacion.length > 0) {
+        const comp = formacion.filter(t => t.estado === 'completada').length;
+        const pct = Math.round((comp / formacion.length) * 100);
+        setFormacionPercent(pct);
+        setFormacionTitulo(formacion[0]?.titulo || 'Curso asignado');
+        setFormacionDetalle(`${pct}% completado`);
+      } else {
+        setFormacionPercent(0);
+        setFormacionTitulo('Sin cursos asignados');
+        setFormacionDetalle('0% completado');
+      }
       
     } catch (error) {
       console.error('Error al cargar datos:', error);
@@ -164,11 +258,7 @@ export function InicioTrabajador() {
   const progresoTareas = (tareasCompletadas / totalTareas) * 100;
 
   const horasObjetivo = 40;
-  const horasReales = 38;
-  const proyeccionViernes = 42;
-
-  const rendimientoCalidad = 92;
-  const tendenciaPositiva = true;
+  const tendenciaPositiva = (tendenciaDelta ?? 0) >= 0;
 
   return (
     <div className="space-y-6">
@@ -190,7 +280,7 @@ export function InicioTrabajador() {
                     {enTurno ? 'En turno' : 'Fuera de turno'}
                   </p>
                   <p className="text-xs sm:text-sm text-gray-500">
-                    {enTurno ? `Tiempo trabajado: ${formatearTiempo(tiempoFichaje)}` : 'Último fichaje: 08:30'}
+                    {enTurno ? `Tiempo trabajado: ${formatearTiempo(tiempoFichaje)}` : `Último fichaje: ${ultimoFichajeHora || '-'}`}
                   </p>
                 </div>
               </div>
@@ -407,7 +497,7 @@ export function InicioTrabajador() {
                 Rendimiento
               </CardTitle>
               <Badge className={tendenciaPositiva ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
-                {tendenciaPositiva ? '↑ +5.2%' : '↓ -2.1%'}
+                {tendenciaDelta == null ? '—' : tendenciaPositiva ? `↑ +${Math.abs(tendenciaDelta)}%` : `↓ -${Math.abs(tendenciaDelta)}%`}
               </Badge>
             </div>
           </CardHeader>
@@ -447,7 +537,7 @@ export function InicioTrabajador() {
                 Formación
               </CardTitle>
               <Badge className="bg-blue-100 text-blue-700">
-                37%
+                {formacionPercent}%
               </Badge>
             </div>
           </CardHeader>
@@ -456,13 +546,11 @@ export function InicioTrabajador() {
               <Badge variant="outline" className="mb-2 border-blue-300 text-blue-700 text-xs">
                 📚 Curso Recomendado
               </Badge>
-              <p className="font-medium text-sm mb-2">Manipulación de Alimentos Avanzada</p>
+              <p className="font-medium text-sm mb-2">{formacionTitulo}</p>
               <div className="flex items-center gap-2 text-xs text-gray-600 mb-3">
-                <span>Módulo 3 de 8</span>
-                <span>•</span>
-                <span>37% completado</span>
+                <span>{formacionDetalle}</span>
               </div>
-              <Progress value={37} className="h-2" />
+              <Progress value={formacionPercent} className="h-2" />
             </div>
             <Button 
               variant="outline" 

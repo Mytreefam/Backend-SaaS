@@ -122,10 +122,10 @@ export function PedidosTrabajador() {
     if (busqueda) {
       const termino = busqueda.toLowerCase();
       resultado = resultado.filter(p => 
-        p.numero?.toLowerCase().includes(termino) ||
-        p.cliente.nombre.toLowerCase().includes(termino) ||
-        p.cliente.telefono.includes(termino) ||
-        p.id.toLowerCase().includes(termino)
+        String((p as any)?.numero ?? p.id).toLowerCase().includes(termino) ||
+        String(p?.cliente?.nombre || '').toLowerCase().includes(termino) ||
+        String(p?.cliente?.telefono || '').includes(termino) ||
+        String(p.id).toLowerCase().includes(termino)
       );
     }
 
@@ -136,7 +136,7 @@ export function PedidosTrabajador() {
 
     // Filtro por origen
     if (filtroOrigen !== 'todos') {
-      resultado = resultado.filter(p => p.origenPedido === filtroOrigen);
+      resultado = resultado.filter(p => String((p as any)?.origenPedido || 'app') === filtroOrigen);
     }
 
     return resultado;
@@ -304,7 +304,7 @@ function VistTabla({ pedidos, onVerDetalle }: { pedidos: Pedido[], onVerDetalle:
                 onClick={() => onVerDetalle(pedido)}
                 className="cursor-pointer hover:bg-gray-50 transition-colors"
               >
-                <TableCell className="font-medium">#{pedido.numero}</TableCell>
+                <TableCell className="font-medium">#{String((pedido as any)?.numero ?? pedido.id)}</TableCell>
                 <TableCell>
                   <div>
                     <div className="font-medium">{pedido.cliente.nombre}</div>
@@ -348,7 +348,7 @@ function VistaTarjetas({ pedidos, onVerDetalle }: { pedidos: Pedido[], onVerDeta
         >
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <div className="font-semibold">Pedido #{pedido.numero}</div>
+              <div className="font-semibold">Pedido #{String((pedido as any)?.numero ?? pedido.id)}</div>
               <BadgeOrigen origen={pedido.origenPedido} />
             </div>
           </CardHeader>

@@ -4,7 +4,7 @@
  * Maneja el login, logout y gestión de sesiones
  */
 
-import { API_CONFIG, buildUrl, setAuthToken, clearAuthToken } from '../../config/api.config';
+import { API_CONFIG, buildUrl, setAuthToken, clearAuthToken, hasAuthToken } from '../../config/api.config';
 import { toast } from 'sonner@2.0.3';
 import { envelopedFetch } from '../http/envelopedFetch';
 
@@ -33,6 +33,14 @@ export interface AuthError {
   code: string;
 }
 
+export interface AuthSession {
+  id: number;
+  createdAt: string;
+  expiresAt: string;
+  userAgent?: string | null;
+  ip?: string | null;
+}
+
 // ============================================================================
 // API CLIENT
 // ============================================================================
@@ -46,6 +54,8 @@ export const authApi = {
       const response = await envelopedFetch<LoginResponse>(API_CONFIG.ENDPOINTS.LOGIN, {
         method: 'POST',
         headers: API_CONFIG.HEADERS,
+        // IMPORTANT: login sets refresh_token cookie; must include credentials so browser stores it
+        credentials: 'include',
         body: JSON.stringify({
           email: credentials.email,
           password: credentials.password,
@@ -116,13 +126,26 @@ export const authApi = {
    */
   isAuthenticated(): boolean {
     const user = localStorage.getItem('user');
-    return !!user;
+    const tokenOk = hasAuthToken();
+
+    // If we have a persisted user but no token, treat as logged out
+    if (user && !tokenOk) {
+      clearAuthToken();
+      localStorage.removeItem('user');
+      localStorage.removeItem('currentUser');
+      return false;
+    }
+
+    return !!user && tokenOk;
   },
 
   /**
    * Obtener usuario actual
    */
   getCurrentUser(): LoginResponse | null {
+    // If token is missing, consider session invalid
+    if (!hasAuthToken()) return null;
+
     const user = localStorage.getItem('user');
     if (!user) return null;
     
@@ -153,6 +176,55 @@ export const authApi = {
     } catch (error) {
       console.error('Error al refrescar token:', error);
       return null;
+    }
+  },
+
+  /**
+   * Cambiar contraseña (revoca sesiones en backend)
+   */
+  async changePassword(params: { currentPassword: string; newPassword: string }): Promise<boolean> {
+    try {
+      await envelopedFetch<{ ok?: boolean }>(API_CONFIG.ENDPOINTS.CHANGE_PASSWORD, {
+        method: 'POST',
+        headers: API_CONFIG.HEADERS,
+        body: JSON.stringify(params),
+      });
+      toast.success('Contraseña actualizada correctamente');
+      return true;
+    } catch (error) {
+      console.error('Error cambiando contraseña:', error);
+      const message = error instanceof Error ? error.message : 'Error al cambiar contraseña';
+      toast.error(message || 'Error al cambiar contraseña');
+      return false;
+    }
+  },
+
+  async getSessions(): Promise<AuthSession[]> {
+    try {
+      const response = await envelopedFetch<{ sessions: AuthSession[] }>(API_CONFIG.ENDPOINTS.AUTH_SESSIONS, {
+        method: 'GET',
+        headers: API_CONFIG.HEADERS,
+      });
+      return response.data.data?.sessions ?? [];
+    } catch (error) {
+      console.error('Error obteniendo sesiones:', error);
+      toast.error('Error al cargar sesiones');
+      return [];
+    }
+  },
+
+  async revokeAllSessions(): Promise<boolean> {
+    try {
+      await envelopedFetch<{ revoked?: number }>(API_CONFIG.ENDPOINTS.AUTH_SESSIONS_REVOKE_ALL, {
+        method: 'POST',
+        headers: API_CONFIG.HEADERS,
+      });
+      toast.success('Sesiones cerradas');
+      return true;
+    } catch (error) {
+      console.error('Error revocando sesiones:', error);
+      toast.error('Error al cerrar sesiones');
+      return false;
     }
   },
 };

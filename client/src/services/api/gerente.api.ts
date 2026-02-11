@@ -1,16 +1,10 @@
 // Obtener tickets de soporte
 export async function getTicketsSoporte() {
-  const res = await fetch(buildUrl('/gerente/chat/tickets'), {
-    headers: {
-      ...API_CONFIG.HEADERS,
-      'Authorization': `Bearer ${getAuthToken()}`,
-    },
-  });
-  if (!res.ok) throw new Error('No se pudo obtener la lista de tickets');
-  const data = await res.json();
-  return data.data || [];
+  const response = await apiService.get<any[]>('/gerente/chat/tickets');
+  if (!response.success) throw new Error(response.message || response.error || 'No se pudo obtener la lista de tickets');
+  return response.data || [];
 }
-import { buildUrl, getAuthToken, API_CONFIG } from '../../config/api.config';
+
 // Crear ticket de soporte
 export async function createTicketSoporte(ticket: {
   asunto: string;
@@ -19,16 +13,9 @@ export async function createTicketSoporte(ticket: {
   prioridad?: string;
   adjuntos?: any[];
 }) {
-  const res = await fetch(buildUrl('/gerente/chat/tickets'), {
-    method: 'POST',
-    headers: {
-      ...API_CONFIG.HEADERS,
-      'Authorization': `Bearer ${getAuthToken()}`,
-    },
-    body: JSON.stringify(ticket),
-  });
-  if (!res.ok) throw new Error('No se pudo crear el ticket');
-  return res.json();
+  const response = await apiService.post('/gerente/chat/tickets', ticket);
+  if (!response.success) throw new Error(response.message || response.error || 'No se pudo crear el ticket');
+  return response.data;
 }
 /**
  * API CLIENT: Módulo Gerente
@@ -670,6 +657,44 @@ export const horariosApi = {
     } catch (error) {
       console.error('Error al cancelar asignación:', error);
       toast.error('Error al cancelar asignación');
+      throw error;
+    }
+  },
+
+  /**
+   * Obtener solicitudes de cambio de horario creadas por trabajadores
+   */
+  async obtenerSolicitudesCambioHorario(params?: {
+    estado?: string;
+    empleadoId?: number;
+    puntoVentaId?: string;
+    desde?: string;
+    hasta?: string;
+  }): Promise<any[]> {
+    try {
+      const queryParams = params ? new URLSearchParams(params as any).toString() : '';
+      const response = await apiService.get(`/gerente/horarios/solicitudes${queryParams ? '?' + queryParams : ''}`);
+      if (!response.success) return [];
+      return response.data || [];
+    } catch (error) {
+      console.error('Error al obtener solicitudes de horario:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Aprobar/Rechazar una solicitud de cambio de horario
+   */
+  async resolverSolicitudCambioHorario(
+    solicitudId: number,
+    data: { estado: 'aprobada' | 'rechazada'; respuesta?: string }
+  ): Promise<any> {
+    try {
+      const response = await apiService.put(`/gerente/horarios/solicitudes/${solicitudId}`, data);
+      if (!response.success) throw new Error(response.message || 'Error desconocido');
+      return response.data;
+    } catch (error) {
+      console.error('Error al resolver solicitud de horario:', error);
       throw error;
     }
   }

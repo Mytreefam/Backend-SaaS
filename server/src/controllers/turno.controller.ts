@@ -30,7 +30,10 @@ export async function createTurno(req: Request, res: Response) {
       numero: req.body?.numero,
       estado: req.body?.estado,
       tiempoEstimado: req.body?.tiempoEstimado,
-      pedidoId: Number(req.body?.pedidoId),
+      pedidoId: req.body?.pedidoId !== undefined ? Number(req.body.pedidoId) : undefined,
+      origenPedido: req.body?.origenPedido,
+      geolocalizacionValidada: req.body?.geolocalizacionValidada,
+      fechaGeolocalizacion: req.body?.fechaGeolocalizacion ? new Date(req.body.fechaGeolocalizacion) : undefined,
     };
 
     // Ownership: clients can only create their own turnos
@@ -60,6 +63,8 @@ export async function updateTurno(req: Request, res: Response) {
     const payload: any = {
       estado: req.body?.estado,
       tiempoEstimado: req.body?.tiempoEstimado,
+      geolocalizacionValidada: req.body?.geolocalizacionValidada,
+      fechaGeolocalizacion: req.body?.fechaGeolocalizacion ? new Date(req.body.fechaGeolocalizacion) : undefined,
     };
     const turno = await TurnoModel.update(id, payload);
     res.json(turno);

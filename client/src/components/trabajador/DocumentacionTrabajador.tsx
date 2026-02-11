@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -14,6 +14,7 @@ import {
   Receipt
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
+import { documentosApi, uploadsApi } from '../../services/api';
 
 interface Documento {
   id: string;
@@ -25,84 +26,53 @@ interface Documento {
 }
 
 export function DocumentacionTrabajador() {
-  const [documentos, setDocumentos] = useState<Documento[]>([
-    {
-      id: 'DOC001',
-      tipo: 'nomina',
-      nombre: 'Nómina Octubre 2025',
-      fecha: '2025-10-31',
-      tamano: '245 KB',
-      url: '#'
-    },
-    {
-      id: 'DOC002',
-      tipo: 'nomina',
-      nombre: 'Nómina Septiembre 2025',
-      fecha: '2025-09-30',
-      tamano: '238 KB',
-      url: '#'
-    },
-    {
-      id: 'DOC003',
-      tipo: 'nomina',
-      nombre: 'Nómina Agosto 2025',
-      fecha: '2025-08-31',
-      tamano: '242 KB',
-      url: '#'
-    },
-    {
-      id: 'DOC004',
-      tipo: 'contrato',
-      nombre: 'Contrato Laboral',
-      fecha: '2025-01-15',
-      tamano: '1.2 MB',
-      url: '#'
-    },
-    {
-      id: 'DOC005',
-      tipo: 'irpf',
-      nombre: 'Certificado IRPF 2024',
-      fecha: '2025-01-20',
-      tamano: '320 KB',
-      url: '#'
-    },
-    {
-      id: 'DOC006',
-      tipo: 'irpf',
-      nombre: 'Certificado IRPF 2023',
-      fecha: '2024-01-18',
-      tamano: '315 KB',
-      url: '#'
-    },
-    {
-      id: 'DOC007',
-      tipo: 'otro',
-      nombre: 'Certificado Seguridad Social',
-      fecha: '2025-02-10',
-      tamano: '452 KB',
-      url: '#'
-    },
-    {
-      id: 'DOC008',
-      tipo: 'otro',
-      nombre: 'Certificado Formación PRL',
-      fecha: '2025-03-15',
-      tamano: '580 KB',
-      url: '#'
-    },
-    {
-      id: 'DOC009',
-      tipo: 'otro',
-      nombre: 'Informe Médico Laboral',
-      fecha: '2025-01-25',
-      tamano: '220 KB',
-      url: '#'
-    },
-  ]);
+  const [documentos, setDocumentos] = useState<Documento[]>([]);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const inferTipo = (nombre: string): Documento['tipo'] => {
+    const n = nombre.toLowerCase();
+    if (n.includes('nómina') || n.includes('nomina')) return 'nomina';
+    if (n.includes('irpf')) return 'irpf';
+    if (n.includes('contrato')) return 'contrato';
+    return 'otro';
+  };
+
+  const cargar = async () => {
+    const docs = await documentosApi.list();
+    const mapped: Documento[] = docs.map((d) => ({
+      id: String(d.id),
+      tipo: inferTipo(d.nombre),
+      nombre: d.nombre,
+      fecha: new Date().toISOString().split('T')[0],
+      tamano: '-',
+      url: d.url,
+    }));
+    setDocumentos(mapped);
+  };
+
+  useEffect(() => {
+    cargar();
+  }, []);
 
   const handleSubirArchivo = () => {
-    toast.success('Abriendo selector de archivos...');
-    console.log('[UPLOAD] Subiendo archivo');
+    inputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const url = await uploadsApi.uploadImage(file);
+      const created = await documentosApi.create({ nombre: file.name, url });
+      if (!created) throw new Error('No se pudo guardar el documento');
+      toast.success('Documento subido');
+      await cargar();
+    } catch (error) {
+      console.error(error);
+      toast.error('Error al subir documento');
+    } finally {
+      e.target.value = '';
+    }
   };
 
   const handleDescargar = (doc: Documento) => {
@@ -110,10 +80,13 @@ export function DocumentacionTrabajador() {
     console.log('[DOWNLOAD] Documento:', doc);
   };
 
-  const nominas = documentos.filter(d => d.tipo === 'nomina');
-  const irpf = documentos.filter(d => d.tipo === 'irpf');
-  const contrato = documentos.find(d => d.tipo === 'contrato');
-  const otros = documentos.filter(d => d.tipo === 'otro');
+  const { nominas, irpf, contrato, otros } = useMemo(() => {
+    const nominas = documentos.filter((d) => d.tipo === 'nomina');
+    const irpf = documentos.filter((d) => d.tipo === 'irpf');
+    const contrato = documentos.find((d) => d.tipo === 'contrato');
+    const otros = documentos.filter((d) => d.tipo === 'otro');
+    return { nominas, irpf, contrato, otros };
+  }, [documentos]);
 
   return (
     <div className="space-y-6">
@@ -145,6 +118,7 @@ export function DocumentacionTrabajador() {
               </CardTitle>
             </CardHeader>
             <CardContent>
+              <input ref={inputRef} type="file" className="hidden" onChange={handleFileChange} />
               {!contrato ? (
                 <div className="text-center py-8 text-gray-500">
                   <FileText className="w-12 h-12 mx-auto mb-2 opacity-30" />

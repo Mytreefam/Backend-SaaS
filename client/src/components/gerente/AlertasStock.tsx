@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -29,33 +29,62 @@ import {
   Bell,
   Plus
 } from 'lucide-react';
-import { stockManager } from '../../data/stock-manager';
-import { proveedores } from '../../data/proveedores';
 import { toast } from 'sonner@2.0.3';
 import { ModalCrearPedidoProveedor } from './modales/ModalCrearPedidoProveedor';
+import { stockApi } from '../../services/api/gerente.api';
 
 export function AlertasStock() {
   const [modalPedidoAbierto, setModalPedidoAbierto] = useState(false);
   const [articuloSeleccionado, setArticuloSeleccionado] = useState<string | null>(null);
 
-  // Obtener datos del stockManager
-  const stockActual = stockManager.getStock();
-  const articulosStockBajo = stockManager.getArticulosStockBajo(100); // Umbral de 100 unidades
-  const articulosSinStock = stockManager.getArticulosSinStock();
-  const movimientosRecientes = stockManager.getMovimientos().slice(0, 10);
+  const [cargando, setCargando] = useState(true);
+  const [alertas, setAlertas] = useState<any[]>([]);
+  const [proveedores, setProveedores] = useState<any[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setCargando(true);
+    Promise.all([stockApi.obtenerAlertas(), stockApi.obtenerProveedores?.({})])
+      .then(([alertasRes, proveedoresRes]) => {
+        if (cancelled) return;
+        setAlertas(Array.isArray(alertasRes) ? alertasRes : []);
+        setProveedores(Array.isArray(proveedoresRes) ? proveedoresRes : []);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setAlertas([]);
+        setProveedores([]);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setCargando(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const stockActual = alertas;
+  const articulosStockBajo = useMemo(() => {
+    return stockActual.filter((a: any) => Number(a.stockActual ?? 0) > 0);
+  }, [stockActual]);
+  const articulosSinStock = useMemo(() => {
+    return stockActual.filter((a: any) => Number(a.stockActual ?? 0) <= 0);
+  }, [stockActual]);
 
   // Calcular métricas
   const totalArticulos = stockActual.length;
   const porcentajeStockBajo = (articulosStockBajo.length / totalArticulos) * 100;
   const porcentajeSinStock = (articulosSinStock.length / totalArticulos) * 100;
   const valorTotalStockBajo = articulosStockBajo.reduce(
-    (sum, art) => sum + art.stock * art.precioKg,
-    0
+    (sum: number, art: any) => sum + Number(art.stockActual || 0) * Number(art.precioUltimaCompra || 0),
+    0,
   );
 
   // Agrupar alertas por proveedor
-  const alertasPorProveedor = [...articulosStockBajo, ...articulosSinStock].reduce((acc, articulo) => {
-    const proveedorNombre = articulo.proveedor || 'Sin proveedor';
+  const alertasPorProveedor = [...articulosStockBajo, ...articulosSinStock].reduce((acc, articulo: any) => {
+    const proveedorNombre = articulo?.proveedor?.nombre || 'Sin proveedor';
     if (!acc[proveedorNombre]) {
       acc[proveedorNombre] = [];
     }
@@ -79,7 +108,7 @@ export function AlertasStock() {
       proveedor: proveedorNombre,
       articulos: alertasPorProveedor[proveedorNombre].length,
       valorEstimado: alertasPorProveedor[proveedorNombre].reduce(
-        (sum, art) => sum + (100 - art.stock) * art.precioKg,
+        (sum: number, art: any) => sum + (Number(art.stockMinimo || 0) - Number(art.stockActual || 0)) * Number(art.precioUltimaCompra || 0),
         0
       ).toFixed(2)
     });
@@ -106,13 +135,13 @@ export function AlertasStock() {
             <div className="flex items-center justify-between mb-2">
               <div>
                 <p className="text-xs text-amber-700">Stock Bajo</p>
-                <p className="text-2xl font-bold text-amber-900">{articulosStockBajo.length}</p>
+                <p className="text-2xl font-bold text-amber-900">{cargando ? '—' : articulosStockBajo.length}</p>
               </div>
               <AlertTriangle className="w-8 h-8 text-amber-600" />
             </div>
-            <Progress value={porcentajeStockBajo} className="h-2 bg-amber-200" />
+            <Progress value={Number.isFinite(porcentajeStockBajo) ? porcentajeStockBajo : 0} className="h-2 bg-amber-200" />
             <p className="text-xs text-amber-700 mt-2">
-              {porcentajeStockBajo.toFixed(1)}% del inventario
+              {cargando ? '—' : `${(Number.isFinite(porcentajeStockBajo) ? porcentajeStockBajo : 0).toFixed(1)}% del inventario`}
             </p>
           </CardContent>
         </Card>
@@ -122,11 +151,11 @@ export function AlertasStock() {
             <div className="flex items-center justify-between mb-2">
               <div>
                 <p className="text-xs text-red-700">Sin Stock</p>
-                <p className="text-2xl font-bold text-red-900">{articulosSinStock.length}</p>
+                <p className="text-2xl font-bold text-red-900">{cargando ? '—' : articulosSinStock.length}</p>
               </div>
               <XCircle className="w-8 h-8 text-red-600" />
             </div>
-            <Progress value={porcentajeSinStock} className="h-2 bg-red-200" />
+            <Progress value={Number.isFinite(porcentajeSinStock) ? porcentajeSinStock : 0} className="h-2 bg-red-200" />
             <p className="text-xs text-red-700 mt-2">
               Requiere atención inmediata
             </p>
@@ -139,7 +168,7 @@ export function AlertasStock() {
               <div>
                 <p className="text-xs text-blue-700">Valor en Riesgo</p>
                 <p className="text-2xl font-bold text-blue-900">
-                  €{valorTotalStockBajo.toLocaleString('es-ES', { maximumFractionDigits: 0 })}
+                  {cargando ? '—' : `€${valorTotalStockBajo.toLocaleString('es-ES', { maximumFractionDigits: 0 })}`}
                 </p>
               </div>
               <TrendingDown className="w-8 h-8 text-blue-600" />
@@ -156,13 +185,18 @@ export function AlertasStock() {
               <div>
                 <p className="text-xs text-green-700">Stock Óptimo</p>
                 <p className="text-2xl font-bold text-green-900">
-                  {totalArticulos - articulosStockBajo.length - articulosSinStock.length}
+                  {cargando ? '—' : totalArticulos - articulosStockBajo.length - articulosSinStock.length}
                 </p>
               </div>
               <CheckCircle className="w-8 h-8 text-green-600" />
             </div>
             <p className="text-xs text-green-700 mt-2">
-              {((1 - (articulosStockBajo.length + articulosSinStock.length) / totalArticulos) * 100).toFixed(1)}% del inventario
+              {cargando
+                ? '—'
+                : `${(
+                    (1 - (articulosStockBajo.length + articulosSinStock.length) / Math.max(1, totalArticulos)) *
+                    100
+                  ).toFixed(1)}% del inventario`}
             </p>
           </CardContent>
         </Card>
@@ -201,8 +235,8 @@ export function AlertasStock() {
             ) : (
               Object.entries(alertasPorProveedor).map(([proveedorNombre, articulos]) => {
                 const proveedor = proveedores.find(p => p.nombre === proveedorNombre);
-                const articulosCriticos = articulos.filter(a => a.stock === 0);
-                const articulosBajos = articulos.filter(a => a.stock > 0);
+                const articulosCriticos = (articulos as any[]).filter(a => Number((a as any).stockActual ?? 0) <= 0);
+                const articulosBajos = (articulos as any[]).filter(a => Number((a as any).stockActual ?? 0) > 0);
 
                 return (
                   <Card key={proveedorNombre} className="bg-gray-50">
@@ -244,25 +278,27 @@ export function AlertasStock() {
                       {/* Lista de artículos */}
                       <div className="space-y-2 mt-3">
                         {articulos.slice(0, 3).map((articulo) => {
-                          const colorNivel = getColorNivelStock(articulo.stock);
-                          const porcentajeStock = (articulo.stock / 100) * 100;
+                          const stock = Number((articulo as any).stockActual ?? 0);
+                          const stockMinimo = Number((articulo as any).stockMinimo ?? 100);
+                          const colorNivel = getColorNivelStock(stock, stockMinimo);
+                          const porcentajeStock = stockMinimo > 0 ? (stock / stockMinimo) * 100 : 0;
 
                           return (
                             <div
-                              key={articulo.id}
+                              key={(articulo as any).id}
                               className="flex items-center justify-between p-2 bg-white rounded-lg border"
                             >
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-1">
-                                  <p className="text-sm font-medium">{articulo.nombre}</p>
+                                  <p className="text-sm font-medium">{(articulo as any).nombre}</p>
                                   <Badge variant="outline" className={`${colorNivel.text} text-xs`}>
                                     {colorNivel.label}
                                   </Badge>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                  <Progress value={porcentajeStock} className="h-1.5 flex-1" />
+                                  <Progress value={Math.min(100, Math.max(0, porcentajeStock))} className="h-1.5 flex-1" />
                                   <span className="text-xs text-gray-600 w-20 text-right">
-                                    {articulo.stock} {articulo.unidad}
+                                    {stock} {(articulo as any).unidadMedida || 'u'}
                                   </span>
                                 </div>
                               </div>
@@ -279,9 +315,9 @@ export function AlertasStock() {
                       {/* Info del proveedor */}
                       {proveedor && (
                         <div className="mt-3 pt-3 border-t text-xs text-gray-600">
-                          <div className="flex items-center justify-between">
-                            <span>Plazo de entrega: {proveedor.condicionesComerciales.plazoEntrega} días</span>
-                            <span>Pedido mínimo: €{proveedor.condicionesComerciales.pedidoMinimo}</span>
+                          <div className="flex items-center justify-between gap-4">
+                            <span>Contacto: {proveedor.contactoNombre || '—'}</span>
+                            <span>Pago: {proveedor.condicionesPago || '—'}</span>
                           </div>
                         </div>
                       )}
@@ -318,8 +354,10 @@ export function AlertasStock() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {articulosStockBajo.map((articulo) => {
-                    const colorNivel = getColorNivelStock(articulo.stock);
+                  {articulosStockBajo.map((articulo: any) => {
+                    const stock = Number(articulo.stockActual ?? 0);
+                    const stockMinimo = Number(articulo.stockMinimo ?? 100);
+                    const colorNivel = getColorNivelStock(stock, stockMinimo);
 
                     return (
                       <TableRow key={articulo.id} className="hover:bg-gray-50">
@@ -336,14 +374,14 @@ export function AlertasStock() {
                         </TableCell>
                         <TableCell className="text-right">
                           <span className={`font-semibold ${colorNivel.text}`}>
-                            {articulo.stock} {articulo.unidad}
+                            {stock} {articulo.unidadMedida || 'u'}
                           </span>
                         </TableCell>
                         <TableCell className="text-right">
-                          €{articulo.precioKg.toFixed(2)}
+                          €{Number(articulo.precioUltimaCompra || 0).toFixed(2)}
                         </TableCell>
                         <TableCell className="text-sm">
-                          {articulo.proveedor || 'Sin asignar'}
+                          {articulo?.proveedor?.nombre || 'Sin asignar'}
                         </TableCell>
                         <TableCell>
                           <Badge className={`${colorNivel.text}`}>
@@ -355,7 +393,7 @@ export function AlertasStock() {
                             size="sm"
                             variant="outline"
                             onClick={() => {
-                              setArticuloSeleccionado(articulo.id);
+                              setArticuloSeleccionado(String(articulo.id));
                               setModalPedidoAbierto(true);
                             }}
                           >

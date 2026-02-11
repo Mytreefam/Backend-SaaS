@@ -16,8 +16,7 @@ import { Calendar } from '../ui/calendar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { EmptyState } from '../ui/empty-state';
 import { SkeletonList } from '../ui/skeleton-list';
-import { fichajesApi, Fichaje } from '../../services/api';
-import { useAuth } from '../../hooks/useAuth';
+import { fichajesApi, Fichaje, trabajadorRrhhApi, authApi } from '../../services/api';
 import { 
   Clock, 
   LogIn, 
@@ -98,8 +97,8 @@ interface FichajeTrabajadorProps {
 }
 
 export function FichajeTrabajador({ enTurno: enTurnoExterno, onFicharChange }: FichajeTrabajadorProps = {}) {
-  const { user } = useAuth();
-  const empleadoId = user?.id || 1;
+  const user = authApi.getCurrentUser();
+  const empleadoId = Number(user?.id || 1);
   
   const [activeTab, setActiveTab] = useState('fichaje');
   const [enTurno, setEnTurno] = useState(enTurnoExterno || false);
@@ -156,62 +155,16 @@ export function FichajeTrabajador({ enTurno: enTurnoExterno, onFicharChange }: F
   // Datos de fichajes del día (se carga del backend)
   const [registrosHoy, setRegistrosHoy] = useState<RegistroFichaje[]>([]);
 
-  const [solicitudesHorasExtra, setSolicitudesHorasExtra] = useState<SolicitudHoraExtra[]>([
-    { id: '1', fecha: '15 Nov 2025', rango: '18:00 - 20:00', motivo: 'Trabajo urgente cliente', estado: 'pendiente' },
-  ]);
+  const [solicitudesHorasExtra, setSolicitudesHorasExtra] = useState<SolicitudHoraExtra[]>([]);
+  const [solicitudesVacaciones, setSolicitudesVacaciones] = useState<SolicitudVacaciones[]>([]);
+  const [consumosProductos, setConsumosProductos] = useState<ConsumoProducto[]>([]);
+  const [gastosEmpleado, setGastosEmpleado] = useState<GastoEmpleado[]>([]);
 
-  const [solicitudesVacaciones, setSolicitudesVacaciones] = useState<SolicitudVacaciones[]>([
-    { id: '1', rango: '20-24 Dic 2025', motivo: 'Vacaciones navideñas', estado: 'aprobada', dias: 5 },
-  ]);
-
-  const consumosProductos: ConsumoProducto[] = [
-    { id: 'CONS-001', producto: 'Bocadillo de jamón', categoria: 'comida', cantidad: 1, fecha: '2025-11-18', precio: 3.50 },
-    { id: 'CONS-002', producto: 'Café con leche', categoria: 'bebida', cantidad: 2, fecha: '2025-11-18', precio: 2.40 },
-    { id: 'CONS-003', producto: 'Delantal nuevo', categoria: 'uniforme', cantidad: 1, fecha: '2025-11-15', precio: 15.00 },
-    { id: 'CONS-004', producto: 'Agua embotellada', categoria: 'bebida', cantidad: 3, fecha: '2025-11-17', precio: 1.50 },
-    { id: 'CONS-005', producto: 'Guantes de trabajo', categoria: 'herramientas', cantidad: 2, fecha: '2025-11-16', precio: 8.00 },
-  ];
-
-  const gastosEmpleado: GastoEmpleado[] = [
-    { 
-      id: 'GASTO-001', 
-      concepto: 'Productos de limpieza para horno', 
-      categoria: 'limpieza', 
-      importe: 24.50, 
-      fecha: '2025-11-15', 
-      estado: 'pendiente',
-      justificante: 'factura-limpieza.pdf',
-      notas: 'Desengrasante industrial para horno de panadería'
-    },
-    { 
-      id: 'GASTO-002', 
-      concepto: 'Gasolina moto - entregas a domicilio', 
-      categoria: 'transporte', 
-      importe: 35.00, 
-      fecha: '2025-11-18', 
-      estado: 'aprobado',
-      justificante: 'ticket-gasolinera.pdf',
-      notas: 'Reparto de pedidos zona Barcelona'
-    },
-    { 
-      id: 'GASTO-003', 
-      concepto: 'Moldes especiales para pan', 
-      categoria: 'material', 
-      importe: 45.90, 
-      fecha: '2025-11-12', 
-      estado: 'aprobado',
-      justificante: 'factura-moldes.pdf'
-    },
-    { 
-      id: 'GASTO-004', 
-      concepto: 'Trapos y bayetas profesionales', 
-      categoria: 'limpieza', 
-      importe: 18.20, 
-      fecha: '2025-11-10', 
-      estado: 'pendiente',
-      justificante: 'ticket-compra.pdf'
-    },
-  ];
+  // Formularios modales (backend-first)
+  const [horasExtraForm, setHorasExtraForm] = useState({ fecha: '', horaInicio: '', horaFin: '', motivo: '' });
+  const [vacacionesMotivo, setVacacionesMotivo] = useState('');
+  const [gastoForm, setGastoForm] = useState({ concepto: '', categoria: '', importe: '', fecha: '', notas: '' });
+  const [consumoForm, setConsumoForm] = useState({ producto: '', categoria: '', cantidad: '1', fecha: '', notas: '' });
 
   // Unificar consumos internos y gastos en una sola lista
   const registrosConsumos: RegistroConsumo[] = [
@@ -237,6 +190,75 @@ export function FichajeTrabajador({ enTurno: enTurnoExterno, onFicharChange }: F
       notas: g.notas
     }))
   ].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+
+  const refreshRrhh = useCallback(async () => {
+    try {
+      const [vac, he, cons, gas] = await Promise.all([
+        trabajadorRrhhApi.listVacaciones(),
+        trabajadorRrhhApi.listHorasExtra(),
+        trabajadorRrhhApi.listConsumos(),
+        trabajadorRrhhApi.listGastos(),
+      ]);
+
+      setSolicitudesVacaciones(
+        (vac || []).map((v) => {
+          const desde = new Date(v.desde);
+          const hasta = new Date(v.hasta);
+          const dias =
+            Number.isFinite(desde.getTime()) && Number.isFinite(hasta.getTime())
+              ? Math.max(1, Math.round((hasta.getTime() - desde.getTime()) / (1000 * 60 * 60 * 24)) + 1)
+              : 1;
+          return {
+            id: String(v.id),
+            rango: `${desde.toLocaleDateString('es-ES')} - ${hasta.toLocaleDateString('es-ES')}`,
+            motivo: v.motivo,
+            estado: (v.estado as any) || 'pendiente',
+            dias,
+          };
+        }),
+      );
+
+      setSolicitudesHorasExtra(
+        (he || []).map((h) => ({
+          id: String(h.id),
+          fecha: new Date(h.fecha).toLocaleDateString('es-ES'),
+          rango: `${h.horaInicio} - ${h.horaFin}`,
+          motivo: h.motivo,
+          estado: (h.estado as any) || 'pendiente',
+        })),
+      );
+
+      setConsumosProductos(
+        (cons || []).map((c) => ({
+          id: `CONS-${c.id}`,
+          producto: c.producto,
+          categoria: c.categoria as any,
+          cantidad: Number(c.cantidad || 1),
+          fecha: new Date(c.fecha).toISOString().split('T')[0],
+          precio: Number(c.precio || 0),
+        })),
+      );
+
+      setGastosEmpleado(
+        (gas || []).map((g) => ({
+          id: `GASTO-${g.id}`,
+          concepto: g.concepto,
+          categoria: g.categoria as any,
+          importe: Number(g.importe || 0),
+          fecha: new Date(g.fechaGasto).toISOString().split('T')[0],
+          estado: (g.estado as any) || 'pendiente',
+          justificante: g.justificanteUrl || undefined,
+          notas: g.notas || undefined,
+        })),
+      );
+    } catch (e) {
+      console.error('Error cargando RRHH trabajador:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshRrhh();
+  }, [refreshRrhh]);
 
   const vacacionesSaldo = {
     pendientes: 18,
@@ -1095,16 +1117,34 @@ export function FichajeTrabajador({ enTurno: enTurnoExterno, onFicharChange }: F
           <div className="space-y-4">
             <div>
               <Label htmlFor="fecha-extra">Fecha</Label>
-              <Input id="fecha-extra" type="date" className="min-h-[44px]" />
+              <Input
+                id="fecha-extra"
+                type="date"
+                className="min-h-[44px]"
+                value={horasExtraForm.fecha}
+                onChange={(e) => setHorasExtraForm((p) => ({ ...p, fecha: e.target.value }))}
+              />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="hora-inicio">Hora inicio</Label>
-                <Input id="hora-inicio" type="time" className="min-h-[44px]" />
+                <Input
+                  id="hora-inicio"
+                  type="time"
+                  className="min-h-[44px]"
+                  value={horasExtraForm.horaInicio}
+                  onChange={(e) => setHorasExtraForm((p) => ({ ...p, horaInicio: e.target.value }))}
+                />
               </div>
               <div>
                 <Label htmlFor="hora-fin">Hora fin</Label>
-                <Input id="hora-fin" type="time" className="min-h-[44px]" />
+                <Input
+                  id="hora-fin"
+                  type="time"
+                  className="min-h-[44px]"
+                  value={horasExtraForm.horaFin}
+                  onChange={(e) => setHorasExtraForm((p) => ({ ...p, horaFin: e.target.value }))}
+                />
               </div>
             </div>
             <div>
@@ -1113,6 +1153,8 @@ export function FichajeTrabajador({ enTurno: enTurnoExterno, onFicharChange }: F
                 id="motivo-extra"
                 placeholder="Describe el motivo de las horas extra..."
                 className="min-h-[80px]"
+                value={horasExtraForm.motivo}
+                onChange={(e) => setHorasExtraForm((p) => ({ ...p, motivo: e.target.value }))}
               />
             </div>
           </div>
@@ -1122,9 +1164,19 @@ export function FichajeTrabajador({ enTurno: enTurnoExterno, onFicharChange }: F
             </Button>
             <Button
               className="bg-teal-600 hover:bg-teal-700"
-              onClick={() => {
-                setHorasExtraModalOpen(false);
-                toast.success('Solicitud de horas extra enviada');
+              onClick={async () => {
+                try {
+                  const { fecha, horaInicio, horaFin, motivo } = horasExtraForm;
+                  await trabajadorRrhhApi.createHorasExtra({ fecha, horaInicio, horaFin, motivo });
+                  toast.success('Solicitud de horas extra enviada');
+                  setHorasExtraForm({ fecha: '', horaInicio: '', horaFin: '', motivo: '' });
+                  await refreshRrhh();
+                } catch (e) {
+                  console.error(e);
+                  toast.error('No se pudo enviar la solicitud de horas extra');
+                } finally {
+                  setHorasExtraModalOpen(false);
+                }
               }}
             >
               Enviar Solicitud
@@ -1163,6 +1215,8 @@ export function FichajeTrabajador({ enTurno: enTurnoExterno, onFicharChange }: F
                 id="motivo-vacaciones"
                 placeholder="Describe el motivo de las vacaciones..."
                 className="min-h-[80px]"
+                value={vacacionesMotivo}
+                onChange={(e) => setVacacionesMotivo(e.target.value)}
               />
             </div>
           </div>
@@ -1173,9 +1227,21 @@ export function FichajeTrabajador({ enTurno: enTurnoExterno, onFicharChange }: F
             <Button
               className="bg-teal-600 hover:bg-teal-700"
               disabled={!dateRange?.from || !dateRange?.to}
-              onClick={() => {
-                setVacacionesModalOpen(false);
-                toast.success('Solicitud de vacaciones enviada');
+              onClick={async () => {
+                if (!dateRange?.from || !dateRange?.to) return;
+                try {
+                  const desde = dateRange.from.toISOString().split('T')[0];
+                  const hasta = dateRange.to.toISOString().split('T')[0];
+                  await trabajadorRrhhApi.createVacaciones({ desde, hasta, motivo: vacacionesMotivo || 'Vacaciones' });
+                  toast.success('Solicitud de vacaciones enviada');
+                  setVacacionesMotivo('');
+                  await refreshRrhh();
+                } catch (e) {
+                  console.error(e);
+                  toast.error('No se pudo enviar la solicitud de vacaciones');
+                } finally {
+                  setVacacionesModalOpen(false);
+                }
               }}
             >
               Enviar Solicitud
@@ -1202,6 +1268,8 @@ export function FichajeTrabajador({ enTurno: enTurnoExterno, onFicharChange }: F
                 id="concepto-gasto" 
                 placeholder="Ej: Productos de limpieza, Gasolina moto..." 
                 className="min-h-[44px]" 
+                value={gastoForm.concepto}
+                onChange={(e) => setGastoForm((p) => ({ ...p, concepto: e.target.value }))}
               />
             </div>
             <div>
@@ -1209,6 +1277,8 @@ export function FichajeTrabajador({ enTurno: enTurnoExterno, onFicharChange }: F
               <select 
                 id="categoria-gasto"
                 className="w-full min-h-[44px] rounded-md border border-gray-300 px-3"
+                value={gastoForm.categoria}
+                onChange={(e) => setGastoForm((p) => ({ ...p, categoria: e.target.value }))}
               >
                 <option value="">Selecciona una categoría</option>
                 <option value="limpieza">Limpieza</option>
@@ -1226,6 +1296,8 @@ export function FichajeTrabajador({ enTurno: enTurnoExterno, onFicharChange }: F
                   step="0.01" 
                   placeholder="0.00" 
                   className="min-h-[44px]" 
+                  value={gastoForm.importe}
+                  onChange={(e) => setGastoForm((p) => ({ ...p, importe: e.target.value }))}
                 />
               </div>
               <div>
@@ -1234,6 +1306,8 @@ export function FichajeTrabajador({ enTurno: enTurnoExterno, onFicharChange }: F
                   id="fecha-gasto" 
                   type="date" 
                   className="min-h-[44px]" 
+                  value={gastoForm.fecha}
+                  onChange={(e) => setGastoForm((p) => ({ ...p, fecha: e.target.value }))}
                 />
               </div>
             </div>
@@ -1255,6 +1329,8 @@ export function FichajeTrabajador({ enTurno: enTurnoExterno, onFicharChange }: F
                 id="notas-gasto"
                 placeholder="Añade detalles sobre el gasto..."
                 className="min-h-[60px]"
+                value={gastoForm.notas}
+                onChange={(e) => setGastoForm((p) => ({ ...p, notas: e.target.value }))}
               />
             </div>
           </div>
@@ -1264,9 +1340,24 @@ export function FichajeTrabajador({ enTurno: enTurnoExterno, onFicharChange }: F
             </Button>
             <Button
               className="bg-teal-600 hover:bg-teal-700"
-              onClick={() => {
-                setGastoModalOpen(false);
-                toast.success('Solicitud de reembolso enviada correctamente');
+              onClick={async () => {
+                try {
+                  await trabajadorRrhhApi.createGasto({
+                    concepto: gastoForm.concepto,
+                    categoria: gastoForm.categoria,
+                    importe: Number(gastoForm.importe),
+                    fechaGasto: gastoForm.fecha || undefined,
+                    notas: gastoForm.notas || undefined,
+                  });
+                  toast.success('Solicitud de reembolso enviada correctamente');
+                  setGastoForm({ concepto: '', categoria: '', importe: '', fecha: '', notas: '' });
+                  await refreshRrhh();
+                } catch (e) {
+                  console.error(e);
+                  toast.error('No se pudo enviar el gasto');
+                } finally {
+                  setGastoModalOpen(false);
+                }
               }}
             >
               Solicitar Reembolso
@@ -1293,6 +1384,8 @@ export function FichajeTrabajador({ enTurno: enTurnoExterno, onFicharChange }: F
                 id="producto-consumo" 
                 placeholder="Ej: Bocadillo, Café, Agua..." 
                 className="min-h-[44px]" 
+                value={consumoForm.producto}
+                onChange={(e) => setConsumoForm((p) => ({ ...p, producto: e.target.value }))}
               />
             </div>
             <div>
@@ -1300,6 +1393,8 @@ export function FichajeTrabajador({ enTurno: enTurnoExterno, onFicharChange }: F
               <select 
                 id="categoria-consumo"
                 className="w-full min-h-[44px] rounded-md border border-gray-300 px-3"
+                value={consumoForm.categoria}
+                onChange={(e) => setConsumoForm((p) => ({ ...p, categoria: e.target.value }))}
               >
                 <option value="">Selecciona una categoría</option>
                 <option value="comida">Comida</option>
@@ -1317,6 +1412,8 @@ export function FichajeTrabajador({ enTurno: enTurnoExterno, onFicharChange }: F
                   step="1" 
                   placeholder="1" 
                   className="min-h-[44px]" 
+                  value={consumoForm.cantidad}
+                  onChange={(e) => setConsumoForm((p) => ({ ...p, cantidad: e.target.value }))}
                 />
               </div>
               <div>
@@ -1325,6 +1422,8 @@ export function FichajeTrabajador({ enTurno: enTurnoExterno, onFicharChange }: F
                   id="fecha-consumo" 
                   type="date" 
                   className="min-h-[44px]" 
+                  value={consumoForm.fecha}
+                  onChange={(e) => setConsumoForm((p) => ({ ...p, fecha: e.target.value }))}
                 />
               </div>
             </div>
@@ -1334,6 +1433,8 @@ export function FichajeTrabajador({ enTurno: enTurnoExterno, onFicharChange }: F
                 id="notas-consumo"
                 placeholder="Añade detalles sobre el consumo..."
                 className="min-h-[60px]"
+                value={consumoForm.notas}
+                onChange={(e) => setConsumoForm((p) => ({ ...p, notas: e.target.value }))}
               />
             </div>
           </div>
@@ -1343,9 +1444,24 @@ export function FichajeTrabajador({ enTurno: enTurnoExterno, onFicharChange }: F
             </Button>
             <Button
               className="bg-teal-600 hover:bg-teal-700"
-              onClick={() => {
-                setConsumoInternoModalOpen(false);
-                toast.success('Consumo interno registrado correctamente');
+              onClick={async () => {
+                try {
+                  await trabajadorRrhhApi.createConsumo({
+                    producto: consumoForm.producto,
+                    categoria: consumoForm.categoria,
+                    cantidad: Number(consumoForm.cantidad || 1),
+                    fecha: consumoForm.fecha || undefined,
+                    notas: consumoForm.notas || undefined,
+                  });
+                  toast.success('Consumo interno registrado correctamente');
+                  setConsumoForm({ producto: '', categoria: '', cantidad: '1', fecha: '', notas: '' });
+                  await refreshRrhh();
+                } catch (e) {
+                  console.error(e);
+                  toast.error('No se pudo registrar el consumo interno');
+                } finally {
+                  setConsumoInternoModalOpen(false);
+                }
               }}
             >
               Registrar Consumo

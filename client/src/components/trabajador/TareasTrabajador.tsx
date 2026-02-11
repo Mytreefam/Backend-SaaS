@@ -177,13 +177,7 @@ export function TareasTrabajador({
   };
   
   const handleAgregarEvidencia = () => {
-    // En producción, aquí se subiría la imagen a un storage
-    // Por ahora simulamos con una URL
-    const mockUrl = `https://storage.example.com/evidencia-${Date.now()}.jpg`;
-    setEvidencias([...evidencias, mockUrl]);
-    toast.success('Evidencia agregada', {
-      description: 'En producción, aquí se subiría la foto',
-    });
+    toast.error('Subida de evidencias no disponible aún');
   };
   
   const getPrioridadColor = (prioridad: string) => {

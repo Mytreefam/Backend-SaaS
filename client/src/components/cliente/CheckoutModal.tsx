@@ -13,7 +13,7 @@
  * 
  * Al confirmar:
  * - Crea el pedido con todos los datos
- * - Genera factura VeriFactu
+ * - Genera factura (backend)
  * - Limpia el carrito
  * - Muestra confirmación
  */
@@ -49,11 +49,13 @@ import {
 } from 'lucide-react';
 import { useCart } from '../../contexts/CartContext';
 import { MisDirecciones, type Direccion } from './MisDirecciones';
-import { asociarFactura } from '../../services/pedidos.service';
-import { notificationsService } from '../../services/notifications.service';
+import { facturasApi } from '../../services/api/facturas.api';
+import { notificacionesApi } from '../../services/api/notificaciones.api';
+import { puntosVentaApi } from '../../services/api/puntosVenta.api';
 import { toast } from 'sonner@2.0.3';
 import { PagoProcesamientoModal } from './PagoProcesamientoModal';
 import { PagoResultadoModal } from './PagoResultadoModal';
+import type { PedidoConfirmacionData } from './PedidoConfirmacionModal';
 
 // ============================================
 // INTERFACES
@@ -62,7 +64,7 @@ import { PagoResultadoModal } from './PagoResultadoModal';
 interface CheckoutModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess?: (pedidoId: string, facturaId: string) => void;
+  onSuccess?: (pedido: PedidoConfirmacionData) => void;
   userData: {
     id?: string | number;
     name: string;
@@ -70,12 +72,6 @@ interface CheckoutModalProps {
     telefono?: string;
     direccion?: string;
   };
-}
-
-interface Marca {
-  id: string;
-  nombre: string;
-  colorIdentidad: string;
 }
 
 interface PuntoVenta {
@@ -86,60 +82,12 @@ interface PuntoVenta {
   tiempoEstimado?: number;
   latitud: number;
   longitud: number;
-  marcasDisponibles: Marca[];
+  marcasIds?: string[];
+  activo?: boolean;
 }
 
 type MetodoPago = 'tarjeta' | 'bizum' | 'efectivo';
 type TipoEntrega = 'domicilio' | 'recogida';
-
-// ============================================
-// DATOS MOCK - PDVs (desde ConfiguracionEmpresas del Gerente)
-// ============================================
-
-const puntosVentaMock: PuntoVenta[] = [
-  {
-    id: 'PDV-TIANA',
-    nombre: 'Tiana',
-    direccion: 'Passeig de la Vilesa, 6, 08391 Tiana, Barcelona',
-    distancia: 0.8,
-    tiempoEstimado: 15,
-    latitud: 41.4933,
-    longitud: 2.2633,
-    marcasDisponibles: [
-      {
-        id: 'MRC-001',
-        nombre: 'Modomio',
-        colorIdentidad: '#FF6B35',
-      },
-      {
-        id: 'MRC-002',
-        nombre: 'Blackburguer',
-        colorIdentidad: '#1A1A1A',
-      },
-    ],
-  },
-  {
-    id: 'PDV-BADALONA',
-    nombre: 'Badalona',
-    direccion: 'Carrer del Doctor Robert, 75, 08915 Badalona, Barcelona',
-    distancia: 2.3,
-    tiempoEstimado: 20,
-    latitud: 41.4500,
-    longitud: 2.2461,
-    marcasDisponibles: [
-      {
-        id: 'MRC-001',
-        nombre: 'Modomio',
-        colorIdentidad: '#FF6B35',
-      },
-      {
-        id: 'MRC-002',
-        nombre: 'Blackburguer',
-        colorIdentidad: '#1A1A1A',
-      },
-    ],
-  },
-];
 
 // ============================================
 // COMPONENTE PRINCIPAL
@@ -159,7 +107,9 @@ export function CheckoutModal({ isOpen, onClose, onSuccess, userData }: Checkout
   const [ubicacionUsuario, setUbicacionUsuario] = useState<{ lat: number; lng: number } | null>(null);
   const [geolocalizando, setGeolocalizando] = useState(false);
   const [errorGeolocalizacion, setErrorGeolocalizacion] = useState<string | null>(null);
-  const [puntosOrdenados, setPuntosOrdenados] = useState<PuntoVenta[]>(puntosVentaMock);
+  const [puntosVenta, setPuntosVenta] = useState<PuntoVenta[]>([]);
+  const [puntosOrdenados, setPuntosOrdenados] = useState<PuntoVenta[]>([]);
+  const [puntosVentaLoading, setPuntosVentaLoading] = useState(false);
 
   // Carrito
   const {
@@ -170,9 +120,25 @@ export function CheckoutModal({ isOpen, onClose, onSuccess, userData }: Checkout
     iva,
     total,
     cuponAplicado,
-    clearCart,
     crearPedido, // ✅ Método para crear pedido con API backend
   } = useCart();
+
+  // ============================================
+  // CARGA DE PUNTOS DE VENTA (backend)
+  // ============================================
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setPuntosVentaLoading(true);
+    puntosVentaApi
+      .getAll()
+      .then((list) => {
+        setPuntosVenta(list as any);
+        setPuntosOrdenados(list as any);
+        if (list.length > 0) setPuntoVentaSeleccionado(list[0] as any);
+      })
+      .finally(() => setPuntosVentaLoading(false));
+  }, [isOpen]);
 
   // ============================================
   // GEOLOCALIZACIÓN
@@ -182,15 +148,15 @@ export function CheckoutModal({ isOpen, onClose, onSuccess, userData }: Checkout
     if (isOpen && !ubicacionUsuario) {
       obtenerUbicacion();
     }
-  }, [isOpen]);
+  }, [isOpen, ubicacionUsuario, puntosVenta.length]);
 
   const obtenerUbicacion = () => {
     // Verificar si la geolocalización está disponible
     if (!navigator.geolocation) {
       setErrorGeolocalizacion('Tu navegador no soporta geolocalización');
-      setPuntosOrdenados(puntosVentaMock);
-      if (puntosVentaMock.length > 0) {
-        setPuntoVentaSeleccionado(puntosVentaMock[0]);
+      setPuntosOrdenados(puntosVenta);
+      if (puntosVenta.length > 0) {
+        setPuntoVentaSeleccionado(puntosVenta[0]);
       }
       return;
     }
@@ -236,9 +202,9 @@ export function CheckoutModal({ isOpen, onClose, onSuccess, userData }: Checkout
         setGeolocalizando(false);
         
         // Mostrar puntos sin ordenar por distancia
-        setPuntosOrdenados(puntosVentaMock);
-        if (puntosVentaMock.length > 0) {
-          setPuntoVentaSeleccionado(puntosVentaMock[0]);
+        setPuntosOrdenados(puntosVenta);
+        if (puntosVenta.length > 0) {
+          setPuntoVentaSeleccionado(puntosVenta[0]);
         }
       },
       // Opciones
@@ -251,7 +217,7 @@ export function CheckoutModal({ isOpen, onClose, onSuccess, userData }: Checkout
   };
 
   const calcularDistancias = (lat: number, lng: number): PuntoVenta[] => {
-    return puntosVentaMock.map(punto => {
+    return puntosVenta.map(punto => {
       const distancia = calcularDistanciaHaversine(lat, lng, punto.latitud, punto.longitud);
       return {
         ...punto,
@@ -361,87 +327,90 @@ export function CheckoutModal({ isOpen, onClose, onSuccess, userData }: Checkout
         direccionEntrega = puntoVentaSeleccionado.direccion;
       }
 
-      // Crear pedido
-      const nuevoPedido = crearPedido({
-        clienteId: userData.id || 'CLI-001',
-        clienteNombre: userData.name,
-        clienteEmail: userData.email,
-        clienteTelefono: userData.telefono || '',
-        clienteDireccion: direccionEntrega,
-        items: items,
-        subtotal: subtotal,
+      const clienteIdNum = Number(userData.id);
+      if (!Number.isFinite(clienteIdNum)) {
+        throw new Error('No se pudo determinar el cliente. Vuelve a iniciar sesión.');
+      }
+
+      // Snapshot del resumen (antes de que el carrito pueda limpiarse)
+      const pedidoNumero = `PED-${String(Date.now() % 100000).padStart(5, '0')}`;
+      const pedidoResumenBase: Omit<PedidoConfirmacionData, 'facturaId'> = {
+        id: '', // se rellena tras crear en backend
+        numero: pedidoNumero,
+        tiempoPreparacion: null,
+        tipoEntrega,
+        direccionEntrega,
+        estado: metodoPago === 'efectivo' ? 'pendiente' : 'pagado',
+        items: items.map((i) => ({ cantidad: i.cantidad })),
+        subtotal,
         descuento: descuentoCupon,
-        cuponAplicado: cuponAplicado?.codigo,
-        iva: iva,
-        total: total,
-        metodoPago: metodoPago,
-        tipoEntrega: tipoEntrega,
-        observaciones: observaciones,
+        iva,
+        total,
+      };
+
+      // Crear pedido (persistencia real)
+      const pedidoCreado = await crearPedido({
+        clienteId: clienteIdNum,
+        tipoEntrega,
+        direccionEntrega,
+        metodoPago,
         puntoVentaId: tipoEntrega === 'recogida' ? puntoVentaSeleccionado?.id : undefined,
       });
 
-      // ⭐ NUEVO: Descontar stock automáticamente
-      const resultadoDescuento = stockIntegrationService.descontarStockPorPedido(
-        nuevoPedido,
-        userData.name
-      );
-
-      if (!resultadoDescuento.exito) {
-        console.error('❌ Error al descontar stock:', resultadoDescuento.errores);
-        toast.error('Error al actualizar inventario', {
-          description: 'El pedido se creó pero hubo un problema con el stock'
-        });
-      } else {
-        console.log('✅ Stock descontado:', resultadoDescuento.movimientosRegistrados);
+      if (!pedidoCreado) {
+        throw new Error('No se pudo crear el pedido');
       }
 
-      // Generar factura si no es efectivo
-      let facturaId = '';
+      // Generar factura si no es efectivo (persistencia real)
+      let facturaId: string | null = null;
       if (metodoPago !== 'efectivo') {
-        facturaId = await generarFacturaVeriFactu(nuevoPedido);
-        
-        if (facturaId) {
-          asociarFactura(nuevoPedido.id, facturaId);
-        }
+        const factura = await facturasApi.create({
+          pedidoId: Number(pedidoCreado.id),
+          total,
+          subtotal,
+          impuestos: iva,
+          metodoPago,
+          estadoVerifactu: 'pendiente',
+          puntoVentaId: tipoEntrega === 'recogida' ? puntoVentaSeleccionado?.id : null,
+          notas: observaciones || null,
+        } as any);
+        if (factura?.id != null) facturaId = String(factura.id);
       }
 
-      // Crear notificación
+      // Crear notificación (backend)
       try {
-        await notificationsService.createNotification({
-          usuarioId: String(userData.id || 'CLI-001'),
-          titulo: '¡Pedido confirmado!',
-          mensaje: `Tu pedido ${nuevoPedido.numero} ha sido confirmado y está siendo preparado.`,
-          tipo: 'pedido',
-          prioridad: 'alta',
-          relacionId: nuevoPedido.id,
-          relacionTipo: 'pedido',
-          urlAccion: '/pedidos',
-          canales: ['in_app', 'push'],
+        await notificacionesApi.create({
+          mensaje: `¡Pedido confirmado! Tu pedido ${pedidoNumero} ha sido confirmado y está siendo preparado.`,
+          clienteId: clienteIdNum,
+          leida: false,
         });
       } catch (error) {
         console.error('Error al crear notificación:', error);
       }
 
-      // Limpiar carrito
-      clearCart();
+      // (El carrito se limpia dentro de `useCart().crearPedido()` si fue OK)
 
       // Confirmación
+      const pedidoConfirmacion: PedidoConfirmacionData = {
+        ...pedidoResumenBase,
+        id: String(pedidoCreado.id),
+        facturaId,
+      };
+
       toast.success(
         <div className="flex items-start gap-3">
           <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
           <div>
             <p className="font-medium">¡Pedido realizado correctamente!</p>
-            <p className="text-sm text-gray-600">Nº Pedido: {nuevoPedido.numero || nuevoPedido.id}</p>
-            {facturaId && (
-              <p className="text-sm text-gray-600">Nº Factura: {facturaId}</p>
-            )}
+            <p className="text-sm text-gray-600">Nº Pedido: {pedidoNumero}</p>
+            {facturaId && <p className="text-sm text-gray-600">Nº Factura: {facturaId}</p>}
           </div>
         </div>,
         { duration: 5000 }
       );
 
       if (onSuccess) {
-        onSuccess(nuevoPedido.id, facturaId);
+        onSuccess(pedidoConfirmacion);
       }
 
       onClose();
@@ -452,66 +421,6 @@ export function CheckoutModal({ isOpen, onClose, onSuccess, userData }: Checkout
     } finally {
       setProcesando(false);
     }
-  };
-
-  // ============================================
-  // FACTURA VERIFACTU
-  // ============================================
-
-  const generarFacturaVeriFactu = async (pedido: any): Promise<string> => {
-    const facturaId = `FAC-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-    
-    const empresa = {
-      nombre: 'Udar Edge SL',
-      cif: 'B12345678',
-      direccion: 'Calle Principal 123, 28001 Madrid',
-      telefono: '+34 912 345 678',
-      email: 'info@udaredge.com',
-    };
-
-    const factura = {
-      id: facturaId,
-      numero: facturaId,
-      serie: 'A',
-      fecha: new Date().toISOString(),
-      fechaVencimiento: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      cliente: pedido.cliente,
-      empresa: empresa,
-      items: pedido.items.map((item: any) => ({
-        descripcion: item.nombre,
-        cantidad: item.cantidad,
-        precioUnitario: item.precio,
-        subtotal: item.subtotal,
-        ivaPorc: 21,
-        ivaImporte: item.subtotal * 0.21,
-        total: item.subtotal * 1.21,
-      })),
-      subtotal: pedido.subtotal,
-      descuento: pedido.descuento,
-      baseImponible: pedido.subtotal - pedido.descuento,
-      iva: pedido.iva,
-      total: pedido.total,
-      verifactu: {
-        hash: generarHashVeriFactu(facturaId, pedido.total),
-        qr: `https://verifactu.gob.es/verify/${facturaId}`,
-        estado: 'enviado',
-        fechaEnvio: new Date().toISOString(),
-      },
-      pedidoId: pedido.id,
-      metodoPago: pedido.metodoPago,
-      estado: 'emitida',
-    };
-
-    const facturasGuardadas = JSON.parse(localStorage.getItem('udar-facturas') || '[]');
-    facturasGuardadas.unshift(factura);
-    localStorage.setItem('udar-facturas', JSON.stringify(facturasGuardadas));
-
-    return facturaId;
-  };
-
-  const generarHashVeriFactu = (facturaId: string, total: number): string => {
-    const str = `${facturaId}-${total}-${Date.now()}`;
-    return btoa(str).substr(0, 64);
   };
 
   // ============================================
@@ -761,6 +670,7 @@ export function CheckoutModal({ isOpen, onClose, onSuccess, userData }: Checkout
           </CardHeader>
           <CardContent>
             <MisDirecciones 
+              clienteId={userData.id !== undefined ? String(userData.id) : undefined}
               onSeleccionarDireccion={setDireccionSeleccionada}
               direccionSeleccionada={direccionSeleccionada}
               modoSeleccion

@@ -6,46 +6,64 @@
 import { Request, Response } from 'express';
 import prisma from '../../prisma/client';
 
+function safeNumber(n: any, decimals = 4) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return 0;
+  const p = Math.pow(10, decimals);
+  return Math.round(v * p) / p;
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
 // ============================================
 // OBTENER TODOS LOS ESCANDALLOS
 // ============================================
 export const obtenerEscandallos = async (req: Request, res: Response) => {
   try {
-    const { empresaId, productoId, desde, hasta } = req.query;
+    const empresaId = typeof req.query.empresaId === 'string' ? req.query.empresaId : undefined;
+    const puntoVentaId = typeof (req.query as any).puntoVentaId === 'string' ? (req.query as any).puntoVentaId : undefined;
+    const productoId = typeof req.query.productoId === 'string' ? req.query.productoId : undefined;
 
-    // Obtener productos
     const productos = await prisma.producto.findMany({
-      where: {
-        ...(productoId && { id: Number(productoId) }),
-      },
+      where: { ...(productoId ? { id: Number(productoId) } : {}) },
       orderBy: { nombre: 'asc' },
+      include: {
+        escandallo: {
+          include: { ingredientes: true },
+        },
+      },
     });
 
-    // Simular datos de escandallo para cada producto
-    const escandallos = productos.map((producto: any) => {
-      const costeEstimado = producto.precio * 0.35; // 35% coste promedio
-      const margen = producto.precio - costeEstimado;
-      const margenPorcentaje = (margen / producto.precio) * 100;
+    const data = productos.map((p: any) => {
+      const esc = p.escandallo;
+      // Si se filtra por empresa/pdv, ignorar escandallos de otro contexto (si existe)
+      if (esc) {
+        if (empresaId && esc.empresaId && esc.empresaId !== empresaId) return null;
+        if (puntoVentaId && esc.puntoVentaId && esc.puntoVentaId !== puntoVentaId) return null;
+      }
+
+      const costeTotal = safeNumber(esc?.costeTotal ?? 0, 4);
+      const precioVenta = safeNumber(p.precio ?? 0, 4);
+      const margen = safeNumber(precioVenta - costeTotal, 4);
+      const margenPorcentaje = precioVenta > 0 ? safeNumber((margen / precioVenta) * 100, 2) : 0;
 
       return {
-        id: producto.id,
-        productoId: producto.id,
-        productoNombre: producto.nombre,
+        id: esc?.id ?? null,
+        productoId: p.id,
+        productoNombre: p.nombre,
         categoria: 'General',
-        precioVenta: producto.precio,
-        costeTotal: costeEstimado,
-        margen: margen,
-        margenPorcentaje: margenPorcentaje,
-        ingredientes: [], // Se poblaría con ingredientes reales
-        ultimaActualizacion: new Date().toISOString(),
+        precioVenta,
+        costeTotal,
+        margen,
+        margenPorcentaje,
+        ingredientesCount: Array.isArray(esc?.ingredientes) ? esc.ingredientes.length : 0,
+        ultimaActualizacion: esc?.modificadoEn ? new Date(esc.modificadoEn).toISOString() : nowIso(),
       };
-    });
+    }).filter(Boolean);
 
-    res.json({
-      success: true,
-      data: escandallos,
-      total: escandallos.length,
-    });
+    return res.json({ success: true, data, total: data.length });
   } catch (error: any) {
     console.error('❌ Error obteniendo escandallos:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -59,65 +77,52 @@ export const obtenerEscandalloPorProducto = async (req: Request, res: Response) 
   try {
     const { productoId } = req.params;
 
-    const producto = await prisma.producto.findUnique({
-      where: { id: Number(productoId) },
-    });
+    const producto = await prisma.producto.findUnique({ where: { id: Number(productoId) } });
 
     if (!producto) {
       return res.status(404).json({ success: false, error: 'Producto no encontrado' });
     }
 
-    // Datos de escandallo detallado
-    const costeEstimado = producto.precio * 0.35;
-    const margen = producto.precio - costeEstimado;
+    const esc = await prisma.escandallo.findUnique({
+      where: { productoId: Number(productoId) },
+      include: {
+        ingredientes: {
+          orderBy: { id: 'asc' },
+          include: {
+            articulo: { select: { id: true, nombre: true, unidadMedida: true, precioUltimaCompra: true, proveedorId: true } },
+          },
+        },
+      },
+    });
 
-    const escandallo = {
-      id: producto.id,
+    const costeTotal = safeNumber(esc?.costeTotal ?? 0, 4);
+    const precioVenta = safeNumber(producto.precio ?? 0, 4);
+    const margen = safeNumber(precioVenta - costeTotal, 4);
+    const margenPorcentaje = precioVenta > 0 ? safeNumber((margen / precioVenta) * 100, 2) : 0;
+
+    const data = {
+      id: esc?.id ?? null,
       productoId: producto.id,
       productoNombre: producto.nombre,
       categoria: 'General',
-      precioVenta: producto.precio,
-      costeTotal: costeEstimado,
-      margen: margen,
-      margenPorcentaje: (margen / producto.precio) * 100,
-      ingredientes: [
-        // Ejemplo de ingredientes - en producción vendría de tabla Ingredientes
-        {
-          id: 1,
-          nombre: 'Ingrediente principal',
-          cantidad: 1,
-          unidad: 'ud',
-          costeUnitario: costeEstimado * 0.6,
-          costeTotal: costeEstimado * 0.6,
-          proveedorId: null,
-          proveedorNombre: 'Proveedor genérico',
-        },
-        {
-          id: 2,
-          nombre: 'Ingrediente secundario',
-          cantidad: 1,
-          unidad: 'ud',
-          costeUnitario: costeEstimado * 0.4,
-          costeTotal: costeEstimado * 0.4,
-          proveedorId: null,
-          proveedorNombre: 'Proveedor genérico',
-        },
-      ],
-      historialPrecios: [
-        {
-          fecha: new Date().toISOString(),
-          costeAnterior: costeEstimado * 0.95,
-          costeNuevo: costeEstimado,
-          variacion: 5,
-        },
-      ],
-      ultimaActualizacion: new Date().toISOString(),
+      precioVenta,
+      costeTotal,
+      margen,
+      margenPorcentaje,
+      ingredientes: (esc?.ingredientes || []).map((i: any) => ({
+        id: i.id,
+        articuloId: i.articuloId ?? null,
+        nombre: i.nombre,
+        unidad: i.unidad,
+        cantidad: safeNumber(i.cantidad ?? 0, 4),
+        costeUnitario: safeNumber(i.costeUnitario ?? 0, 4),
+        costeTotal: safeNumber(i.costeTotal ?? 0, 4),
+        proveedorId: i.proveedorId ?? i.articulo?.proveedorId ?? null,
+      })),
+      ultimaActualizacion: esc?.modificadoEn ? new Date(esc.modificadoEn).toISOString() : nowIso(),
     };
 
-    res.json({
-      success: true,
-      data: escandallo,
-    });
+    return res.json({ success: true, data });
   } catch (error: any) {
     console.error('❌ Error obteniendo escandallo:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -129,7 +134,16 @@ export const obtenerEscandalloPorProducto = async (req: Request, res: Response) 
 // ============================================
 export const guardarEscandallo = async (req: Request, res: Response) => {
   try {
-    const { productoId, ingredientes, costeTotal, notas } = req.body;
+    const body = req.body || {};
+    const productoId = Number(body.productoId);
+    const empresaId = typeof body.empresaId === 'string' ? body.empresaId : null;
+    const puntoVentaId = typeof body.puntoVentaId === 'string' ? body.puntoVentaId : null;
+    const notas = typeof body.notas === 'string' ? body.notas : null;
+    const ingredientesIn = Array.isArray(body.ingredientes) ? body.ingredientes : [];
+
+    if (!Number.isFinite(productoId)) {
+      return res.status(400).json({ success: false, error: 'VALIDATION_ERROR: productoId inválido' });
+    }
 
     // Verificar que el producto existe
     const producto = await prisma.producto.findUnique({
@@ -140,23 +154,95 @@ export const guardarEscandallo = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, error: 'Producto no encontrado' });
     }
 
-    // Por ahora simulamos guardar - en producción se usaría tabla Escandallo
-    const escandallo = {
-      id: productoId,
-      productoId: productoId,
-      productoNombre: producto.nombre,
-      ingredientes: ingredientes || [],
-      costeTotal: costeTotal || 0,
-      notas: notas || '',
-      actualizadoPor: 'Sistema',
-      fechaActualizacion: new Date().toISOString(),
-    };
+    const articuloIds = ingredientesIn
+      .map((i: any) => Number(i?.articuloId))
+      .filter((n: number) => Number.isFinite(n));
 
-    res.json({
-      success: true,
-      data: escandallo,
-      message: 'Escandallo guardado correctamente',
+    const articulos = articuloIds.length
+      ? await prisma.articuloStock.findMany({
+          where: { id: { in: articuloIds } },
+          select: { id: true, nombre: true, unidadMedida: true, precioUltimaCompra: true, proveedorId: true },
+        })
+      : [];
+    const articuloMap = new Map<number, any>(articulos.map((a) => [a.id, a]));
+
+    const ingredientesNormalized = ingredientesIn
+      .map((raw: any) => {
+        const articuloId = Number(raw?.articuloId);
+        const hasArticulo = Number.isFinite(articuloId) && articuloMap.has(articuloId);
+        const articulo = hasArticulo ? articuloMap.get(articuloId) : null;
+
+        const nombre = String(raw?.nombre || articulo?.nombre || '').trim();
+        const unidad = String(raw?.unidad || articulo?.unidadMedida || '').trim() || 'ud';
+        const cantidad = safeNumber(raw?.cantidad ?? 0, 4);
+        if (!nombre || !Number.isFinite(cantidad) || cantidad <= 0) return null;
+
+        const costeUnitarioFromPayload = Number(raw?.costeUnitario);
+        const costeUnitario = Number.isFinite(costeUnitarioFromPayload)
+          ? safeNumber(costeUnitarioFromPayload, 4)
+          : safeNumber(articulo?.precioUltimaCompra ?? 0, 4);
+        const costeTotal = safeNumber(costeUnitario * cantidad, 4);
+
+        return {
+          articuloId: hasArticulo ? articuloId : null,
+          nombre,
+          unidad,
+          cantidad,
+          costeUnitario,
+          costeTotal,
+          proveedorId: raw?.proveedorId ? Number(raw.proveedorId) : articulo?.proveedorId ?? null,
+        };
+      })
+      .filter(Boolean) as any[];
+
+    const costeTotalComputed = safeNumber(
+      ingredientesNormalized.reduce((sum: number, i: any) => sum + (Number(i.costeTotal) || 0), 0),
+      4,
+    );
+
+    const saved = await prisma.$transaction(async (tx) => {
+      const esc = await tx.escandallo.upsert({
+        where: { productoId },
+        update: {
+          empresaId,
+          puntoVentaId,
+          notas,
+          costeTotal: costeTotalComputed,
+        },
+        create: {
+          productoId,
+          empresaId,
+          puntoVentaId,
+          notas,
+          costeTotal: costeTotalComputed,
+        },
+      });
+
+      await tx.escandalloIngrediente.deleteMany({ where: { escandalloId: esc.id } });
+      if (ingredientesNormalized.length > 0) {
+        await tx.escandalloIngrediente.createMany({
+          data: ingredientesNormalized.map((i: any) => ({
+            escandalloId: esc.id,
+            articuloId: i.articuloId,
+            nombre: i.nombre,
+            unidad: i.unidad,
+            cantidad: i.cantidad,
+            costeUnitario: i.costeUnitario,
+            costeTotal: i.costeTotal,
+            proveedorId: i.proveedorId,
+          })),
+        });
+      }
+
+      return esc;
     });
+
+    const data = await prisma.escandallo.findUnique({
+      where: { productoId },
+      include: { ingredientes: { orderBy: { id: 'asc' } } },
+    });
+
+    return res.json({ success: true, data, message: 'Escandallo guardado correctamente' });
   } catch (error: any) {
     console.error('❌ Error guardando escandallo:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -168,25 +254,45 @@ export const guardarEscandallo = async (req: Request, res: Response) => {
 // ============================================
 export const obtenerResumenEscandallos = async (req: Request, res: Response) => {
   try {
-    const { empresaId } = req.query;
+    const empresaId = typeof req.query.empresaId === 'string' ? req.query.empresaId : undefined;
+    const puntoVentaId = typeof (req.query as any).puntoVentaId === 'string' ? (req.query as any).puntoVentaId : undefined;
 
-    const productos = await prisma.producto.findMany();
+    const totalProductos = await prisma.producto.count();
+    const escWhere: any = {
+      ...(empresaId ? { empresaId } : {}),
+      ...(puntoVentaId ? { puntoVentaId } : {}),
+    };
+    const productosConEscandallo = await prisma.escandallo.count({ where: escWhere });
 
-    const totalProductos = productos.length;
-    const productosConEscandallo = Math.round(totalProductos * 0.7); // 70% tienen escandallo
-    const margenPromedio = 65; // 65% margen promedio
-    const productosMargenBajo = Math.round(totalProductos * 0.15); // 15% margen bajo
+    const escs = await prisma.escandallo.findMany({
+      where: escWhere,
+      include: { producto: { select: { precio: true } } },
+    });
+    const margenesPct = escs
+      .map((e: any) => {
+        const precio = Number(e.producto?.precio) || 0;
+        const coste = Number(e.costeTotal) || 0;
+        const margen = precio - coste;
+        return precio > 0 ? (margen / precio) * 100 : 0;
+      })
+      .filter((x) => Number.isFinite(x));
 
-    res.json({
+    const margenPromedio = margenesPct.length
+      ? safeNumber(margenesPct.reduce((s, x) => s + x, 0) / margenesPct.length, 2)
+      : 0;
+
+    const productosMargenBajo = margenesPct.filter((x) => x > 0 && x < 40).length;
+
+    return res.json({
       success: true,
       data: {
         totalProductos,
         productosConEscandallo,
-        productosSinEscandallo: totalProductos - productosConEscandallo,
+        productosSinEscandallo: Math.max(0, totalProductos - productosConEscandallo),
         margenPromedio,
         productosMargenBajo,
         alertasCostes: productosMargenBajo,
-        ultimaActualizacion: new Date().toISOString(),
+        ultimaActualizacion: nowIso(),
       },
     });
   } catch (error: any) {
@@ -202,28 +308,42 @@ export const obtenerCostesPorProveedor = async (req: Request, res: Response) => 
   try {
     const { empresaId } = req.query;
 
-    // Obtener proveedores
+    const groups = await prisma.escandalloIngrediente.groupBy({
+      by: ['proveedorId'],
+      where: {
+        proveedorId: { not: null },
+      } as any,
+      _sum: { costeTotal: true },
+      _avg: { costeUnitario: true },
+      _count: { _all: true },
+    });
+
+    const proveedorIds = groups.map((g) => g.proveedorId).filter((x): x is number => typeof x === 'number');
     const proveedores = await prisma.proveedor.findMany({
       where: {
-        ...(empresaId && { empresaId: String(empresaId) }),
-        activo: true,
-      },
-      take: 10,
+        id: { in: proveedorIds },
+        ...(empresaId ? { empresaId: String(empresaId) } : {}),
+      } as any,
+      select: { id: true, nombre: true },
     });
+    const provMap = new Map<number, any>(proveedores.map((p) => [p.id, p]));
 
-    const costesPorProveedor = proveedores.map((proveedor: any) => ({
-      proveedorId: proveedor.id,
-      proveedorNombre: proveedor.nombre,
-      totalProductos: Math.floor(Math.random() * 20) + 5,
-      costePromedio: Math.random() * 50 + 10,
-      costetotalMes: Math.random() * 5000 + 1000,
-      variacionMensual: (Math.random() - 0.5) * 20, // -10% a +10%
-    }));
+    const data = groups
+      .map((g) => {
+        const pid = g.proveedorId as number | null;
+        if (!pid) return null;
+        const p = provMap.get(pid);
+        return {
+          proveedorId: pid,
+          proveedorNombre: p?.nombre || `Proveedor ${pid}`,
+          totalLineas: g._count._all,
+          costePromedioUnitario: safeNumber(g._avg.costeUnitario ?? 0, 4),
+          costeTotal: safeNumber(g._sum.costeTotal ?? 0, 2),
+        };
+      })
+      .filter(Boolean);
 
-    res.json({
-      success: true,
-      data: costesPorProveedor,
-    });
+    return res.json({ success: true, data });
   } catch (error: any) {
     console.error('❌ Error obteniendo costes por proveedor:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -235,20 +355,72 @@ export const obtenerCostesPorProveedor = async (req: Request, res: Response) => 
 // ============================================
 export const recalcularEscandallos = async (req: Request, res: Response) => {
   try {
-    const { productoIds, empresaId } = req.body;
+    const body = req.body || {};
+    const productoIds = Array.isArray(body.productoIds) ? body.productoIds.map((x: any) => Number(x)).filter((n: number) => Number.isFinite(n)) : null;
+    const empresaId = typeof body.empresaId === 'string' ? body.empresaId : undefined;
+    const puntoVentaId = typeof body.puntoVentaId === 'string' ? body.puntoVentaId : undefined;
 
-    // Simular recálculo
-    const productosRecalculados = productoIds?.length || 10;
+    const where: any = {
+      ...(empresaId ? { empresaId } : {}),
+      ...(puntoVentaId ? { puntoVentaId } : {}),
+      ...(productoIds && productoIds.length > 0 ? { productoId: { in: productoIds } } : {}),
+    };
 
-    res.json({
+    const escandallos = await prisma.escandallo.findMany({
+      where,
+      include: { ingredientes: true },
+    });
+
+    const start = Date.now();
+    let errores = 0;
+
+    for (const esc of escandallos) {
+      try {
+        const articuloIds = esc.ingredientes.map((i) => i.articuloId).filter((x): x is number => typeof x === 'number');
+        const articulos = articuloIds.length
+          ? await prisma.articuloStock.findMany({
+              where: { id: { in: articuloIds } },
+              select: { id: true, precioUltimaCompra: true },
+            })
+          : [];
+        const map = new Map<number, any>(articulos.map((a) => [a.id, a]));
+
+        const updates = esc.ingredientes
+          .filter((i) => i.articuloId && map.has(i.articuloId))
+          .map((i) => {
+            const precio = Number(map.get(i.articuloId!).precioUltimaCompra) || 0;
+            const costeUnitario = safeNumber(precio, 4);
+            const costeTotal = safeNumber(costeUnitario * (Number(i.cantidad) || 0), 4);
+            return { id: i.id, costeUnitario, costeTotal };
+          });
+
+        if (updates.length > 0) {
+          await prisma.$transaction(async (tx) => {
+            for (const u of updates) {
+              await tx.escandalloIngrediente.update({
+                where: { id: u.id },
+                data: { costeUnitario: u.costeUnitario, costeTotal: u.costeTotal },
+              });
+            }
+            const total = safeNumber(updates.reduce((s, u) => s + u.costeTotal, 0), 4);
+            await tx.escandallo.update({ where: { id: esc.id }, data: { costeTotal: total } });
+          });
+        }
+      } catch (e) {
+        errores += 1;
+      }
+    }
+
+    const duracionMs = Date.now() - start;
+    return res.json({
       success: true,
       data: {
-        productosRecalculados,
-        errores: 0,
-        duracionMs: Math.random() * 1000 + 500,
-        fechaRecalculo: new Date().toISOString(),
+        productosRecalculados: escandallos.length,
+        errores,
+        duracionMs,
+        fechaRecalculo: nowIso(),
       },
-      message: `Se han recalculado ${productosRecalculados} escandallos`,
+      message: `Se han recalculado ${escandallos.length} escandallos`,
     });
   } catch (error: any) {
     console.error('❌ Error recalculando escandallos:', error);

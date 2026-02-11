@@ -45,15 +45,25 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import {
-  obtenerFormacionTrabajador,
-  obtenerProgresoOnboarding,
-  completarModuloFormacion,
-  iniciarTarea,
   CATEGORIAS_FORMACION,
   MODULOS_ONBOARDING,
-  type TareaBase,
-  type CategoriaFormacion,
 } from '../../services/formacion.service';
+import { tareasApi } from '../../services/api';
+
+type EstadoModulo = 'pendiente' | 'en_progreso' | 'completada' | 'aprobada' | 'rechazada';
+type ModuloFormacion = {
+  id: string;
+  titulo: string;
+  descripcion: string;
+  estado: EstadoModulo;
+  categoria?: keyof typeof CATEGORIAS_FORMACION;
+  moduloFormacionId?: string;
+  duracionEstimada?: number;
+  urlRecurso?: string;
+  certificadoUrl?: string;
+  puntuacion?: number;
+  requiereAprobacion?: boolean;
+};
 
 interface FormacionTrabajadorProps {
   trabajadorId: string;
@@ -64,7 +74,7 @@ export function FormacionTrabajador({
   trabajadorId,
   trabajadorNombre,
 }: FormacionTrabajadorProps) {
-  const [modulosFormacion, setModulosFormacion] = useState<TareaBase[]>([]);
+  const [modulosFormacion, setModulosFormacion] = useState<ModuloFormacion[]>([]);
   const [progresoOnboarding, setProgresoOnboarding] = useState({
     total: 0,
     completados: 0,
@@ -75,7 +85,7 @@ export function FormacionTrabajador({
   });
   
   const [modalModuloAbierto, setModalModuloAbierto] = useState(false);
-  const [moduloSeleccionado, setModuloSeleccionado] = useState<TareaBase | null>(null);
+  const [moduloSeleccionado, setModuloSeleccionado] = useState<ModuloFormacion | null>(null);
   const [puntuacion, setPuntuacion] = useState('');
   const [comentario, setComentario] = useState('');
   
@@ -83,27 +93,81 @@ export function FormacionTrabajador({
     cargarFormacion();
   }, [trabajadorId]);
   
-  const cargarFormacion = () => {
-    const modulos = obtenerFormacionTrabajador(trabajadorId);
-    setModulosFormacion(modulos);
-    
-    const progreso = obtenerProgresoOnboarding(trabajadorId);
-    setProgresoOnboarding(progreso);
+  const cargarFormacion = async () => {
+    try {
+      const empleadoId = Number(trabajadorId);
+      const tareas = await tareasApi.getByEmpleadoId(empleadoId);
+      const modulos: ModuloFormacion[] = tareas
+        .filter((t) => t.tipo === 'formacion' || Boolean(t.esFormacion))
+        .map((t) => {
+          const categoria: ModuloFormacion['categoria'] =
+            MODULOS_ONBOARDING.some((m) => m.id === t.moduloFormacionId) ? 'onboarding' : undefined;
+          const estado: EstadoModulo = t.estado === 'completada' ? 'aprobada' : (t.estado as any);
+          return {
+            id: String(t.id),
+            titulo: t.titulo,
+            descripcion: t.descripcion || '',
+            estado,
+            categoria,
+            moduloFormacionId: t.moduloFormacionId,
+            duracionEstimada: t.duracionEstimada,
+            urlRecurso: t.urlRecurso,
+            puntuacion: undefined,
+            certificadoUrl: undefined,
+            requiereAprobacion: false,
+          };
+        });
+
+      setModulosFormacion(modulos);
+
+      const onboarding = modulos.filter(
+        (m) => m.categoria === 'onboarding' || MODULOS_ONBOARDING.some((mo) => mo.id === m.moduloFormacionId),
+      );
+      const base = onboarding.length > 0 ? onboarding : modulos;
+      const total = base.length;
+      const completados = base.filter((m) => m.estado === 'aprobada').length;
+      const enProgreso = base.filter((m) => m.estado === 'en_progreso').length;
+      const pendientes = base.filter((m) => m.estado === 'pendiente').length;
+      const porcentaje = total > 0 ? Math.round((completados / total) * 100) : 0;
+
+      setProgresoOnboarding({
+        total,
+        completados,
+        enProgreso,
+        pendientes,
+        porcentaje,
+        finalizado: total > 0 && completados === total,
+      });
+    } catch (error) {
+      console.error('Error cargando formación:', error);
+      toast.error('Error al cargar la formación');
+      setModulosFormacion([]);
+      setProgresoOnboarding({
+        total: 0,
+        completados: 0,
+        enProgreso: 0,
+        pendientes: 0,
+        porcentaje: 0,
+        finalizado: false,
+      });
+    }
   };
   
-  const handleIniciarModulo = (moduloId: string) => {
-    const resultado = iniciarTarea(moduloId, trabajadorId);
-    
-    if (resultado) {
+  const handleIniciarModulo = async (moduloId: string) => {
+    try {
+      await tareasApi.iniciar(Number(moduloId));
       toast.success('Módulo iniciado', {
         description: 'Puedes comenzar con el contenido',
         icon: <Play className="h-4 w-4" />,
       });
       cargarFormacion();
+    } catch (error) {
+      console.error(error);
+      toast.error('Error al iniciar el módulo');
     }
   };
   
-  const handleAbrirModalCompletar = (modulo: TareaBase) => {
+  const handleAbrirModalCompletar = (modulo: ModuloFormacion) => {
     setModuloSeleccionado(modulo);
     setModalModuloAbierto(true);
     setPuntuacion('');
@@ -121,12 +185,7 @@ export function FormacionTrabajador({
     }
     
     try {
-      await completarModuloFormacion({
-        moduloId: moduloSeleccionado.id,
-        trabajadorId,
-        puntuacion: puntuacionNum,
-        comentario: comentario || undefined,
-      });
+      await tareasApi.completar(Number(moduloSeleccionado.id));
       
       toast.success('Módulo completado', {
         description: moduloSeleccionado.requiereAprobacion 
@@ -548,9 +607,7 @@ export function FormacionTrabajador({
                       
                       <div className="flex items-center gap-4 pt-2">
                         {modulo.categoria && (
-                          <Badge variant="outline">
-                            {CATEGORIAS_FORMACION[modulo.categoria as CategoriaFormacion]}
-                          </Badge>
+                          <Badge variant="outline">{CATEGORIAS_FORMACION[modulo.categoria]}</Badge>
                         )}
                         {modulo.duracionEstimada && (
                           <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -638,9 +695,7 @@ export function FormacionTrabajador({
                         </div>
                         <CardDescription>
                           Completado: {new Date(modulo.fechaAprobada!).toLocaleDateString()}
-                          {modulo.categoria && (
-                            <> • {CATEGORIAS_FORMACION[modulo.categoria as CategoriaFormacion]}</>
-                          )}
+                          {modulo.categoria && <> • {CATEGORIAS_FORMACION[modulo.categoria]}</>}
                         </CardDescription>
                       </div>
                       
@@ -730,7 +785,7 @@ export function FormacionTrabajador({
                               <div>
                                 <p className="font-medium">{modulo.titulo}</p>
                                 <p className="text-sm text-muted-foreground">
-                                  {modulo.categoria && CATEGORIAS_FORMACION[modulo.categoria as CategoriaFormacion]}
+                                  {modulo.categoria && CATEGORIAS_FORMACION[modulo.categoria]}
                                   {modulo.descripcion && ` • ${modulo.descripcion}`}
                                 </p>
                               </div>
@@ -765,9 +820,7 @@ export function FormacionTrabajador({
                 <div className="flex items-center gap-2">
                   {getCategoriaIcon(moduloSeleccionado.categoria)}
                   <span className="text-sm font-medium">
-                    {moduloSeleccionado.categoria && 
-                      CATEGORIAS_FORMACION[moduloSeleccionado.categoria as CategoriaFormacion]
-                    }
+                    {moduloSeleccionado.categoria && CATEGORIAS_FORMACION[moduloSeleccionado.categoria]}
                   </span>
                 </div>
                 <p className="text-sm">{moduloSeleccionado.descripcion}</p>

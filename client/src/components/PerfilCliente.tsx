@@ -10,6 +10,7 @@ import { EmptyState } from './ui/empty-state';
 import { User, Mail, Phone, MapPin, CreditCard, FileText, Download, ShoppingBag, Heart, Award, TrendingUp } from 'lucide-react';
 import type { User as UserType } from '../App';
 import { useState } from 'react';
+import { MisDirecciones } from './cliente/MisDirecciones';
 
 interface PerfilClienteProps {
   user: UserType;
@@ -139,7 +140,9 @@ export function PerfilCliente({ user }: PerfilClienteProps) {
 
                 <div className="space-y-2">
                   <Label htmlFor="direccion">Dirección de Entrega</Label>
-                  <Input id="direccion" defaultValue="Av. Insurgentes Sur 1234, Col. Del Valle" />
+                  <div className="md:col-span-2">
+                    <MisDirecciones clienteId={user?.id} compacto />
+                  </div>
                 </div>
               </div>
 

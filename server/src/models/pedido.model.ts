@@ -1,12 +1,61 @@
 import prisma from '../prisma/client';
 import { coercePedidoEstado } from '../domain/pedido-estado';
 
+const clienteSafeSelect = {
+  id: true,
+  codigo: true,
+  nombre: true,
+  email: true,
+  telefono: true,
+  creadoEn: true,
+  role: true,
+  avatar: true,
+  ciudad: true,
+  idioma: true,
+} as const;
+
 export const PedidoModel = {
   async findAll() {
-    return prisma.pedido.findMany({ include: { cliente: true, items: true } });
+    return prisma.pedido.findMany({
+      include: {
+        cliente: { select: clienteSafeSelect },
+        items: {
+          include: {
+            producto: {
+              select: {
+                id: true,
+                nombre: true,
+                descripcion: true,
+                precio: true,
+                imagen: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { fecha: 'desc' },
+    });
   },
   async findById(id: number) {
-    return prisma.pedido.findUnique({ where: { id }, include: { cliente: true, items: true } });
+    return prisma.pedido.findUnique({
+      where: { id },
+      include: {
+        cliente: { select: clienteSafeSelect },
+        items: {
+          include: {
+            producto: {
+              select: {
+                id: true,
+                nombre: true,
+                descripcion: true,
+                precio: true,
+                imagen: true,
+              },
+            },
+          },
+        },
+      },
+    });
   },
   async create(data: any) {
       console.log('DEBUG PedidoModel.create payload:', JSON.stringify(data, null, 2));
@@ -55,7 +104,7 @@ export const PedidoModel = {
           clienteId, // SIEMPRE el valor correcto aquí
           items: { create: items }
         },
-        include: { items: true, cliente: true }
+        include: { items: true, cliente: { select: clienteSafeSelect } }
       });
   },
   async update(id: number, data: any) {

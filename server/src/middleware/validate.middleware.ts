@@ -11,9 +11,19 @@ type Schemas = {
 export function validate(schemas: Schemas) {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
-      if (schemas.params) req.params = schemas.params.parse(req.params) as any;
-      if (schemas.query) req.query = schemas.query.parse(req.query) as any;
-      if (schemas.body) req.body = schemas.body.parse(req.body) as any;
+      if (schemas.params) {
+        const parsed = schemas.params.parse(req.params) as any;
+        // Express/Router may expose req.params as non-writable in some runtimes
+        Object.assign(req.params as any, parsed);
+      }
+      if (schemas.query) {
+        const parsed = schemas.query.parse(req.query) as any;
+        // In some runtimes req.query has only a getter; avoid re-assigning.
+        Object.assign(req.query as any, parsed);
+      }
+      if (schemas.body) {
+        req.body = schemas.body.parse(req.body) as any;
+      }
       return next();
     } catch (err) {
       if (err instanceof ZodError) {

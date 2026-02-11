@@ -4,7 +4,7 @@
  * Conecta con visualizaciones del Cliente y TPV
  */
 
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { 
   EMPRESAS_ARRAY,
@@ -83,14 +83,40 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
-import {
-  promocionesDisponibles,
-  type PromocionDisponible,
-  type TipoPromocion,
-  type PublicoObjetivo,
-  type CanalPromocion,
-  type ProductoCombo
-} from '../../data/promociones-disponibles';
+import { promocionesApi } from '../../services/api/promociones.api';
+import { clientesApi } from '../../services/api/clientes.api';
+
+// ============================================================================
+// Tipos (sin depender de mocks en /data)
+// ============================================================================
+type TipoPromocion = string;
+type PublicoObjetivo = string;
+type CanalPromocion = string;
+type ProductoCombo = any;
+
+interface PromocionDisponible {
+  id: string;
+  nombre: string;
+  tipo: TipoPromocion;
+  valor: number;
+  descripcion: string;
+  color?: string;
+  activa: boolean;
+  fechaInicio: string;
+  fechaFin: string;
+  publicoObjetivo: PublicoObjetivo;
+  canal: CanalPromocion;
+  destacada?: boolean;
+  imagen?: string;
+  limiteUsosPorCliente?: number;
+  cantidadMinima?: number;
+  horaInicio?: string;
+  horaFin?: string;
+  vecesUsada?: number;
+  clientesQueUsaron?: string[];
+  clientesAsignados?: string[];
+  combos?: ProductoCombo[];
+}
 
 // ============================================
 // TIPOS ADICIONALES
@@ -114,27 +140,14 @@ interface EstadisticasPromocion {
 }
 
 // ============================================
-// DATOS MOCK DE CLIENTES
-// ============================================
-
-const CLIENTES_MOCK: Cliente[] = [
-  { id: 'CLI-0001', nombre: 'Juan Pérez', segmento: 'premium', email: 'juan@email.com', telefono: '600111222' },
-  { id: 'CLI-0002', nombre: 'Ana García', segmento: 'nuevo', email: 'ana@email.com', telefono: '600222333' },
-  { id: 'CLI-0003', nombre: 'Carlos Ruiz', segmento: 'alta_frecuencia', email: 'carlos@email.com', telefono: '600333444' },
-  { id: 'CLI-0011', nombre: 'María López', segmento: 'premium', email: 'maria@email.com', telefono: '600444555' },
-  { id: 'CLI-0015', nombre: 'Laura Martínez', segmento: 'alta_frecuencia', email: 'laura@email.com', telefono: '600555666' },
-  { id: 'CLI-0020', nombre: 'Pedro Sánchez', segmento: 'general', email: 'pedro@email.com', telefono: '600666777' },
-  { id: 'CLI-0025', nombre: 'Sofía Torres', segmento: 'nuevo', email: 'sofia@email.com', telefono: '600777888' },
-  { id: 'CLI-0030', nombre: 'Miguel Ángel Díaz', segmento: 'multitienda', email: 'miguel@email.com', telefono: '600888999' },
-];
-
-// ============================================
 // COMPONENTE PRINCIPAL
 // ============================================
 
 export function PromocionesGerente() {
   // Estados principales
-  const [promociones, setPromociones] = useState<PromocionDisponible[]>(promocionesDisponibles);
+  const [promociones, setPromociones] = useState<PromocionDisponible[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState('');
   const [filtroTipo, setFiltroTipo] = useState<string>('todos');
   const [filtroEstado, setFiltroEstado] = useState<string>('todos');
@@ -153,6 +166,65 @@ export function PromocionesGerente() {
   const [modoEdicion, setModoEdicion] = useState(false);
   const [clientesSeleccionados, setClientesSeleccionados] = useState<string[]>([]);
   const [busquedaClientes, setBusquedaClientes] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    setCargando(true);
+    Promise.all([promocionesApi.getAll(), clientesApi.getAll()])
+      .then(([promos, clientesRes]) => {
+        if (cancelled) return;
+        const now = new Date();
+        const promocionesMap = (Array.isArray(promos) ? promos : []).map((p: any) => {
+          const validoHasta = p.validoHasta ? new Date(p.validoHasta) : null;
+          const activa = !!validoHasta && validoHasta.getTime() >= now.getTime();
+          const descuentoStr = String(p.descuento || '').trim();
+          const valorNum = Number(descuentoStr.replace('%', '').replace(',', '.')) || 0;
+
+          return {
+            id: String(p.id),
+            nombre: p.titulo || 'Promoción',
+            tipo: (descuentoStr.includes('%') ? 'descuento_porcentaje' : 'precio_fijo') as any,
+            valor: valorNum,
+            descripcion: p.descripcion || '',
+            color: 'blue',
+            activa,
+            fechaInicio: new Date().toISOString().split('T')[0],
+            fechaFin: validoHasta ? validoHasta.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+            publicoObjetivo: 'general' as any,
+            canal: 'ambos' as any,
+            destacada: false,
+            // métricas (si no se trackean aún, 0 / vacío)
+            vecesUsada: 0,
+            clientesQueUsaron: [],
+            clientesAsignados: [],
+          } as any;
+        });
+
+        setPromociones(promocionesMap as any);
+
+        const clientesMap: Cliente[] = (Array.isArray(clientesRes) ? clientesRes : []).map((c: any) => ({
+          id: String(c.id),
+          nombre: c.nombre || 'Cliente',
+          segmento: 'general',
+          email: c.email || '',
+          telefono: c.telefono || '',
+        }));
+        setClientes(clientesMap);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPromociones([]);
+        setClientes([]);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setCargando(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Formulario de nueva/editar promoción
   const [formData, setFormData] = useState<Partial<PromocionDisponible>>({
@@ -226,12 +298,12 @@ export function PromocionesGerente() {
   }, [promociones, busqueda, filtroTipo, filtroEstado, filtroPublico, filtroCanal]);
 
   const clientesFiltrados = useMemo(() => {
-    if (!busquedaClientes) return CLIENTES_MOCK;
-    return CLIENTES_MOCK.filter(c =>
+    if (!busquedaClientes) return clientes;
+    return clientes.filter(c =>
       c.nombre.toLowerCase().includes(busquedaClientes.toLowerCase()) ||
       c.email.toLowerCase().includes(busquedaClientes.toLowerCase())
     );
-  }, [busquedaClientes]);
+  }, [busquedaClientes, clientes]);
 
   // ============================================
   // FUNCIONES DE MANIPULACIÓN
@@ -262,92 +334,130 @@ export function PromocionesGerente() {
     setModalCrearEditar(true);
   };
 
-  const handleDuplicarPromocion = (promo: PromocionDisponible) => {
-    const nuevaPromocion: PromocionDisponible = {
-      ...promo,
-      id: `PROMO-${Date.now()}`,
-      nombre: `${promo.nombre} (Copia)`,
-      vecesUsada: 0,
-      clientesQueUsaron: [],
-    };
-    setPromociones([...promociones, nuevaPromocion]);
-    toast.success('Promoción duplicada correctamente');
+  const recargarPromociones = async () => {
+    const promos = await promocionesApi.getAll();
+    const now = new Date();
+    const mapped = (Array.isArray(promos) ? promos : []).map((p: any) => {
+      const validoHasta = p.validoHasta ? new Date(p.validoHasta) : null;
+      const activa = !!validoHasta && validoHasta.getTime() >= now.getTime();
+      const descuentoStr = String(p.descuento || '').trim();
+      const valorNum = Number(descuentoStr.replace('%', '').replace(',', '.')) || 0;
+      return {
+        id: String(p.id),
+        nombre: p.titulo || 'Promoción',
+        tipo: (descuentoStr.includes('%') ? 'descuento_porcentaje' : 'precio_fijo') as any,
+        valor: valorNum,
+        descripcion: p.descripcion || '',
+        color: 'blue',
+        activa,
+        fechaInicio: new Date().toISOString().split('T')[0],
+        fechaFin: validoHasta ? validoHasta.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        publicoObjetivo: 'general' as any,
+        canal: 'ambos' as any,
+        destacada: false,
+        vecesUsada: 0,
+        clientesQueUsaron: [],
+        clientesAsignados: [],
+      } as any;
+    });
+    setPromociones(mapped);
   };
 
-  const handleGuardarPromocion = () => {
+  const handleDuplicarPromocion = async (promo: PromocionDisponible) => {
+    try {
+      const validoHasta = promo.fechaFin ? new Date(promo.fechaFin).toISOString() : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      const descuento = promo.tipo?.includes('porcentaje') ? `${promo.valor}%` : String(promo.valor);
+      await promocionesApi.create({
+        titulo: `${promo.nombre} (Copia)`,
+        descripcion: promo.descripcion,
+        descuento,
+        validoHasta,
+      });
+      await recargarPromociones();
+      toast.success('Promoción duplicada correctamente');
+    } catch {
+      toast.error('No se pudo duplicar la promoción');
+    }
+  };
+
+  const handleGuardarPromocion = async () => {
     if (!formData.nombre || !formData.descripcion) {
       toast.error('Por favor, completa todos los campos obligatorios');
       return;
     }
 
-    if (modoEdicion && promocionSeleccionada) {
-      // Editar
-      setPromociones(promociones.map(p =>
-        p.id === promocionSeleccionada.id ? { ...promocionSeleccionada, ...formData } as PromocionDisponible : p
-      ));
-      toast.success('Promoción actualizada correctamente');
-    } else {
-      // Crear
-      const nuevaPromocion: PromocionDisponible = {
-        id: `PROMO-${Date.now()}`,
-        nombre: formData.nombre!,
-        tipo: formData.tipo as TipoPromocion,
-        valor: formData.valor || 0,
-        descripcion: formData.descripcion!,
-        color: formData.color || 'blue',
-        activa: formData.activa ?? true,
-        fechaInicio: formData.fechaInicio!,
-        fechaFin: formData.fechaFin!,
-        publicoObjetivo: formData.publicoObjetivo as PublicoObjetivo,
-        canal: formData.canal as CanalPromocion,
-        destacada: formData.destacada,
-        imagen: formData.imagen,
-        limiteUsosPorCliente: formData.limiteUsosPorCliente,
-        cantidadMinima: formData.cantidadMinima,
-        horaInicio: formData.horaInicio,
-        horaFin: formData.horaFin,
-        vecesUsada: 0,
-        clientesQueUsaron: [],
-      };
-      setPromociones([nuevaPromocion, ...promociones]);
-      toast.success('Promoción creada correctamente');
+    try {
+      const descuento = String(formData.tipo || '').includes('porcentaje') ? `${formData.valor || 0}%` : String(formData.valor || 0);
+      const validoHasta = formData.fechaFin ? new Date(formData.fechaFin).toISOString() : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+      if (modoEdicion && promocionSeleccionada) {
+        await promocionesApi.update(Number(promocionSeleccionada.id), {
+          titulo: formData.nombre!,
+          descripcion: formData.descripcion!,
+          descuento,
+          validoHasta,
+        } as any);
+        toast.success('Promoción actualizada correctamente');
+      } else {
+        await promocionesApi.create({
+          titulo: formData.nombre!,
+          descripcion: formData.descripcion!,
+          descuento,
+          validoHasta,
+        });
+        toast.success('Promoción creada correctamente');
+      }
+
+      await recargarPromociones();
+      setModalCrearEditar(false);
+      setPromocionSeleccionada(null);
+    } catch {
+      toast.error('No se pudo guardar la promoción');
     }
 
-    setModalCrearEditar(false);
-    setPromocionSeleccionada(null);
   };
 
-  const handleEliminarPromocion = () => {
-    if (promocionSeleccionada) {
-      setPromociones(promociones.filter(p => p.id !== promocionSeleccionada.id));
+  const handleEliminarPromocion = async () => {
+    if (!promocionSeleccionada) return;
+    try {
+      await promocionesApi.delete(Number(promocionSeleccionada.id));
+      await recargarPromociones();
       toast.success('Promoción eliminada correctamente');
+    } catch {
+      toast.error('No se pudo eliminar la promoción');
+    } finally {
       setModalEliminar(false);
       setPromocionSeleccionada(null);
     }
   };
 
-  const handleToggleActiva = (promo: PromocionDisponible) => {
-    setPromociones(promociones.map(p =>
-      p.id === promo.id ? { ...p, activa: !p.activa } : p
-    ));
-    toast.success(`Promoción ${!promo.activa ? 'activada' : 'desactivada'}`);
+  const handleToggleActiva = async (promo: PromocionDisponible) => {
+    try {
+      const willActivate = !promo.activa;
+      const validoHasta = willActivate
+        ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+        : new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const descuento = String(promo.tipo || '').includes('porcentaje') ? `${promo.valor || 0}%` : String(promo.valor || 0);
+      await promocionesApi.update(Number(promo.id), {
+        titulo: promo.nombre,
+        descripcion: promo.descripcion,
+        descuento,
+        validoHasta,
+      } as any);
+      await recargarPromociones();
+      toast.success(`Promoción ${willActivate ? 'activada' : 'desactivada'}`);
+    } catch {
+      toast.error('No se pudo actualizar la promoción');
+    }
   };
 
   const handleToggleDestacada = (promo: PromocionDisponible) => {
-    setPromociones(promociones.map(p =>
-      p.id === promo.id ? { ...p, destacada: !p.destacada } : p
-    ));
-    toast.success(`Promoción ${!promo.destacada ? 'destacada' : 'no destacada'}`);
+    toast.info('Funcionalidad disponible próximamente');
   };
 
   const handleAsignarClientes = () => {
     if (promocionSeleccionada) {
-      setPromociones(promociones.map(p =>
-        p.id === promocionSeleccionada.id
-          ? { ...p, clientesAsignados: clientesSeleccionados, publicoObjetivo: 'personalizado' as PublicoObjetivo }
-          : p
-      ));
-      toast.success(`Promoción asignada a ${clientesSeleccionados.length} cliente(s)`);
+      toast.info('Asignación a clientes: disponible próximamente');
       setModalAsignarClientes(false);
       setClientesSeleccionados([]);
       setPromocionSeleccionada(null);

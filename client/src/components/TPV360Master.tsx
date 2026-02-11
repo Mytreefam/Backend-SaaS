@@ -39,7 +39,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import { useProductos } from '../contexts/ProductosContext';
-import { pedidosApi } from '../services/api/pedidos.api';
+import { pedidosApi, type Pedido as PedidoBackend } from '../services/api/pedidos.api';
 import { integracionesApi } from '../services/api/integraciones.api';
 
 // Importar componentes modulares
@@ -304,7 +304,56 @@ export function TPV360Master({
   useEffect(() => {
     const cargarPedidos = async () => {
       try {
-        const pedidosInternos = await pedidosApi.getAll();
+        const pedidosInternosRaw = await pedidosApi.getAll();
+        const pedidosInternos: Pedido[] = pedidosInternosRaw.map((p: PedidoBackend) => {
+          const fecha = p.fecha ? new Date(p.fecha) : new Date();
+          const year = fecha.getFullYear();
+          const codigo = `${year}-${String(p.id).padStart(6, '0')}`;
+          const clienteNombre = p.cliente?.nombre || 'Cliente';
+          const clienteTelefono = p.cliente?.telefono || '';
+          const clienteEmail = p.cliente?.email || '';
+
+          const items: any[] = (p.items || []).map((it) => {
+            const prod = it.producto;
+            const precio = typeof prod?.precio === 'number' ? prod.precio : it.precio;
+            return {
+              producto: {
+                id: String(prod?.id ?? it.productoId),
+                nombre: prod?.nombre || `Producto ${it.productoId}`,
+                precio,
+                categoria: '',
+                stock: 0,
+                activo: true,
+                visible_tpv: true,
+                descripcion: prod?.descripcion,
+                imagen: prod?.imagen,
+              },
+              cantidad: it.cantidad,
+              subtotal: precio * it.cantidad,
+            };
+          });
+
+          const metodoPago = (p.metodoPago as any) || undefined;
+          const pagado = metodoPago !== 'efectivo' || p.estado !== 'pendiente';
+
+          return {
+            id: String(p.id),
+            codigo,
+            cliente: {
+              id: String(p.cliente?.id ?? p.clienteId),
+              nombre: clienteNombre,
+              telefono: clienteTelefono,
+              email: clienteEmail || undefined,
+            },
+            items,
+            total: p.total,
+            estado: (p.estado as any) || 'pendiente',
+            origenPedido: 'app',
+            metodoPago,
+            pagado,
+            fechaCreacion: fecha,
+          } as Pedido;
+        });
         const pedidosExternos = await integracionesApi.getPedidosExternos();
         const pedidosExternosAdaptados = pedidosExternos.map((p: any) => ({
           ...p,
@@ -983,22 +1032,97 @@ export function TPV360Master({
   // FUNCIONES DE ESTADOS DE PEDIDO
   // ============================================
 
-  const marcarComoListo = (pedidoId: string) => {
+  const isBackendPedidoId = (pedidoId: string): boolean => /^\d+$/.test(pedidoId);
+
+  const upsertPedidoFromBackend = (raw: PedidoBackend) => {
+    const fecha = raw.fecha ? new Date(raw.fecha) : new Date();
+    const year = fecha.getFullYear();
+    const codigo = `${year}-${String(raw.id).padStart(6, '0')}`;
+    const metodoPago = (raw.metodoPago as any) || undefined;
+    const pagado = metodoPago !== 'efectivo' || raw.estado !== 'pendiente';
+
+    const adapted: Pedido = {
+      id: String(raw.id),
+      codigo,
+      cliente: {
+        id: String(raw.cliente?.id ?? raw.clienteId),
+        nombre: raw.cliente?.nombre || 'Cliente',
+        telefono: raw.cliente?.telefono || '',
+        email: raw.cliente?.email || undefined,
+      },
+      items: (raw.items || []).map((it: any) => {
+        const prod = it.producto;
+        const precio = typeof prod?.precio === 'number' ? prod.precio : it.precio;
+        return {
+          producto: {
+            id: String(prod?.id ?? it.productoId),
+            nombre: prod?.nombre || `Producto ${it.productoId}`,
+            precio,
+            categoria: '',
+            stock: 0,
+            activo: true,
+            visible_tpv: true,
+            descripcion: prod?.descripcion,
+            imagen: prod?.imagen,
+          },
+          cantidad: it.cantidad,
+          subtotal: precio * it.cantidad,
+        };
+      }),
+      total: raw.total,
+      estado: (raw.estado as any) || 'pendiente',
+      origenPedido: 'app',
+      metodoPago,
+      pagado,
+      fechaCreacion: fecha,
+    };
+
+    setPedidos((prev) => {
+      const idx = prev.findIndex((p) => p.id === adapted.id);
+      if (idx === -1) return [adapted, ...prev];
+      return prev.map((p) => (p.id === adapted.id ? { ...p, ...adapted } : p));
+    });
+  };
+
+  const cobrarPedido = async (pedidoId: string) => {
+    if (!permisos.cobrar_pedidos) {
+      toast.error('No tienes permisos para cobrar pedidos');
+      return;
+    }
+    if (!isBackendPedidoId(pedidoId)) {
+      toast.info('Este pedido no es del backend');
+      return;
+    }
+    const actualizado = await pedidosApi.cobrar(pedidoId);
+    if (actualizado) upsertPedidoFromBackend(actualizado);
+  };
+
+  const marcarComoListo = async (pedidoId: string) => {
     if (!permisos.marcar_como_listo) {
       toast.error('No tienes permisos para marcar pedidos como listos');
       return;
     }
 
-    setPedidos(pedidos.map(p => 
-      p.id === pedidoId ? { ...p, estado: 'listo' } : p
-    ));
+    if (isBackendPedidoId(pedidoId)) {
+      const actualizado = await pedidosApi.update(pedidoId, { estado: 'listo' } as any);
+      if (actualizado) upsertPedidoFromBackend(actualizado);
+      toast.success('Pedido marcado como listo');
+      return;
+    }
+
+    setPedidos((prev) => prev.map((p) => (p.id === pedidoId ? { ...p, estado: 'listo' } : p)));
     toast.success('Pedido marcado como listo');
   };
 
-  const marcarComoEntregado = (pedidoId: string) => {
-    setPedidos(pedidos.map(p => 
-      p.id === pedidoId ? { ...p, estado: 'entregado' } : p
-    ));
+  const marcarComoEntregado = async (pedidoId: string) => {
+    if (isBackendPedidoId(pedidoId)) {
+      const actualizado = await pedidosApi.update(pedidoId, { estado: 'entregado' } as any);
+      if (actualizado) upsertPedidoFromBackend(actualizado);
+      toast.success('Pedido entregado');
+      return;
+    }
+
+    setPedidos((prev) => prev.map((p) => (p.id === pedidoId ? { ...p, estado: 'entregado' } : p)));
     toast.success('Pedido entregado');
   };
 
@@ -1008,9 +1132,18 @@ export function TPV360Master({
       return;
     }
 
-    setPedidos(pedidos.map(p => 
-      p.id === pedidoId ? { ...p, estado: 'cancelado', motivoCancelacion: motivo } : p
-    ));
+    if (/^\d+$/.test(pedidoId)) {
+      pedidosApi
+        .update(pedidoId, { estado: 'cancelado', motivoCancelacion: motivo } as any)
+        .then((updated) => {
+          if (updated) upsertPedidoFromBackend(updated as any);
+          toast.success('Pedido cancelado');
+        })
+        .catch(() => toast.error('Error al cancelar pedido'));
+      return;
+    }
+
+    setPedidos((prev) => prev.map((p) => (p.id === pedidoId ? { ...p, estado: 'cancelado', motivoCancelacion: motivo } : p)));
     toast.success('Pedido cancelado');
   };
 
@@ -1020,9 +1153,18 @@ export function TPV360Master({
       return;
     }
 
-    setPedidos(pedidos.map(p => 
-      p.id === pedidoId ? { ...p, estado: 'devuelto', motivoDevolucion: motivo } : p
-    ));
+    if (/^\d+$/.test(pedidoId)) {
+      pedidosApi
+        .update(pedidoId, { estado: 'devuelto', motivoDevolucion: motivo } as any)
+        .then((updated) => {
+          if (updated) upsertPedidoFromBackend(updated as any);
+          toast.success('Devolución procesada');
+        })
+        .catch(() => toast.error('Error al procesar devolución'));
+      return;
+    }
+
+    setPedidos((prev) => prev.map((p) => (p.id === pedidoId ? { ...p, estado: 'devuelto', motivoDevolucion: motivo } : p)));
     toast.success('Devolución procesada');
   };
 
@@ -2020,6 +2162,7 @@ export function TPV360Master({
               <TabsContent value="caja-rapida" className="mt-6">
                 <CajaRapidaMejorada 
                   pedidos={pedidos}
+                  onCobrarPedido={cobrarPedido}
                   onMarcarListo={marcarComoListo}
                   onMarcarEntregado={marcarComoEntregado}
                   permisos={permisos}

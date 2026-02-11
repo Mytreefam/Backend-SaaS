@@ -171,7 +171,7 @@ export function ChatCliente({ clienteId, clienteNombre }: ChatClienteProps) {
         clienteId: Number(clienteId),
         estado: 'abierto',
         tipo: tipoConsulta,
-        mensajes: mensaje.trim() ? [{ autor: 'Cliente', texto: mensaje }] : undefined,
+        mensajes: mensaje.trim() ? [{ contenido: mensaje, remitente: 'Cliente' }] : undefined,
       });
 
       if (nuevoChat) {
@@ -199,8 +199,8 @@ export function ChatCliente({ clienteId, clienteNombre }: ChatClienteProps) {
     
     try {
       const nuevoMensaje = await chatApi.sendMessage(chatId, {
-        autor: 'Cliente',
-        texto: mensaje,
+        contenido: mensaje,
+        remitente: 'Cliente',
       });
 
       if (nuevoMensaje) {

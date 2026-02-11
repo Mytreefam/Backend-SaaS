@@ -31,8 +31,8 @@ import {
 import { toast } from 'sonner@2.0.3';
 import { integracionesApi } from '../../services/api';
 import { useProductos } from '../../contexts/ProductosContext';
+import type { EstadisticasIntegraciones, HistorialSincronizacion, PlataformaDelivery } from '../../services/api/integraciones.api';
 
-// Tipos para datos del backend
 interface PlataformaConfig {
   id: number;
   nombre: string;
@@ -88,6 +88,67 @@ export function IntegracionesDelivery() {
   const [cargando, setCargando] = useState(true);
   const { productos } = useProductos();
 
+  const logoFor = (p: PlataformaDelivery): string => {
+    if (p.logo && typeof p.logo === 'string' && p.logo.length <= 6) return p.logo; // emoji / short label
+    switch (p.codigo) {
+      case 'glovo':
+        return '🟡';
+      case 'uber_eats':
+        return '🟢';
+      case 'just_eat':
+        return '🟠';
+      case 'deliveroo':
+        return '🟣';
+      default:
+        return '🔗';
+    }
+  };
+
+  const mapPlataforma = (p: PlataformaDelivery): PlataformaConfig => {
+    const conectada = Boolean(p.conectada);
+    const activa = Boolean(p.activa);
+    return {
+      id: p.id,
+      nombre: p.nombre,
+      tipo: p.codigo,
+      logo: logoFor(p),
+      activa,
+      estado: conectada ? 'conectada' : activa ? 'error' : 'desconectada',
+      credenciales: {
+        apiKey: p.configuracion?.apiKey,
+        storeId: p.configuracion?.storeId,
+        accessToken: undefined,
+      },
+      configuracion: {
+        sincronizarPrecios: true,
+        sincronizarStock: true,
+        sincronizarDisponibilidad: true,
+        sincronizarImagenes: false,
+      },
+      ultimaSincronizacion: p.ultimaSincronizacion ?? null,
+      mensajeError: null,
+    };
+  };
+
+  const mapStats = (s: EstadisticasIntegraciones): Estadisticas => ({
+    plataformasActivas: s.plataformasActivas ?? 0,
+    plataformasTotal: (s as any).plataformasTotales ?? (s as any).plataformasTotal ?? 0,
+    sincronizacionesRecientes: (s as any).pedidosUltimaHora ?? 0,
+    tasaExito: (s as any).tasaExitoSync ?? 0,
+  });
+
+  const mapLogs = (h: HistorialSincronizacion[]): LogSincronizacion[] =>
+    (h || []).map((it) => ({
+      id: it.id,
+      plataformaId: it.plataformaId,
+      plataformaNombre: it.plataformaNombre,
+      accion: it.tipo,
+      productoNombre: `${it.elementosSincronizados} items`,
+      estado: it.resultado === 'ok' ? 'exitoso' : it.resultado === 'error' ? 'error' : 'pendiente',
+      mensaje: it.errores?.length ? it.errores.join(' · ') : null,
+      timestamp: it.fecha,
+    }));
+
   useEffect(() => {
     cargarDatos();
   }, []);
@@ -97,21 +158,15 @@ export function IntegracionesDelivery() {
     try {
       // Cargar plataformas desde API
       const plataformasRes = await integracionesApi.getPlataformas();
-      if (plataformasRes.success && plataformasRes.data) {
-        setConfiguraciones(plataformasRes.data);
-      }
+      setConfiguraciones((plataformasRes || []).map(mapPlataforma));
 
       // Cargar historial de sincronización
       const historialRes = await integracionesApi.getHistorial();
-      if (historialRes.success && historialRes.data) {
-        setLogs(historialRes.data);
-      }
+      setLogs(mapLogs(historialRes || []));
 
       // Cargar estadísticas
       const statsRes = await integracionesApi.getEstadisticas();
-      if (statsRes.success && statsRes.data) {
-        setEstadisticas(statsRes.data);
-      }
+      setEstadisticas(mapStats(statsRes));
     } catch (error) {
       console.error('Error cargando datos de integraciones:', error);
       toast.error('Error al cargar datos de integraciones');
@@ -123,12 +178,14 @@ export function IntegracionesDelivery() {
   const handleTogglePlataforma = async (plataformaId: number, activa: boolean) => {
     try {
       const res = await integracionesApi.togglePlataforma(plataformaId, activa);
-      if (res.success) {
+      if (res) {
         cargarDatos();
         const plataforma = configuraciones.find(c => c.id === plataformaId);
         toast.success(
           `${activa ? '✅ Activada' : '⏸️ Desactivada'} sincronización con ${plataforma?.nombre || 'plataforma'}`
         );
+      } else {
+        toast.error('No se pudo cambiar el estado de la plataforma');
       }
     } catch (error) {
       toast.error('Error al cambiar estado de plataforma');
@@ -137,13 +194,16 @@ export function IntegracionesDelivery() {
 
   const handleGuardarCredenciales = async (plataformaId: number, credenciales: any) => {
     try {
-      const res = await integracionesApi.actualizarPlataforma(plataformaId, { 
-        credenciales,
-        estado: 'conectada'
+      const res = await integracionesApi.configurarPlataforma(plataformaId, {
+        apiKey: credenciales?.apiKey || undefined,
+        storeId: credenciales?.storeId || undefined,
+        secretKey: credenciales?.accessToken || undefined,
       });
-      if (res.success) {
+      if (res) {
         cargarDatos();
         toast.success('Credenciales guardadas correctamente');
+      } else {
+        toast.error('No se pudieron guardar las credenciales');
       }
     } catch (error) {
       toast.error('Error al guardar credenciales');
@@ -162,7 +222,7 @@ export function IntegracionesDelivery() {
 
       for (const plataforma of plataformasActivas) {
         const res = await integracionesApi.sincronizarProductos(plataforma.id, productos as any);
-        if (res.success) {
+        if ((res?.errores ?? 0) === 0) {
           exitosos++;
         } else {
           errores++;

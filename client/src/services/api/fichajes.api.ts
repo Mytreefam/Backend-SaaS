@@ -6,6 +6,21 @@
 
 import { envelopedFetch } from '../http/envelopedFetch';
 
+function getLocalRole(): string | null {
+  try {
+    const raw = localStorage.getItem('user');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return typeof parsed?.role === 'string' ? parsed.role : null;
+  } catch {
+    return null;
+  }
+}
+
+function useGerenteEndpoints(): boolean {
+  return getLocalRole() === 'gerente';
+}
+
 // ============================================================================
 // TIPOS
 // ============================================================================
@@ -27,6 +42,7 @@ export interface Fichaje {
 export interface FichajeCreate {
   empleadoId: number;
   tipo: 'entrada' | 'salida' | 'pausa' | 'reanudacion';
+  puntoVentaId?: string;
   ubicacion?: string;
   notas?: string;
 }
@@ -36,6 +52,12 @@ export interface EstadoFichaje {
   horaEntrada?: string;
   tiempoTrabajado: number; // en segundos
   pausado: boolean;
+}
+
+export interface EstadoFichajeDetallado extends EstadoFichaje {
+  empleadoId?: number;
+  puntoVentaId?: string;
+  puntoVentaNombre?: string;
 }
 
 // ============================================================================
@@ -48,9 +70,9 @@ export const fichajesApi = {
    */
   async getByEmpleadoId(empleadoId: number): Promise<Fichaje[]> {
     try {
-      const response = await envelopedFetch<Fichaje[]>(`/gerente/empleados/${empleadoId}/fichajes`, {
-        method: 'GET',
-      });
+      const response = useGerenteEndpoints()
+        ? await envelopedFetch<Fichaje[]>(`/gerente/empleados/${empleadoId}/fichajes`, { method: 'GET' })
+        : await envelopedFetch<Fichaje[]>(`/trabajador/fichajes`, { method: 'GET' });
       return response.data.data ?? [];
     } catch (error) {
       console.error('Error al obtener fichajes:', error);
@@ -64,10 +86,10 @@ export const fichajesApi = {
   async getFichajesHoy(empleadoId: number): Promise<Fichaje[]> {
     try {
       const hoy = new Date().toISOString().split('T')[0];
-      const response = await envelopedFetch<Fichaje[]>(
-        `/gerente/empleados/${empleadoId}/fichajes?fecha=${hoy}`,
-        { method: 'GET' },
-      );
+      const url = useGerenteEndpoints()
+        ? `/gerente/empleados/${empleadoId}/fichajes?fecha=${hoy}`
+        : `/trabajador/fichajes?fecha=${hoy}`;
+      const response = await envelopedFetch<Fichaje[]>(url, { method: 'GET' });
       return response.data.data ?? [];
     } catch (error) {
       console.error('Error al obtener fichajes de hoy:', error);
@@ -80,10 +102,13 @@ export const fichajesApi = {
    */
   async registrar(data: FichajeCreate): Promise<Fichaje | null> {
     try {
-      const response = await envelopedFetch<Fichaje>('/gerente/empleados/fichajes', {
+      const url = useGerenteEndpoints() ? '/gerente/empleados/fichajes' : '/trabajador/fichajes';
+      const response = await envelopedFetch<Fichaje>(url, {
         method: 'POST',
         body: JSON.stringify({
           ...data,
+          puntoVentaId: data.puntoVentaId,
+          // keep legacy fields for gerente endpoint, worker endpoint also accepts
           fecha: new Date().toISOString().split('T')[0],
           hora: new Date().toTimeString().split(' ')[0],
         }),
@@ -132,6 +157,38 @@ export const fichajesApi = {
       return { enTurno, horaEntrada, tiempoTrabajado, pausado };
     } catch (error) {
       console.error('Error al obtener estado de fichaje:', error);
+      return { enTurno: false, tiempoTrabajado: 0, pausado: false };
+    }
+  },
+
+  /**
+   * Estado actual (detallado) del trabajador autenticado.
+   * Para trabajador usa endpoint backend; para gerente deriva desde fichajes de hoy.
+   */
+  async getEstadoDetallado(empleadoId: number): Promise<EstadoFichajeDetallado> {
+    try {
+      if (!useGerenteEndpoints()) {
+        const res = await envelopedFetch<EstadoFichajeDetallado>('/trabajador/fichajes/estado', { method: 'GET' });
+        return (
+          res.data.data ?? {
+            enTurno: false,
+            tiempoTrabajado: 0,
+            pausado: false,
+          }
+        );
+      }
+
+      const base = await this.getEstadoActual(empleadoId);
+      const fichajesHoy = await this.getFichajesHoy(empleadoId);
+      const lastEntrada = [...fichajesHoy].reverse().find((f) => f.tipo === 'entrada');
+      return {
+        ...base,
+        empleadoId,
+        puntoVentaId: (lastEntrada as any)?.puntoVentaId,
+        puntoVentaNombre: undefined,
+      };
+    } catch (error) {
+      console.error('Error al obtener estado de fichaje detallado:', error);
       return { enTurno: false, tiempoTrabajado: 0, pausado: false };
     }
   },

@@ -41,6 +41,8 @@ import {
   UtensilsCrossed
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
+import { authApi, fichajesApi } from '../services/api';
+import { puntosVentaApi } from '../services/api/puntosVenta.api';
 
 // ============================================
 // INTERFACES
@@ -98,43 +100,19 @@ interface FichajeActivo {
   enPausa: boolean;
 }
 
-// ============================================
-// DATOS MOCK - PDVs (desde ConfiguracionEmpresas del Gerente)
-// ============================================
-
-const puntosVentaMock: PuntoVenta[] = [
-  {
-    id: 'PDV-TIANA',
-    nombre: 'Tiana',
-    direccion: 'Passeig de la Vilesa, 6, 08391 Tiana, Barcelona',
-    coordenadas: {
-      latitud: 41.4933,
-      longitud: 2.2633,
-    },
-    activo: true,
-  },
-  {
-    id: 'PDV-BADALONA',
-    nombre: 'Badalona',
-    direccion: 'Carrer del Doctor Robert, 75, 08915 Badalona, Barcelona',
-    coordenadas: {
-      latitud: 41.4500,
-      longitud: 2.2461,
-    },
-    activo: true,
-  },
-];
-
 export const FichajeColaborador = forwardRef<FichajeColaboradorRef, FichajeColaboradorProps>((props, ref) => {
   const { onFichajeChange } = props;
   const [fichadoActivo, setFichadoActivo] = useState<FichajeActivo | null>(null);
   const [enPausa, setEnPausa] = useState(false);
   const [tiempoActual, setTiempoActual] = useState('00:00:00');
+
+  const [puntosVenta, setPuntosVenta] = useState<PuntoVenta[]>([]);
   
   // Estados para el modal de fichaje
   const [modalFichajeOpen, setModalFichajeOpen] = useState(false);
   const [pdvSeleccionado, setPdvSeleccionado] = useState<string>('');
   const [geolocalizando, setGeolocalizando] = useState(false);
+  const [registrandoFichaje, setRegistrandoFichaje] = useState(false);
   const [geolocalizacion, setGeolocalizacion] = useState<{
     latitud: number;
     longitud: number;
@@ -143,12 +121,7 @@ export const FichajeColaborador = forwardRef<FichajeColaboradorRef, FichajeColab
 
   // Estados para Consumos Internos
   const [modalConsumoOpen, setModalConsumoOpen] = useState(false);
-  const [consumos, setConsumos] = useState([
-    { id: '1', fecha: '30 Nov 2025', hora: '10:30', categoria: 'Comida', producto: 'Menú del día', cantidad: 1, importe: 8.50, pdv: 'Tiana', estado: 'Aprobado' },
-    { id: '2', fecha: '29 Nov 2025', hora: '15:00', categoria: 'Bebida', producto: 'Café con leche', cantidad: 2, importe: 3.00, pdv: 'Tiana', estado: 'Aprobado' },
-    { id: '3', fecha: '28 Nov 2025', hora: '12:00', categoria: 'Comida', producto: 'Bocadillo', cantidad: 1, importe: 4.50, pdv: 'Montgat', estado: 'Pendiente' },
-    { id: '4', fecha: '27 Nov 2025', hora: '14:30', categoria: 'Bebida', producto: 'Refresco', cantidad: 1, importe: 2.50, pdv: 'Tiana', estado: 'Aprobado' },
-  ]);
+  const [consumos, setConsumos] = useState<any[]>([]);
 
   // Estados para nuevo consumo
   const [nuevoConsumo, setNuevoConsumo] = useState({
@@ -160,43 +133,126 @@ export const FichajeColaborador = forwardRef<FichajeColaboradorRef, FichajeColab
     observaciones: ''
   });
 
-  const registrosHoy = [
-    { tipo: 'entrada', hora: '09:00 AM', fecha: 'Hoy', pdv: 'Tiana' },
-    { tipo: 'pausa', hora: '11:30 AM', fecha: 'Hoy', pdv: 'Tiana' },
-    { tipo: 'reanudacion', hora: '11:45 AM', fecha: 'Hoy', pdv: 'Tiana' },
-  ];
-
-  const registrosSemana = [
-    { dia: 'Lunes', entrada: '09:00 AM', salida: '06:00 PM', horas: '8h 00m', pdv: 'Tiana' },
-    { dia: 'Martes', entrada: '09:05 AM', salida: '06:10 PM', horas: '8h 05m', pdv: 'Tiana' },
-    { dia: 'Miércoles', entrada: '08:55 AM', salida: '05:55 PM', horas: '8h 00m', pdv: 'Montgat' },
-    { dia: 'Jueves', entrada: '09:00 AM', salida: '06:00 PM', horas: '8h 00m', pdv: 'Montgat' },
-    { dia: 'Viernes', entrada: '09:00 AM', salida: '-', horas: 'En curso', pdv: 'Tiana' },
-  ];
+  const [registrosHoy, setRegistrosHoy] = useState<Array<{ tipo: string; hora: string; fecha: string; pdv: string }>>([]);
+  const [registrosSemana, setRegistrosSemana] = useState<
+    Array<{ dia: string; entrada: string; salida: string; horas: string; pdv: string }>
+  >([]);
 
   // ============================================
   // EFECTOS
   // ============================================
 
-  // Cargar fichaje activo desde localStorage al montar
+  // Cargar estado real desde backend al montar
   useEffect(() => {
-    try {
-      const fichajeGuardado = localStorage.getItem('fichaje_activo');
-      if (fichajeGuardado) {
-        const fichaje = JSON.parse(fichajeGuardado);
-        // Convertir las fechas de string a Date
-        fichaje.fechaEntrada = new Date(fichaje.fechaEntrada);
-        setFichadoActivo(fichaje);
-        setEnPausa(fichaje.enPausa || false);
-        console.log('[FICHAJE] Fichaje activo cargado desde localStorage:', fichaje);
-        // Notificar al padre
-        onFichajeChange?.(true);
+    let cancelled = false;
+    const user = authApi.getCurrentUser();
+    const empleadoId = Number(user?.id || 0);
+    if (!Number.isFinite(empleadoId) || empleadoId <= 0) return;
+
+    const load = async () => {
+      try {
+        const [pvListApi, estado, hoy, all] = await Promise.all([
+          puntosVentaApi.getAll(),
+          fichajesApi.getEstadoDetallado(empleadoId),
+          fichajesApi.getFichajesHoy(empleadoId),
+          fichajesApi.getByEmpleadoId(empleadoId),
+        ]);
+        if (cancelled) return;
+
+        const pvMapped: PuntoVenta[] = (pvListApi || []).map((pv: any) => ({
+          id: String(pv.id),
+          nombre: String(pv.nombre || pv.id),
+          direccion: String(pv.direccion || ''),
+          coordenadas: { latitud: Number(pv.latitud || 0), longitud: Number(pv.longitud || 0) },
+          activo: Boolean(pv.activo ?? true),
+        }));
+        setPuntosVenta(pvMapped.filter((p) => p.activo));
+
+        setEnPausa(Boolean(estado.pausado));
+        if (estado.enTurno && estado.horaEntrada && estado.puntoVentaId) {
+          const todayStr = new Date().toISOString().split('T')[0];
+          const fechaEntrada = new Date(`${todayStr}T${estado.horaEntrada}`);
+          setFichadoActivo({
+            id: `activo-${empleadoId}`,
+            trabajadorId: String(empleadoId),
+            puntoVentaId: String(estado.puntoVentaId),
+            puntoVentaNombre: String(estado.puntoVentaNombre || estado.puntoVentaId),
+            fechaEntrada,
+            horaEntrada: String(estado.horaEntrada),
+            geolocalizacion: undefined,
+            enPausa: Boolean(estado.pausado),
+          });
+          onFichajeChange?.(true);
+        } else {
+          setFichadoActivo(null);
+          onFichajeChange?.(false);
+        }
+
+        const registrosHoyUi = (hoy || []).map((f: any) => ({
+          tipo: String(f.tipo),
+          hora: String(f.hora),
+          fecha: String(f.fecha),
+          pdv: String(f.puntoVentaId || ''),
+        }));
+        setRegistrosHoy(registrosHoyUi);
+
+        // Semana: agrupar por fecha y mostrar primer entrada / última salida
+        const now = new Date();
+        const day = now.getDay(); // 0=Sun..6=Sat
+        const diffToMonday = (day + 6) % 7;
+        const monday = new Date(now);
+        monday.setHours(0, 0, 0, 0);
+        monday.setDate(now.getDate() - diffToMonday);
+
+        const inWeek = (all || []).filter((f: any) => {
+          const d = new Date(`${f.fecha}T00:00:00`);
+          return d >= monday && d <= now;
+        });
+        const byDate = new Map<string, any[]>();
+        for (const f of inWeek) {
+          const key = String(f.fecha);
+          byDate.set(key, [...(byDate.get(key) || []), f]);
+        }
+        const weekUi = Array.from(byDate.entries())
+          .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+          .map(([fecha, list]) => {
+            const ordered = [...list].sort((a, b) => String(a.hora).localeCompare(String(b.hora)));
+            const entrada = ordered.find((x) => x.tipo === 'entrada')?.hora || '-';
+            const salida = [...ordered].reverse().find((x) => x.tipo === 'salida')?.hora || '-';
+            const pdv = ordered.find((x) => x.puntoVentaId)?.puntoVentaId || '';
+            let horas = '-';
+            if (entrada !== '-' && salida !== '-') {
+              const start = new Date(`${fecha}T${entrada}`);
+              const end = new Date(`${fecha}T${salida}`);
+              const diff = Math.max(0, end.getTime() - start.getTime());
+              const h = Math.floor(diff / 3600000);
+              const m = Math.floor((diff % 3600000) / 60000);
+              horas = `${h}h ${String(m).padStart(2, '0')}m`;
+            } else if (entrada !== '-' && salida === '-' && fecha === new Date().toISOString().split('T')[0]) {
+              horas = 'En curso';
+            }
+            const dia = new Date(`${fecha}T00:00:00`).toLocaleDateString('es-ES', { weekday: 'long' });
+            return {
+              dia: dia.charAt(0).toUpperCase() + dia.slice(1),
+              entrada,
+              salida,
+              horas,
+              pdv,
+            };
+          });
+        setRegistrosSemana(weekUi);
+      } catch (e) {
+        console.error('[FICHAJE] Error cargando estado:', e);
       }
-    } catch (error) {
-      console.error('[FICHAJE] Error al cargar fichaje desde localStorage:', error);
-      localStorage.removeItem('fichaje_activo');
-    }
-  }, []);
+    };
+
+    void load();
+    const interval = window.setInterval(load, 15000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [onFichajeChange]);
 
   // Timer para actualizar el tiempo trabajado
   useEffect(() => {
@@ -312,14 +368,13 @@ export const FichajeColaborador = forwardRef<FichajeColaboradorRef, FichajeColab
       return;
     }
 
-    const pdvData = puntosVentaMock.find(p => p.id === pdvSeleccionado);
+    const pdvData = puntosVenta.find(p => p.id === pdvSeleccionado);
     if (!pdvData) {
       toast.error('Punto de venta no encontrado');
       return;
     }
 
-    // Simulación: el ID del empleado debería venir del usuario autenticado
-    const empleadoId = 1; // TODO: Reemplazar por el ID real del usuario logueado
+    const empleadoId = Number(authApi.getCurrentUser()?.id || 1);
 
     // Construir la ubicación como string si hay geolocalización
     let ubicacion = undefined;
@@ -328,32 +383,32 @@ export const FichajeColaborador = forwardRef<FichajeColaboradorRef, FichajeColab
     }
 
     // Llamar a la API para registrar el fichaje
+    setRegistrandoFichaje(true);
     fichajesApi.registrar({
       empleadoId,
       tipo: 'entrada',
+      puntoVentaId: pdvSeleccionado,
       ubicacion,
       notas: undefined,
     })
       .then((fichaje) => {
         if (fichaje) {
-          // Guardar el fichaje activo en el estado y localStorage
           const ahora = new Date();
+          const fechaEntrada = fichaje.fecha
+            ? new Date(`${fichaje.fecha}T${String(fichaje.hora || '00:00:00')}`)
+            : ahora;
           const nuevoFichaje: FichajeActivo = {
-            id: `FICH-${Date.now()}`,
+            id: `FICH-${String(fichaje.id)}`,
             trabajadorId: String(empleadoId),
             puntoVentaId: pdvSeleccionado,
             puntoVentaNombre: pdvData.nombre,
-            fechaEntrada: ahora,
-            horaEntrada: ahora.toLocaleTimeString('es-ES', {
-              hour: '2-digit',
-              minute: '2-digit',
-            }),
+            fechaEntrada,
+            horaEntrada: String(fichaje.hora || ''),
             geolocalizacion: geolocalizacion || undefined,
             enPausa: false,
           };
           setFichadoActivo(nuevoFichaje);
           setModalFichajeOpen(false);
-          localStorage.setItem('fichaje_activo', JSON.stringify(nuevoFichaje));
           onFichajeChange?.(true);
           toast.success('Fichaje de entrada registrado', {
             description: `PDV: ${pdvData.nombre}${geolocalizacion ? ' | Ubicación registrada' : ''}`,
@@ -366,14 +421,16 @@ export const FichajeColaborador = forwardRef<FichajeColaboradorRef, FichajeColab
         toast.error('Error al registrar fichaje', {
           description: error?.message || 'Error desconocido',
         });
+      })
+      .finally(() => {
+        setRegistrandoFichaje(false);
       });
   };
 
   const handleFicharSalida = () => {
     if (!fichadoActivo) return;
 
-    // Simulación: el ID del empleado debería venir del usuario autenticado
-    const empleadoId = 1; // TODO: Reemplazar por el ID real del usuario logueado
+    const empleadoId = Number(authApi.getCurrentUser()?.id || 1);
 
     // Construir la ubicación como string si hay geolocalización
     let ubicacion = undefined;
@@ -384,6 +441,7 @@ export const FichajeColaborador = forwardRef<FichajeColaboradorRef, FichajeColab
     fichajesApi.registrar({
       empleadoId,
       tipo: 'salida',
+      puntoVentaId: fichadoActivo.puntoVentaId,
       ubicacion,
       notas: undefined,
     })
@@ -392,7 +450,6 @@ export const FichajeColaborador = forwardRef<FichajeColaboradorRef, FichajeColab
           setFichadoActivo(null);
           setEnPausa(false);
           setTiempoActual('00:00:00');
-          localStorage.removeItem('fichaje_activo');
           onFichajeChange?.(false);
           toast.success('Fichaje de salida registrado', {
             description: `PDV: ${fichadoActivo.puntoVentaNombre} | Tiempo total: ${tiempoActual}`,
@@ -461,7 +518,7 @@ export const FichajeColaborador = forwardRef<FichajeColaboradorRef, FichajeColab
       producto: nuevoConsumo.producto,
       cantidad: parseInt(nuevoConsumo.cantidad),
       importe: parseFloat(nuevoConsumo.importe),
-      pdv: puntosVentaMock.find(p => p.id === nuevoConsumo.pdv)?.nombre || nuevoConsumo.pdv,
+      pdv: puntosVenta.find(p => p.id === nuevoConsumo.pdv)?.nombre || nuevoConsumo.pdv,
       estado: 'Pendiente' // Los consumos nuevos siempre empiezan como pendientes
     };
 
@@ -506,7 +563,7 @@ export const FichajeColaborador = forwardRef<FichajeColaboradorRef, FichajeColab
     console.log('[FICHAJE] Estado del modal cambió:', modalFichajeOpen);
     if (modalFichajeOpen) {
       console.log('[FICHAJE] ✅ Modal debería estar VISIBLE');
-      console.log('[FICHAJE] PDVs disponibles:', puntosVentaMock);
+      console.log('[FICHAJE] PDVs disponibles:', puntosVenta);
     }
   }, [modalFichajeOpen]);
 
@@ -904,7 +961,7 @@ export const FichajeColaborador = forwardRef<FichajeColaboradorRef, FichajeColab
                   <SelectValue placeholder="Selecciona un punto de venta" />
                 </SelectTrigger>
                 <SelectContent>
-                  {puntosVentaMock
+                  {puntosVenta
                     .filter(p => p.activo)
                     .map((pdv) => (
                       <SelectItem key={pdv.id} value={pdv.id}>
@@ -992,11 +1049,11 @@ export const FichajeColaborador = forwardRef<FichajeColaboradorRef, FichajeColab
             </Button>
             <Button
               onClick={handleConfirmarFichaje}
-              disabled={!pdvSeleccionado}
+              disabled={!pdvSeleccionado || registrandoFichaje}
               className="bg-green-600 hover:bg-green-700"
             >
               <CheckCircle2 className="w-4 h-4 mr-2" />
-              Confirmar Fichaje
+              {registrandoFichaje ? 'Confirmando...' : 'Confirmar Fichaje'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1027,7 +1084,7 @@ export const FichajeColaborador = forwardRef<FichajeColaboradorRef, FichajeColab
                   <SelectValue placeholder="Selecciona un punto de venta" />
                 </SelectTrigger>
                 <SelectContent>
-                  {puntosVentaMock
+                  {puntosVenta
                     .filter(p => p.activo)
                     .map((pdv) => (
                       <SelectItem key={pdv.id} value={pdv.id}>

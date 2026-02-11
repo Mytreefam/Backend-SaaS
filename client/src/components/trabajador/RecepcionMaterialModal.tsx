@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -50,12 +50,12 @@ import {
   PopoverTrigger,
 } from '../ui/popover';
 import { Check, ChevronsUpDown } from 'lucide-react';
-import { stockManager } from '../../data/stock-manager';
-import { stockIngredientes } from '../../data/stock-ingredientes';
-import { useStock } from '../../contexts/StockContext';
+import { usePuntoVentaActivo } from '../../hooks/usePuntoVentaActivo';
+import { stockTrabajadorApi, type PedidoProveedorApi } from '../../services/api';
 
 interface MaterialRecibido {
   id: string;
+  articuloId?: number;
   codigo: string;
   nombre: string;
   cantidad: number;
@@ -91,12 +91,8 @@ export function RecepcionMaterialModal({
   onOpenChange, 
   onRecepcionCompletada
 }: RecepcionMaterialModalProps) {
-  // ✅ HOOK DE STOCKCONTEXT - Para registrar recepción en tiempo real
-  const {
-    registrarRecepcion: registrarRecepcionEnContexto,
-    pedidosProveedores,
-    puntoVentaActivo,
-  } = useStock();
+  const { puntoVentaId } = usePuntoVentaActivo();
+  const [backendPedidos, setBackendPedidos] = useState<PedidoProveedorApi[]>([]);
 
   const [modo, setModo] = useState<'seleccion' | 'ocr' | 'manual'>('seleccion');
   const [paso, setPaso] = useState(1); // 1: Captura/entrada, 2: Revisión, 3: Confirmación
@@ -104,76 +100,47 @@ export function RecepcionMaterialModal({
   // Búsqueda de pedidos realizados
   const [openPedidos, setOpenPedidos] = useState(false);
   const [pedidoSeleccionado, setPedidoSeleccionado] = useState<string>('');
-  
-  // ✅ USAR PEDIDOS DEL CONTEXTO - Sincronizados con el gerente
-  const pedidosDelContexto: PedidoRealizado[] = pedidosProveedores
-    .filter(p => p.estado !== 'entregado' && p.estado !== 'anulado')
-    .map(pedido => ({
-      id: pedido.id,
-      numeroPedido: pedido.numeroPedido,
-      proveedor: pedido.proveedorNombre,
-      fechaPedido: pedido.fechaSolicitud,
-      fechaEsperada: pedido.fechaEstimadaEntrega || '',
-      estado: (pedido.estado === 'solicitado' || pedido.estado === 'confirmado' || pedido.estado === 'en-transito') 
-        ? 'pendiente' 
-        : pedido.estado === 'parcial' 
-        ? 'parcial' 
-        : 'completado',
-      materiales: pedido.articulos.map(art => ({
-        codigo: art.codigo,
-        nombre: art.nombre,
-        cantidad: art.cantidad,
-        ubicacion: 'A-01' // TODO: Obtener ubicación real
-      })),
-      total: pedido.total
-    }));
 
-  // Usar pedidos del contexto si existen, sino usar mock local
-  const pedidosRealizados: PedidoRealizado[] = pedidosDelContexto.length > 0 
-    ? pedidosDelContexto 
-    : [
-    {
-      id: 'PED-001',
-      numeroPedido: 'PED-2025-001',
-      proveedor: 'Cafés del Mundo S.L.',
-      fechaPedido: '2025-11-20',
-      fechaEsperada: '2025-11-30',
-      estado: 'pendiente',
-      materiales: [
-        { codigo: 'CAF001', nombre: 'Café Arábica Colombia 1kg', cantidad: 50, ubicacion: 'A-12' },
-        { codigo: 'CAF002', nombre: 'Café Robusta Vietnam 1kg', cantidad: 30, ubicacion: 'A-13' },
-        { codigo: 'TZA001', nombre: 'Taza cerámica blanca', cantidad: 100, ubicacion: 'B-05' },
-      ],
-      total: 845.50
-    },
-    {
-      id: 'PED-002',
-      numeroPedido: 'PED-2025-002',
-      proveedor: 'Tostadores Premium S.A.',
-      fechaPedido: '2025-11-22',
-      fechaEsperada: '2025-12-01',
-      estado: 'pendiente',
-      materiales: [
-        { codigo: 'CAF005', nombre: 'Café Descafeinado 1kg', cantidad: 20, ubicacion: 'A-15' },
-        { codigo: 'LEC001', nombre: 'Leche entera 1L', cantidad: 50, ubicacion: 'C-01' },
-      ],
-      total: 425.00
-    },
-    {
-      id: 'PED-003',
-      numeroPedido: 'PED-2025-003',
-      proveedor: 'Arábica Gourmet',
-      fechaPedido: '2025-11-25',
-      fechaEsperada: '2025-12-05',
-      estado: 'pendiente',
-      materiales: [
-        { codigo: 'CAF010', nombre: 'Café Blend Special 1kg', cantidad: 40, ubicacion: 'A-20' },
-        { codigo: 'SIR001', nombre: 'Sirope Vainilla 750ml', cantidad: 12, ubicacion: 'D-08' },
-        { codigo: 'SIR002', nombre: 'Sirope Caramelo 750ml', cantidad: 12, ubicacion: 'D-09' },
-      ],
-      total: 680.00
-    },
-  ];
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!puntoVentaId) {
+      setBackendPedidos([]);
+      return;
+    }
+    let cancelled = false;
+    stockTrabajadorApi
+      .listPedidosProveedor({ puntoVentaId })
+      .then((list) => {
+        if (cancelled) return;
+        setBackendPedidos(list || []);
+      })
+      .catch((e) => {
+        console.error('Error cargando pedidos proveedor:', e);
+        if (!cancelled) setBackendPedidos([]);
+      })
+      .finally(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, puntoVentaId]);
+
+  const pedidosRealizados: PedidoRealizado[] = useMemo(() => {
+    return (backendPedidos || []).map((p) => ({
+      id: String(p.id),
+      numeroPedido: p.numero,
+      proveedor: p.proveedor?.nombre || `Proveedor ${p.proveedorId}`,
+      fechaPedido: p.fechaPedido,
+      fechaEsperada: p.fechaEntregaEstimada || '',
+      estado: (p.estado || 'pendiente') as any,
+      materiales: (p.items || []).map((it) => ({
+        codigo: String(it.articuloId),
+        nombre: it.nombreArticulo,
+        cantidad: Number(it.cantidad),
+        ubicacion: '—',
+      })),
+      total: Number(p.total || 0),
+    }));
+  }, [backendPedidos]);
   
   // Datos del albarán
   const [proveedor, setProveedor] = useState('');
@@ -206,8 +173,9 @@ export function RecepcionMaterialModal({
   };
 
   const handleSeleccionarPedido = (pedidoId: string) => {
-    const pedido = pedidosRealizados.find(p => p.id === pedidoId);
-    if (!pedido) return;
+    const pedidoBackend = backendPedidos.find((p) => String(p.id) === String(pedidoId));
+    const pedido = pedidosRealizados.find((p) => p.id === pedidoId);
+    if (!pedidoBackend || !pedido) return;
 
     // Autocompletar datos del albarán
     setProveedor(pedido.proveedor);
@@ -215,12 +183,13 @@ export function RecepcionMaterialModal({
     setNotas(`Recepción del pedido ${pedido.numeroPedido} - Fecha esperada: ${new Date(pedido.fechaEsperada).toLocaleDateString('es-ES')}`);
 
     // Autocompletar materiales
-    const materialesDelPedido: MaterialRecibido[] = pedido.materiales.map((mat, index) => ({
+    const materialesDelPedido: MaterialRecibido[] = (pedidoBackend.items || []).map((it, index) => ({
       id: `${Date.now()}-${index}`,
-      codigo: mat.codigo,
-      nombre: mat.nombre,
-      cantidad: mat.cantidad,
-      ubicacion: mat.ubicacion || 'Por asignar',
+      articuloId: it.articuloId,
+      codigo: String(it.articuloId),
+      nombre: it.nombreArticulo,
+      cantidad: Number(it.cantidad),
+      ubicacion: 'Por asignar',
       lote: '',
       caducidad: ''
     }));
@@ -356,79 +325,43 @@ export function RecepcionMaterialModal({
     setPaso(2);
   };
 
-  const handleConfirmarRecepcion = () => {
-    // Mapear materiales recibidos a artículos del stock
-    const materialesParaStock = materiales.map(material => {
-      // Buscar el artículo en el stock por código o nombre
-      const articuloEnStock = stockIngredientes.find(
-        ing => ing.id === material.codigo || ing.nombre.toLowerCase() === material.nombre.toLowerCase()
-      );
+  const handleConfirmarRecepcion = async () => {
+    const pedidoIdNum = Number(pedidoSeleccionado);
+    if (!Number.isFinite(pedidoIdNum) || pedidoIdNum <= 0) {
+      toast.error('Selecciona un pedido válido');
+      return;
+    }
 
-      return {
-        articuloId: articuloEnStock?.id || material.codigo,
-        articuloNombre: material.nombre,
-        articuloCodigo: material.codigo,
-        cantidadRecibida: material.cantidad,
-        unidad: articuloEnStock?.unidad || 'unidades' as const,
-        lote: material.lote,
-        caducidad: material.caducidad,
-        ubicacion: material.ubicacion
-      };
-    });
-
-    // ✅ REGISTRAR EN STOCKCONTEXT - Sincronización en tiempo real con el gerente
     try {
-      const recepcion = registrarRecepcionEnContexto({
-        numeroAlbaran,
-        proveedorNombre: proveedor,
-        pedidoRelacionado: pedidoSeleccionado || undefined,
-        pdvDestino: puntoVentaActivo || 'tiana',
-        materiales: materialesParaStock,
-        usuarioRecepcion: 'Usuario Actual', // TODO: Obtener del contexto de sesión
-        observaciones: notas
+      const items = materiales
+        .map((m) => ({
+          articuloId: m.articuloId ?? Number(m.codigo),
+          cantidadRecibida: Number(m.cantidad),
+        }))
+        .filter((it) => Number.isFinite(it.articuloId) && it.articuloId! > 0 && Number.isFinite(it.cantidadRecibida) && it.cantidadRecibida! > 0);
+
+      const result = await stockTrabajadorApi.recibirPedidoProveedor({
+        pedidoId: pedidoIdNum,
+        observaciones: notas || undefined,
+        items,
       });
 
-      // ✅ El contexto se encarga de:
-      // - Actualizar el stock automáticamente
-      // - Actualizar el estado del pedido si existe
-      // - Registrar los movimientos
-      // - Sincronizar con la pantalla del gerente en tiempo real
-      
-      toast.success('¡Recepción completada y sincronizada!', {
-        description: `${materiales.length} artículos añadidos. El gerente puede verlo ahora mismo.`,
-        duration: 5000
+      if (!result) {
+        toast.error('No se pudo registrar la recepción');
+        return;
+      }
+
+      toast.success('Recepción registrada', {
+        description: `${materiales.length} artículos procesados`,
+        duration: 4000,
       });
 
-      console.log('✅ RECEPCIÓN COMPLETADA', {
-        recepcionId: recepcion.id,
-        albaran: numeroAlbaran,
-        proveedor,
-        articulos: materiales.length,
-        unidadesTotales: materiales.reduce((sum, m) => sum + m.cantidad, 0),
-        estado: recepcion.estado
-      });
-
-      // Notificar al gerente sobre la nueva recepción
-      console.log('📧 NOTIFICACIÓN GERENTE: Nueva recepción de material', {
-        usuario: 'Usuario Actual',
-        proveedor,
-        numeroAlbaran,
-        fecha: new Date().toISOString(),
-        totalArticulos: materiales.length,
-        totalUnidades: materiales.reduce((sum, m) => sum + m.cantidad, 0),
-        pedidoRelacionado: pedidoSeleccionado ? 'Sí' : 'No'
-      });
-
-      // Callback y reset
       onRecepcionCompletada();
       handleReset();
       onOpenChange(false);
-
     } catch (error) {
-      console.error('❌ Error al registrar recepción:', error);
-      toast.error('Error al registrar la recepción', {
-        description: 'Por favor, inténtalo de nuevo o contacta al administrador.'
-      });
+      console.error('Error al registrar recepción:', error);
+      toast.error('Error al registrar la recepción');
     }
   };
 

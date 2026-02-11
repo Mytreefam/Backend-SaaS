@@ -15,45 +15,30 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Check, Sparkles, Store, Image as ImageIcon } from 'lucide-react';
-import { MARCAS_ARRAY, type Marca } from '../../constants/empresaConfig';
+import { publicCatalogoApi, type MarcaPublicaApi } from '../../services/api';
 import { toast } from 'sonner@2.0.3';
-import logoModomio from 'figma:asset/7a4d64c95291a62dd24c849142ae4540d5e2f45f.png';
-import logoBlackburger from 'figma:asset/60b944da0efe66e24a868c7d759146e988e8fa41.png';
 
 interface SelectorMarcaClienteProps {
   onMarcaSelected: (marcaId: string) => void;
 }
 
-const LOGOS_MAP: Record<string, string> = {
-  'MRC-001': logoModomio,
-  'MRC-002': logoBlackburger,
-};
-
-// Key de localStorage para marcas personalizadas (mismo que GestionMarcas)
-const STORAGE_KEY = 'udar_marcas_personalizadas';
-
-interface MarcaPersonalizada extends Marca {
-  logoPersonalizado?: string;
-}
+interface MarcaUi extends MarcaPublicaApi {}
 
 export function SelectorMarcaCliente({ onMarcaSelected }: SelectorMarcaClienteProps) {
   const [selectedMarca, setSelectedMarca] = useState<string | null>(null);
   const [hoveredMarca, setHoveredMarca] = useState<string | null>(null);
-  const [marcas, setMarcas] = useState<MarcaPersonalizada[]>(MARCAS_ARRAY);
+  const [marcas, setMarcas] = useState<MarcaUi[]>([]);
 
   // Cargar marcas personalizadas y preferencia guardada
   useEffect(() => {
-    // Cargar marcas personalizadas desde localStorage
-    const marcasGuardadas = localStorage.getItem(STORAGE_KEY);
-    if (marcasGuardadas) {
-      try {
-        const marcasPersonalizadas = JSON.parse(marcasGuardadas);
-        setMarcas(marcasPersonalizadas);
-      } catch (error) {
-        console.error('Error al cargar marcas personalizadas:', error);
-        setMarcas(MARCAS_ARRAY);
-      }
-    }
+    // Cargar marcas desde backend (fuente de verdad)
+    publicCatalogoApi
+      .listMarcas()
+      .then((list) => setMarcas((list || []).filter((m) => m.activo)))
+      .catch((error) => {
+        console.error('Error al cargar marcas:', error);
+        setMarcas([]);
+      });
 
     // Cargar preferencia de marca del cliente
     const savedMarca = localStorage.getItem('cliente_marca_preferida');
@@ -84,10 +69,9 @@ export function SelectorMarcaCliente({ onMarcaSelected }: SelectorMarcaClientePr
     onMarcaSelected(selectedMarca);
   };
 
-  // Función para obtener el logo correcto (personalizado o por defecto)
-  const getLogoUrl = (marca: MarcaPersonalizada) => {
-    // Prioridad: logo personalizado > logo por defecto
-    return marca.logoPersonalizado || LOGOS_MAP[marca.id];
+  // Función para obtener el logo (backend)
+  const getLogoUrl = (marca: MarcaUi) => {
+    return marca.logoUrl || undefined;
   };
 
   return (
@@ -107,7 +91,7 @@ export function SelectorMarcaCliente({ onMarcaSelected }: SelectorMarcaClientePr
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {marcas.map((marca, index) => {
           const logoUrl = getLogoUrl(marca);
-          const tieneLogoPersonalizado = !!marca.logoPersonalizado;
+          const tieneLogoPersonalizado = !!marca.logoUrl;
           
           return (
             <motion.div
@@ -166,7 +150,7 @@ export function SelectorMarcaCliente({ onMarcaSelected }: SelectorMarcaClientePr
                     transition={{ duration: 0.3 }}
                   />
                 ) : (
-                  <div className="text-6xl">{marca.icono}</div>
+                  <div className="text-6xl">{marca.icono || '🏷️'}</div>
                 )}
                 
                 {/* Overlay con efecto hover */}

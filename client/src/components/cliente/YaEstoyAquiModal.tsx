@@ -46,7 +46,8 @@ export function YaEstoyAquiModal({ isOpen, onOpenChange, onConfirmar, userId, us
           numero: `T${Date.now() % 10000}`,
           estado: 'en_cola',
           clienteId: parseInt(userId),
-          pedidoId: null
+          geolocalizacionValidada: true,
+          fechaGeolocalizacion: new Date().toISOString(),
         });
 
         if (turno) {

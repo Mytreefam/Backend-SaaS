@@ -3,7 +3,7 @@
  * API Service conectado con backend real
  */
 
-import { API_CONFIG } from '../config/api.config';
+import { API_CONFIG, getAuthToken } from '../config/api.config';
 import { envelopedFetch } from './http/envelopedFetch';
 import type {
   Notification,
@@ -168,16 +168,11 @@ class NotificationsService {
   // ==================== OBTENER NOTIFICACIONES ====================
   
   async getNotifications(request: GetNotificationsRequest): Promise<GetNotificationsResponse> {
-    if (this.useMock) {
-      return this.getMockNotifications(request);
-    }
-    
     try {
       // Usar el endpoint de cliente si tenemos usuarioId (que es el clienteId)
       const clienteId = request.usuarioId;
       const response = await envelopedFetch<any[]>(`${CLIENTES_ENDPOINT}/${clienteId}/notificaciones`, {
         method: 'GET',
-        skipAuth: true,
       });
 
       const data = response.data.data ?? [];
@@ -206,8 +201,7 @@ class NotificationsService {
       };
     } catch (error) {
       console.error('Error en getNotifications:', error);
-      // Fallback a mock si hay error
-      return this.getMockNotifications(request);
+      throw error;
     }
   }
   
@@ -231,10 +225,6 @@ class NotificationsService {
   // ==================== MARCAR COMO LEÍDA ====================
   
   async markAsRead(request: MarkAsReadRequest): Promise<MarkAsReadResponse> {
-    if (this.useMock) {
-      return this.mockMarkAsRead(request);
-    }
-    
     try {
       // Marcar cada notificación como leída
       let actualizadas = 0;
@@ -242,8 +232,8 @@ class NotificationsService {
         try {
           await envelopedFetch<unknown>(`${NOTIFICATIONS_ENDPOINT}/${id}`, {
             method: 'PUT',
-            skipAuth: true,
             body: JSON.stringify({ leida: true }),
+            headers: API_CONFIG.HEADERS,
           });
           actualizadas++;
         } catch {
@@ -254,7 +244,7 @@ class NotificationsService {
       return { success: actualizadas > 0, actualizadas };
     } catch (error) {
       console.error('Error en markAsRead:', error);
-      return this.mockMarkAsRead(request);
+      return { success: false, actualizadas: 0 };
     }
   }
   
@@ -265,7 +255,6 @@ class NotificationsService {
       // Obtener todas las notificaciones del cliente
       const response = await envelopedFetch<any[]>(`${CLIENTES_ENDPOINT}/${usuarioId}/notificaciones`, {
         method: 'GET',
-        skipAuth: true,
       });
       const notificaciones = response.data.data ?? [];
       let actualizadas = 0;
@@ -275,7 +264,6 @@ class NotificationsService {
         try {
           await envelopedFetch<unknown>(`${NOTIFICATIONS_ENDPOINT}/${n.id}`, {
             method: 'PUT',
-            skipAuth: true,
             body: JSON.stringify({ leida: true }),
           });
           actualizadas++;
@@ -305,7 +293,6 @@ class NotificationsService {
     try {
       await envelopedFetch<unknown>(`${NOTIFICATIONS_ENDPOINT}/${notificacionId}`, {
         method: 'DELETE',
-        skipAuth: true,
       });
       return true;
     } catch (error) {
@@ -317,18 +304,41 @@ class NotificationsService {
   // ==================== OBTENER PREFERENCIAS ====================
   
   async getPreferences(usuarioId: string): Promise<NotificationPreferences> {
-    // Retornar preferencias por defecto (el backend no las soporta aún)
-    return { ...MOCK_PREFERENCES, usuarioId };
+    try {
+      const response = await envelopedFetch<NotificationPreferences>(API_CONFIG.ENDPOINTS.NOTIFICACIONES_PREFERENCIAS, {
+        method: 'GET',
+        headers: API_CONFIG.HEADERS,
+      });
+      const prefs = response.data.data;
+      if (!prefs) throw new Error('Preferencias no disponibles');
+      return prefs as any;
+    } catch (error) {
+      console.error('Error en getPreferences:', error);
+      throw error;
+    }
   }
   
   // ==================== ACTUALIZAR PREFERENCIAS ====================
   
   async updatePreferences(request: UpdatePreferencesRequest): Promise<UpdatePreferencesResponse> {
-    // El backend no soporta preferencias aún
-    return {
-      success: true,
-      preferencias: { ...MOCK_PREFERENCES, ...request.preferencias },
-    };
+    try {
+      const response = await envelopedFetch<{ preferencias: NotificationPreferences }>(
+        API_CONFIG.ENDPOINTS.NOTIFICACIONES_PREFERENCIAS,
+        {
+          method: 'PUT',
+          headers: API_CONFIG.HEADERS,
+          body: JSON.stringify(request.preferencias),
+        },
+      );
+      const prefs = response.data.data?.preferencias;
+      return {
+        success: true,
+        preferencias: (prefs as any) || (request.preferencias as any),
+      };
+    } catch (error) {
+      console.error('Error en updatePreferences:', error);
+      throw error;
+    }
   }
   
   // ==================== CREAR NOTIFICACIÓN ====================
@@ -337,12 +347,12 @@ class NotificationsService {
     try {
       const response = await envelopedFetch<any>(NOTIFICATIONS_ENDPOINT, {
         method: 'POST',
-        skipAuth: true,
         body: JSON.stringify({
           mensaje: request.mensaje || request.titulo,
           clienteId: Number(request.usuarioId),
           leida: false,
         }),
+        headers: API_CONFIG.HEADERS,
       });
 
       const data = response.data.data ?? {};
@@ -360,18 +370,7 @@ class NotificationsService {
       };
     } catch (error) {
       console.error('Error en createNotification:', error);
-      // Fallback mock
-      const newNotification: Notification = {
-        id: `not-${Date.now()}`,
-        ...request,
-        fecha: new Date(),
-        status: 'sin_leer',
-        creadoEn: new Date(),
-      };
-      return {
-        success: true,
-        notificacion: newNotification,
-      };
+      throw error;
     }
   }
   
@@ -381,7 +380,6 @@ class NotificationsService {
     try {
       const response = await envelopedFetch<any[]>(`${CLIENTES_ENDPOINT}/${usuarioId}/notificaciones`, {
         method: 'GET',
-        skipAuth: true,
       });
       const notificaciones = response.data.data ?? [];
       const sinLeer = notificaciones.filter((n: any) => !n.leida).length;
@@ -395,7 +393,8 @@ class NotificationsService {
         porPrioridad: { normal: notificaciones.length, alta: 0, urgente: 0, baja: 0 },
       };
     } catch (error) {
-      return this.getMockStats();
+      console.error('Error en getStats:', error);
+      return { total: 0, sinLeer: 0, leidas: 0, archivadas: 0, porTipo: {}, porPrioridad: { normal: 0, alta: 0, urgente: 0, baja: 0 } };
     }
   }
   
@@ -417,7 +416,7 @@ class NotificationsService {
   
   private getToken(): string {
     // Obtener token de autenticación (desde localStorage, cookie, etc.)
-    return localStorage.getItem('auth_token') || '';
+    return getAuthToken() || '';
   }
   
   // ==================== MOCK IMPLEMENTATIONS ====================
@@ -484,6 +483,36 @@ class NotificationsService {
       ultimaSemana: MOCK_NOTIFICATIONS.length,
       urgentes: MOCK_NOTIFICATIONS.filter(n => n.prioridad === 'urgente').length,
     };
+  }
+
+  async registerDeviceToken(params: { token: string; platform?: string }): Promise<boolean> {
+    try {
+      await envelopedFetch<{ ok?: boolean }>(API_CONFIG.ENDPOINTS.NOTIFICACIONES_DEVICES, {
+        method: 'POST',
+        headers: API_CONFIG.HEADERS,
+        body: JSON.stringify({
+          token: params.token,
+          platform: params.platform || 'unknown',
+        }),
+      });
+      return true;
+    } catch (error) {
+      console.error('Error registrando device token:', error);
+      return false;
+    }
+  }
+
+  async sendTest(): Promise<boolean> {
+    try {
+      await envelopedFetch<{ ok?: boolean }>(API_CONFIG.ENDPOINTS.NOTIFICACIONES_TEST, {
+        method: 'POST',
+        headers: API_CONFIG.HEADERS,
+      });
+      return true;
+    } catch (error) {
+      console.error('Error enviando notificación de prueba:', error);
+      return false;
+    }
   }
 }
 

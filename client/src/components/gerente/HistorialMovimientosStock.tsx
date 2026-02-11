@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -31,8 +31,10 @@ import {
   Calendar,
   FileSpreadsheet
 } from 'lucide-react';
-import { stockManager, TipoMovimiento } from '../../data/stock-manager';
 import { toast } from 'sonner@2.0.3';
+import { stockApi } from '../../services/api/gerente.api';
+
+type TipoMovimiento = 'entrada' | 'salida' | 'recepcion' | 'produccion' | 'venta' | 'merma' | 'ajuste' | string;
 
 export function HistorialMovimientosStock() {
   const [busqueda, setBusqueda] = useState('');
@@ -41,8 +43,46 @@ export function HistorialMovimientosStock() {
   const [paginaActual, setPaginaActual] = useState(1);
   const itemsPorPagina = 20;
 
-  // Obtener movimientos del stockManager
-  const todosMovimientos = stockManager.getMovimientos();
+  const [cargando, setCargando] = useState(true);
+  const [todosMovimientos, setTodosMovimientos] = useState<any[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setCargando(true);
+    stockApi
+      .obtenerMovimientos({ limit: 500, offset: 0 })
+      .then((data) => {
+        if (cancelled) return;
+        const mapped = (Array.isArray(data) ? data : []).map((m: any) => ({
+          id: String(m.id),
+          fecha: m.fecha,
+          tipo: m.tipo,
+          articuloId: String(m.articuloId),
+          articuloNombre: m.articulo?.nombre || `Artículo #${m.articuloId}`,
+          cantidad: Number(m.cantidad || 0),
+          cantidadAnterior: Number(m.stockAnterior || 0),
+          cantidadPosterior: Number(m.stockPosterior || 0),
+          unidad: m.articulo?.unidadMedida || 'u',
+          pdv: m.articulo?.puntoVentaId || '—',
+          usuario: m.usuarioNombre || (m.usuarioId ? String(m.usuarioId) : '—'),
+          motivo: m.motivo || '',
+          referencia: m.pedidoProveedorId ? `PED-${m.pedidoProveedorId}` : undefined,
+        }));
+        setTodosMovimientos(mapped);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setTodosMovimientos([]);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setCargando(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Filtrar movimientos
   const movimientosFiltrados = useMemo(() => {
@@ -224,7 +264,14 @@ export function HistorialMovimientosStock() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {movimientosPaginados.length === 0 ? (
+                {cargando ? (
+                  <TableRow>
+                    <TableCell colSpan={10} className="text-center py-8 text-gray-500">
+                      <Package className="w-12 h-12 mx-auto mb-2 text-gray-400" />
+                      <p>Cargando movimientos...</p>
+                    </TableCell>
+                  </TableRow>
+                ) : movimientosPaginados.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={10} className="text-center py-8 text-gray-500">
                       <Package className="w-12 h-12 mx-auto mb-2 text-gray-400" />

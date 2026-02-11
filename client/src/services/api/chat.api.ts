@@ -44,14 +44,17 @@ export interface CrearChatRequest {
   pedidoId?: number;
   tipo?: string;
   mensajes?: Array<{
-    autor: string;
-    texto: string;
+    // Backend contract: contenido/remitente
+    contenido: string;
+    remitente?: string;
+    leido?: boolean;
   }>;
 }
 
 export interface EnviarMensajeRequest {
-  autor: string;
-  texto: string;
+  contenido: string;
+  remitente?: string;
+  leido?: boolean;
 }
 
 // ============================================================================

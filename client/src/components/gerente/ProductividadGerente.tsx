@@ -1,8 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Progress } from '../ui/progress';
 import { Target, Clock, Users, TrendingUp, Award, AlertCircle } from 'lucide-react';
+import { gerenteConfigApi } from '../../services/api';
 
 // ============================================
 // INTERFACES
@@ -26,131 +27,57 @@ interface Equipo {
 }
 
 export function ProductividadGerente() {
-  // ============================================
-  // DATOS MOCK - Ahora con más OKRs y equipos
-  // ============================================
-  
-  const [okrs] = useState<OKR[]>([
-    { 
-      id: 'OKR-001',
-      objetivo: 'Aumentar satisfacción cliente a 4.8', 
-      progreso: 85, 
-      equipo: 'Operaciones',
-      prioridad: 'alta',
-      fechaLimite: '2025-12-31',
-      responsable: 'Ana García'
-    },
-    { 
-      id: 'OKR-002',
-      objetivo: 'Reducir tiempo servicio a 8 minutos', 
-      progreso: 60, 
-      equipo: 'Pizzería 1',
-      prioridad: 'alta',
-      fechaLimite: '2025-11-30',
-      responsable: 'Carlos Méndez'
-    },
-    { 
-      id: 'OKR-003',
-      objetivo: 'Incrementar ventas 20%', 
-      progreso: 75, 
-      equipo: 'Caja 2',
-      prioridad: 'alta',
-      fechaLimite: '2025-12-15',
-      responsable: 'Laura Sánchez'
-    },
-    { 
-      id: 'OKR-004',
-      objetivo: 'Reducir desperdicio de alimentos 15%', 
-      progreso: 45, 
-      equipo: 'Cocina',
-      prioridad: 'media',
-      fechaLimite: '2025-12-20',
-      responsable: 'Roberto Díaz'
-    },
-    { 
-      id: 'OKR-005',
-      objetivo: 'Mejorar rotación de inventario', 
-      progreso: 90, 
-      equipo: 'Almacén',
-      prioridad: 'media',
-      fechaLimite: '2025-11-25',
-      responsable: 'María Torres'
-    },
-    { 
-      id: 'OKR-006',
-      objetivo: 'Capacitar al 100% del personal', 
-      progreso: 70, 
-      equipo: 'RRHH',
-      prioridad: 'media',
-      fechaLimite: '2025-12-10',
-      responsable: 'Jorge Ruiz'
-    },
-    { 
-      id: 'OKR-007',
-      objetivo: 'Implementar nuevo sistema TPV', 
-      progreso: 55, 
-      equipo: 'Tecnología',
-      prioridad: 'alta',
-      fechaLimite: '2025-12-05',
-      responsable: 'Elena Vega'
-    },
-    { 
-      id: 'OKR-008',
-      objetivo: 'Alcanzar 95% puntualidad entregas', 
-      progreso: 88, 
-      equipo: 'Delivery',
-      prioridad: 'alta',
-      fechaLimite: '2025-11-28',
-      responsable: 'Pedro Navarro'
-    },
-    { 
-      id: 'OKR-009',
-      objetivo: 'Reducir costes operativos 10%', 
-      progreso: 42, 
-      equipo: 'Administración',
-      prioridad: 'alta',
-      fechaLimite: '2025-12-31',
-      responsable: 'Isabel Moreno'
-    },
-    { 
-      id: 'OKR-010',
-      objetivo: 'Aumentar conversión online 25%', 
-      progreso: 65, 
-      equipo: 'Marketing',
-      prioridad: 'media',
-      fechaLimite: '2025-12-15',
-      responsable: 'David Ramos'
-    },
-    { 
-      id: 'OKR-011',
-      objetivo: 'Mejorar NPS a 8.5', 
-      progreso: 78, 
-      equipo: 'Atención Cliente',
-      prioridad: 'alta',
-      fechaLimite: '2025-12-20',
-      responsable: 'Carmen López'
-    },
-    { 
-      id: 'OKR-012',
-      objetivo: 'Reducir errores en pedidos 50%', 
-      progreso: 82, 
-      equipo: 'Operaciones',
-      prioridad: 'media',
-      fechaLimite: '2025-11-30',
-      responsable: 'Ana García'
-    },
-  ]);
+  const [okrs, setOkrs] = useState<OKR[]>([]);
+  const [equipos, setEquipos] = useState<Equipo[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const [equipos] = useState<Equipo[]>([
-    { nombre: 'Operaciones', eficiencia: 90, miembros: 12, okrsActivos: 2 },
-    { nombre: 'Pizzería 1', eficiencia: 85, miembros: 8, okrsActivos: 1 },
-    { nombre: 'Pizzería 2', eficiencia: 80, miembros: 7, okrsActivos: 0 },
-    { nombre: 'Administración', eficiencia: 75, miembros: 5, okrsActivos: 1 },
-    { nombre: 'Cocina', eficiencia: 88, miembros: 10, okrsActivos: 1 },
-    { nombre: 'Caja 1', eficiencia: 92, miembros: 4, okrsActivos: 0 },
-    { nombre: 'Caja 2', eficiencia: 87, miembros: 4, okrsActivos: 1 },
-    { nombre: 'Delivery', eficiencia: 84, miembros: 6, okrsActivos: 1 },
-  ]);
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    gerenteConfigApi.okrs
+      .list({ activo: true })
+      .then((data) => {
+        if (cancelled) return;
+        const mapped: OKR[] = (data || []).map((o: any) => ({
+          id: String(o.id),
+          objetivo: String(o.objetivo),
+          progreso: Number(o.progreso || 0),
+          equipo: String(o.equipo || 'Equipo'),
+          prioridad: (String(o.prioridad || 'media') as any),
+          fechaLimite: o.fechaLimite ? String(o.fechaLimite).slice(0, 10) : '',
+          responsable: o.responsable ? String(o.responsable) : '—',
+        }));
+        setOkrs(mapped);
+
+        // Equipos derivados de OKRs (sin mocks)
+        const byEquipo: Record<string, { count: number; sum: number }> = {};
+        mapped.forEach((k) => {
+          byEquipo[k.equipo] = byEquipo[k.equipo] || { count: 0, sum: 0 };
+          byEquipo[k.equipo].count += 1;
+          byEquipo[k.equipo].sum += k.progreso;
+        });
+        const equiposDerivados: Equipo[] = Object.entries(byEquipo).map(([nombre, v]) => ({
+          nombre,
+          eficiencia: v.count ? Math.round(v.sum / v.count) : 0,
+          miembros: 0,
+          okrsActivos: v.count,
+        }));
+        setEquipos(equiposDerivados);
+      })
+      .catch((e) => {
+        console.error('Error cargando OKRs:', e);
+        if (!cancelled) {
+          setOkrs([]);
+          setEquipos([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // ============================================
   // CÁLCULOS DINÁMICOS CON useMemo
@@ -253,6 +180,20 @@ export function ProductividadGerente() {
         <h2 className="text-gray-900">Productividad y OKRs</h2>
         <p className="text-gray-600">Objetivos, tiempos y eficiencia</p>
       </div>
+
+      {loading && (
+        <Card>
+          <CardContent className="p-6 text-sm text-gray-600">Cargando OKRs...</CardContent>
+        </Card>
+      )}
+
+      {!loading && okrs.length === 0 && (
+        <Card>
+          <CardContent className="p-6 text-sm text-gray-600">
+            No hay OKRs configurados todavía. (Puedes crearlos desde backend usando el endpoint `/gerente/productividad/okrs`.)
+          </CardContent>
+        </Card>
+      )}
 
       {/* KPIs PRINCIPALES CALCULADOS DINÁMICAMENTE */}
       <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 md:gap-4">

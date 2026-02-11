@@ -23,62 +23,142 @@ const PLATAFORMAS_BASE = [
  */
 export const obtenerPlataformas = async (req: Request, res: Response) => {
   try {
-    const { empresa_id } = req.query;
+    const empresaId = String(req.query.empresa_id || process.env.DEFAULT_EMPRESA_ID || 'HOYPCM000');
 
-    // TODO: Obtener configuración real de BD
-    // Por ahora devolvemos plataformas base con estado simulado
-    const plataformas = PLATAFORMAS_BASE.map(p => ({
-      ...p,
-      activa: p.codigo === 'glovo' || p.codigo === 'uber_eats', // Simulamos algunas activas
-      conectada: p.codigo === 'glovo',
-      ultimaSincronizacion: p.codigo === 'glovo' ? new Date().toISOString() : null,
-      errores: 0,
-      productosSync: p.codigo === 'glovo' ? 45 : 0,
-      pedidosHoy: p.codigo === 'glovo' ? 12 : 0,
-    }));
+    // Ensure base platforms exist for this empresa
+    await prisma.$transaction(
+      PLATAFORMAS_BASE.map((p) =>
+        prisma.integracionDelivery.upsert({
+          where: { empresaId_codigo: { empresaId, codigo: p.codigo } },
+          update: { nombre: p.nombre, logo: p.logo },
+          create: {
+            empresaId,
+            codigo: p.codigo,
+            nombre: p.nombre,
+            logo: p.logo,
+            activa: false,
+            conectada: false,
+            errores: 0,
+            productosSync: 0,
+            pedidosHoy: 0,
+            configuracion: {},
+          },
+        }),
+      ),
+    );
 
-    res.json(plataformas);
+    const plataformas = await prisma.integracionDelivery.findMany({
+      where: { empresaId },
+      orderBy: { id: 'asc' },
+    });
+
+    return res.json({
+      success: true,
+      data: plataformas.map((p) => ({
+        id: p.id,
+        codigo: p.codigo,
+        nombre: p.nombre,
+        logo: p.logo,
+        activa: p.activa,
+        conectada: p.conectada,
+        ultimaSincronizacion: p.ultimaSincronizacion ? p.ultimaSincronizacion.toISOString() : null,
+        errores: p.errores ?? 0,
+        productosSync: p.productosSync ?? 0,
+        pedidosHoy: p.pedidosHoy ?? 0,
+        configuracion: (p.configuracion as any) || {},
+      })),
+    });
   } catch (error) {
     console.error('Error al obtener plataformas:', error);
-    res.status(500).json({ error: 'Error al obtener plataformas' });
+    return res.status(500).json({ success: false, error: 'GET_PLATAFORMAS_FAILED' });
   }
 };
 
 export const obtenerPlataformaPorId = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const plataforma = PLATAFORMAS_BASE.find((p) => p.id === parseInt(id, 10));
-    if (!plataforma) return res.status(404).json({ error: 'Plataforma no encontrada' });
-    res.json({ ...plataforma, activa: true, conectada: true });
+    const plataformaId = Number(id);
+    if (!Number.isFinite(plataformaId)) return res.status(400).json({ success: false, error: 'INVALID_ID' });
+
+    const plataforma = await prisma.integracionDelivery.findUnique({ where: { id: plataformaId } });
+    if (!plataforma) return res.status(404).json({ success: false, error: 'NOT_FOUND' });
+
+    return res.json({
+      success: true,
+      data: {
+        id: plataforma.id,
+        codigo: plataforma.codigo,
+        nombre: plataforma.nombre,
+        logo: plataforma.logo,
+        activa: plataforma.activa,
+        conectada: plataforma.conectada,
+        ultimaSincronizacion: plataforma.ultimaSincronizacion ? plataforma.ultimaSincronizacion.toISOString() : null,
+        errores: plataforma.errores ?? 0,
+        productosSync: plataforma.productosSync ?? 0,
+        pedidosHoy: plataforma.pedidosHoy ?? 0,
+        configuracion: (plataforma.configuracion as any) || {},
+      },
+    });
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener plataforma' });
+    return res.status(500).json({ success: false, error: 'GET_PLATAFORMA_FAILED' });
   }
 };
 
 export const crearPlataforma = async (req: Request, res: Response) => {
   try {
-    // Simula creación
-    res.status(201).json({ ...req.body, id: Date.now() });
+    const empresaId = String(req.body?.empresaId || process.env.DEFAULT_EMPRESA_ID || 'HOYPCM000');
+    const codigo = String(req.body?.codigo || '').trim();
+    const nombre = String(req.body?.nombre || '').trim();
+    if (!codigo || !nombre) return res.status(400).json({ success: false, error: 'VALIDATION_ERROR' });
+
+    const created = await prisma.integracionDelivery.create({
+      data: {
+        empresaId,
+        codigo,
+        nombre,
+        logo: req.body?.logo || null,
+        activa: Boolean(req.body?.activa ?? false),
+        conectada: Boolean(req.body?.conectada ?? false),
+        configuracion: req.body?.configuracion || {},
+      },
+    });
+
+    return res.status(201).json({ success: true, data: created });
   } catch (error) {
-    res.status(500).json({ error: 'Error al crear plataforma' });
+    return res.status(500).json({ success: false, error: 'CREATE_PLATAFORMA_FAILED' });
   }
 };
 
 export const actualizarPlataforma = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    res.json({ id: parseInt(id, 10), ...req.body });
+    const plataformaId = Number(id);
+    if (!Number.isFinite(plataformaId)) return res.status(400).json({ success: false, error: 'INVALID_ID' });
+
+    const data: any = {};
+    if (typeof req.body?.activa === 'boolean') data.activa = req.body.activa;
+    if (typeof req.body?.conectada === 'boolean') data.conectada = req.body.conectada;
+    if (typeof req.body?.nombre === 'string') data.nombre = req.body.nombre;
+    if (typeof req.body?.logo === 'string' || req.body?.logo === null) data.logo = req.body.logo;
+    if (req.body?.configuracion && typeof req.body.configuracion === 'object') data.configuracion = req.body.configuracion;
+
+    const updated = await prisma.integracionDelivery.update({ where: { id: plataformaId }, data });
+    return res.json({ success: true, data: updated });
   } catch (error) {
-    res.status(500).json({ error: 'Error al actualizar plataforma' });
+    return res.status(500).json({ success: false, error: 'UPDATE_PLATAFORMA_FAILED' });
   }
 };
 
 export const eliminarPlataforma = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    res.json({ id: parseInt(id, 10), eliminado: true });
+    const plataformaId = Number(id);
+    if (!Number.isFinite(plataformaId)) return res.status(400).json({ success: false, error: 'INVALID_ID' });
+
+    await prisma.integracionDelivery.delete({ where: { id: plataformaId } });
+    return res.json({ success: true, data: { deleted: true } });
   } catch (error) {
-    res.status(500).json({ error: 'Error al eliminar plataforma' });
+    return res.status(500).json({ success: false, error: 'DELETE_PLATAFORMA_FAILED' });
   }
 };
 
@@ -87,10 +167,25 @@ export const eliminarPlataforma = async (req: Request, res: Response) => {
  */
 export const obtenerHistorialSincronizacion = async (req: Request, res: Response) => {
   try {
-    // Reutiliza historial simulado
-    res.json([{ id: 1, plataforma: 'Glovo', accion: 'sync', fecha: new Date().toISOString() }]);
+    // Reutiliza historial simulado (compatible con frontend)
+    return res.json({
+      success: true,
+      data: [
+        {
+          id: 1,
+          plataformaId: 1,
+          plataformaNombre: 'Glovo',
+          tipo: 'productos',
+          resultado: 'ok',
+          elementosSincronizados: 0,
+          errores: [],
+          fecha: new Date().toISOString(),
+          duracionMs: 0,
+        },
+      ],
+    });
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener historial' });
+    return res.status(500).json({ success: false, error: 'GET_HISTORIAL_FAILED' });
   }
 };
 
@@ -99,9 +194,24 @@ export const obtenerHistorialSincronizacion = async (req: Request, res: Response
  */
 export const obtenerEstadisticasIntegraciones = async (req: Request, res: Response) => {
   try {
-    res.json({ plataformasActivas: 2, plataformasTotales: 4, tasaExitoSync: 95 });
+    const empresaId = String(req.query.empresa_id || process.env.DEFAULT_EMPRESA_ID || 'HOYPCM000');
+    const [plataformasTotales, plataformasActivas] = await Promise.all([
+      prisma.integracionDelivery.count({ where: { empresaId } }),
+      prisma.integracionDelivery.count({ where: { empresaId, activa: true } }),
+    ]);
+
+    return res.json({
+      success: true,
+      data: {
+        plataformasActivas,
+        plataformasTotales,
+        pedidosUltimaHora: 0,
+        tasaExitoSync: 100,
+        productosSync: 0,
+      },
+    });
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener estadísticas' });
+    return res.status(500).json({ success: false, error: 'GET_STATS_FAILED' });
   }
 };
 
@@ -113,16 +223,21 @@ export const togglePlataforma = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { activa } = req.body;
+    const plataformaId = Number(id);
+    if (!Number.isFinite(plataformaId)) return res.status(400).json({ success: false, error: 'INVALID_ID' });
 
-    // TODO: Guardar en BD
-    res.json({ 
-      id: parseInt(id), 
-      activa, 
-      mensaje: `Plataforma ${activa ? 'activada' : 'desactivada'} correctamente` 
+    const updated = await prisma.integracionDelivery.update({
+      where: { id: plataformaId },
+      data: { activa: Boolean(activa) },
+    });
+
+    return res.json({
+      success: true,
+      data: { id: updated.id, activa: updated.activa },
     });
   } catch (error) {
     console.error('Error al cambiar estado de plataforma:', error);
-    res.status(500).json({ error: 'Error al cambiar estado' });
+    return res.status(500).json({ success: false, error: 'TOGGLE_FAILED' });
   }
 };
 
@@ -133,17 +248,24 @@ export const togglePlataforma = async (req: Request, res: Response) => {
 export const configurarPlataforma = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { apiKey, storeId, secretKey } = req.body;
+    const plataformaId = Number(id);
+    if (!Number.isFinite(plataformaId)) return res.status(400).json({ success: false, error: 'INVALID_ID' });
 
-    // TODO: Guardar credenciales encriptadas en BD
-    res.json({ 
-      id: parseInt(id), 
-      configurado: true,
-      mensaje: 'Credenciales guardadas correctamente' 
+    // Puede llegar como { configuracion: { apiKey, storeId, secretKey } } o plano
+    const cfg = (req.body?.configuracion && typeof req.body.configuracion === 'object') ? req.body.configuracion : req.body;
+    const apiKey = typeof cfg?.apiKey === 'string' ? cfg.apiKey : undefined;
+    const storeId = typeof cfg?.storeId === 'string' ? cfg.storeId : undefined;
+    const secretKey = typeof cfg?.secretKey === 'string' ? cfg.secretKey : undefined;
+
+    const updated = await prisma.integracionDelivery.update({
+      where: { id: plataformaId },
+      data: { configuracion: { apiKey, storeId, secretKey } },
     });
+
+    return res.json({ success: true, data: updated });
   } catch (error) {
     console.error('Error al configurar plataforma:', error);
-    res.status(500).json({ error: 'Error al configurar plataforma' });
+    return res.status(500).json({ success: false, error: 'CONFIG_FAILED' });
   }
 };
 
@@ -153,7 +275,7 @@ export const configurarPlataforma = async (req: Request, res: Response) => {
  */
 export const sincronizarProductos = async (req: Request, res: Response) => {
   try {
-    const { plataformaId } = req.body;
+    const plataformaId = Number(req.params?.id || req.body?.plataformaId || 0);
 
     // Obtener productos
     const productos = await prisma.producto.findMany({
@@ -165,15 +287,30 @@ export const sincronizarProductos = async (req: Request, res: Response) => {
     const sincronizados = productos.length;
     const errores = Math.floor(Math.random() * 3); // Simulamos algunos errores aleatorios
 
-    res.json({
-      sincronizados,
-      errores,
-      plataformaId: plataformaId || 'todas',
-      fecha: new Date().toISOString(),
+    // Persist some telemetry when specific platform is provided
+    if (Number.isFinite(plataformaId) && plataformaId > 0) {
+      await prisma.integracionDelivery.updateMany({
+        where: { id: plataformaId },
+        data: {
+          ultimaSincronizacion: new Date(),
+          productosSync: sincronizados,
+          errores,
+        },
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        sincronizados,
+        errores,
+        plataformaId: Number.isFinite(plataformaId) && plataformaId > 0 ? plataformaId : null,
+        fecha: new Date().toISOString(),
+      },
     });
   } catch (error) {
     console.error('Error al sincronizar productos:', error);
-    res.status(500).json({ error: 'Error al sincronizar productos' });
+    return res.status(500).json({ success: false, error: 'SYNC_FAILED' });
   }
 };
 

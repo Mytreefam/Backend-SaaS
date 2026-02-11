@@ -4,14 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { ChevronRight, ChevronDown, Building2, Tag, Store, Check } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { ScrollArea } from '../ui/scroll-area';
-import { 
-  EMPRESAS, 
-  MARCAS, 
-  PUNTOS_VENTA,
-  getNombreEmpresa,
-  getNombreMarca,
-  getNombrePDV
-} from '../../constants/empresaConfig';
+import { gerenteConfigApi } from '../../services/api';
 
 // ============================================================================
 // TIPOS DE DATOS
@@ -47,62 +40,86 @@ interface PuntoVenta {
 }
 
 interface FiltroContextoJerarquicoProps {
-  empresas?: Empresa[];  // ← Opcional, usa EMPRESAS_MOCK por defecto
+  empresas?: Empresa[];  // Opcional: si no se pasa, se carga desde backend
   selectedContext: SelectedContext[];
   onChange: (newContext: SelectedContext[]) => void;
 }
-
-// ============================================================================
-// DATOS MOCK - Transformados desde empresaConfig.ts
-// ============================================================================
-
-const EMPRESAS_MOCK: Empresa[] = Object.values(EMPRESAS).map(empresa => {
-  // Obtener todas las marcas de la empresa
-  const marcasEmpresa = empresa.marcasIds.map(marcaId => {
-    const marca = MARCAS[marcaId];
-    if (!marca) return null;
-    
-    // Obtener PDVs que tienen esta marca
-    const puntosVentaMarca = empresa.puntosVentaIds
-      .map(pdvId => PUNTOS_VENTA[pdvId])
-      .filter(pdv => pdv && pdv.marcasDisponibles.includes(marcaId))
-      .map(pdv => ({
-        punto_venta_id: pdv.id,
-        codigo_punto_venta: pdv.codigo,
-        nombre_comercial: pdv.nombre,
-        marca_id: marca.id,
-        empresa_id: empresa.id
-      }));
-    
-    return {
-      marca_id: marca.id,
-      codigo_marca: marca.codigo,
-      nombre: marca.nombre,
-      empresa_id: empresa.id,
-      puntos_venta: puntosVentaMarca
-    };
-  }).filter(Boolean) as Marca[];
-  
-  return {
-    empresa_id: empresa.id,
-    codigo_empresa: empresa.codigo,
-    nombre: getNombreEmpresa(empresa.id),
-    marcas: marcasEmpresa
-  };
-});
 
 // ============================================================================
 // COMPONENTE PRINCIPAL
 // ============================================================================
 
 export function FiltroContextoJerarquico({
-  empresas = EMPRESAS_MOCK,
+  empresas: empresasProp,
   selectedContext,
   onChange
 }: FiltroContextoJerarquicoProps) {
   const [open, setOpen] = useState(false);
   const [expandedEmpresas, setExpandedEmpresas] = useState<string[]>([]);
   const [expandedMarcas, setExpandedMarcas] = useState<string[]>([]);
+  const [empresasData, setEmpresasData] = useState<Empresa[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const empresas = empresasProp ?? empresasData;
+
+  useEffect(() => {
+    if (empresasProp) return; // si viene por props, no cargar
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const apiEmpresas = await gerenteConfigApi.empresas.list();
+        const mapped: Empresa[] = (apiEmpresas || []).map((e: any) => {
+          const empresaId = String(e?.id || '').trim();
+          const marcas = Array.isArray(e?.marcas) ? e.marcas : [];
+          const puntosVenta = Array.isArray(e?.puntosVenta) ? e.puntosVenta : [];
+
+          const marcasMapped: Marca[] = marcas
+            .map((m: any) => {
+              const marcaId = String(m?.id || '').trim();
+              if (!marcaId) return null;
+              const puntos_venta: PuntoVenta[] = puntosVenta
+                .filter((pv: any) => Array.isArray(pv?.marcasIds) && pv.marcasIds.includes(marcaId))
+                .map((pv: any) => ({
+                  punto_venta_id: String(pv?.id || '').trim(),
+                  codigo_punto_venta: String(pv?.id || '').trim(),
+                  nombre_comercial: String(pv?.nombre || '').trim(),
+                  marca_id: marcaId,
+                  empresa_id: empresaId,
+                }))
+                .filter((pv: any) => pv.punto_venta_id);
+
+              return {
+                marca_id: marcaId,
+                codigo_marca: String(m?.codigo || m?.id || '').trim(),
+                nombre: String(m?.nombre || '').trim(),
+                empresa_id: empresaId,
+                puntos_venta,
+              } as Marca;
+            })
+            .filter(Boolean) as Marca[];
+
+          return {
+            empresa_id: empresaId,
+            codigo_empresa: String(e?.codigo || e?.id || '').trim(),
+            nombre: String(e?.nombreComercial || e?.nombreFiscal || e?.id || '').trim(),
+            marcas: marcasMapped,
+          } as Empresa;
+        });
+
+        if (!cancelled) setEmpresasData(mapped.filter((x) => x.empresa_id));
+      } catch (err) {
+        console.error('Error cargando empresas/marcas/pdv:', err);
+        if (!cancelled) setEmpresasData([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [empresasProp]);
 
   // ⭐ Auto-expandir empresas y marcas cuando se abre el filtro
   useEffect(() => {

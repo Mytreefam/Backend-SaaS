@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -23,16 +23,9 @@ import {
 } from './ui/select';
 import { Printer, Plus, Trash2, Settings, Check } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
+import { impresorasApi, type ImpresoraConfig as ImpresoraConfigApi } from '../services/api';
 
-interface Impresora {
-  id: string;
-  nombre: string;
-  activa: boolean;
-  categorias: string[];
-  ipAddress?: string;
-  modelo?: string;
-  puntoVentaId: string;
-}
+type Impresora = ImpresoraConfigApi;
 
 interface ConfiguracionImpresorasProps {
   puntoVentaId: string;
@@ -52,35 +45,30 @@ const CATEGORIAS_DISPONIBLES = [
 ];
 
 export function ConfiguracionImpresoras({ puntoVentaId }: ConfiguracionImpresorasProps) {
-  const [impresoras, setImpresoras] = useState<Impresora[]>([
-    {
-      id: 'IMP001',
-      nombre: 'Impresora Cocina Principal',
-      activa: true,
-      categorias: ['Pizzas', 'Burguers', 'Complementos'],
-      ipAddress: '192.168.1.100',
-      modelo: 'Epson TM-T20III',
-      puntoVentaId
-    },
-    {
-      id: 'IMP002',
-      nombre: 'Impresora Bebidas',
-      activa: true,
-      categorias: ['Bebidas', 'Postres'],
-      ipAddress: '192.168.1.101',
-      modelo: 'Star TSP143III',
-      puntoVentaId
-    },
-    {
-      id: 'IMP003',
-      nombre: 'Impresora Montaje',
-      activa: false,
-      categorias: ['Bocadillos', 'Pan', 'Bollería'],
-      ipAddress: '192.168.1.102',
-      modelo: 'Epson TM-T20III',
-      puntoVentaId
-    }
-  ]);
+  const [impresoras, setImpresoras] = useState<Impresora[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    impresorasApi
+      .list(puntoVentaId)
+      .then((data) => {
+        if (!mounted) return;
+        setImpresoras(data);
+      })
+      .catch((e) => {
+        console.error('Error al cargar impresoras:', e);
+        toast.error('Error al cargar impresoras');
+      })
+      .finally(() => {
+        if (!mounted) return;
+        setLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [puntoVentaId]);
 
   const [modalAbierto, setModalAbierto] = useState(false);
   const [impresoraEditar, setImpresoraEditar] = useState<Impresora | null>(null);
@@ -115,7 +103,7 @@ export function ConfiguracionImpresoras({ puntoVentaId }: ConfiguracionImpresora
     }
   };
 
-  const guardarImpresora = () => {
+  const guardarImpresora = async () => {
     if (!nombreImpresora) {
       toast.error('El nombre es obligatorio');
       return;
@@ -126,52 +114,68 @@ export function ConfiguracionImpresoras({ puntoVentaId }: ConfiguracionImpresora
       return;
     }
 
-    if (impresoraEditar) {
-      // Editar
-      setImpresoras(impresoras.map(imp =>
-        imp.id === impresoraEditar.id
-          ? {
-              ...imp,
-              nombre: nombreImpresora,
-              ipAddress,
-              modelo,
-              categorias: categoriasSeleccionadas
-            }
-          : imp
-      ));
-      toast.success('Impresora actualizada correctamente');
-    } else {
-      // Nueva
-      const nuevaImpresora: Impresora = {
-        id: `IMP${Date.now()}`,
-        nombre: nombreImpresora,
-        activa: true,
-        categorias: categoriasSeleccionadas,
-        ipAddress,
-        modelo,
-        puntoVentaId
-      };
-      setImpresoras([...impresoras, nuevaImpresora]);
-      toast.success('Impresora añadida correctamente');
-    }
-
-    setModalAbierto(false);
-  };
-
-  const toggleActiva = (id: string) => {
-    setImpresoras(impresoras.map(imp =>
-      imp.id === id ? { ...imp, activa: !imp.activa } : imp
-    ));
-    const impresora = impresoras.find(imp => imp.id === id);
-    if (impresora) {
-      toast.success(`Impresora ${impresora.activa ? 'desactivada' : 'activada'}`);
+    try {
+      if (impresoraEditar) {
+        const updated = await impresorasApi.update(impresoraEditar.id, {
+          nombre: nombreImpresora,
+          ipAddress,
+          modelo,
+          categorias: categoriasSeleccionadas,
+        });
+        if (!updated) throw new Error('UPDATE_FAILED');
+        setImpresoras((prev) => prev.map((imp) => (imp.id === updated.id ? updated : imp)));
+        toast.success('Impresora actualizada correctamente');
+      } else {
+        const created = await impresorasApi.create({
+          puntoVentaId,
+          nombre: nombreImpresora,
+          activa: true,
+          categorias: categoriasSeleccionadas,
+          ipAddress,
+          modelo,
+        });
+        if (!created) throw new Error('CREATE_FAILED');
+        setImpresoras((prev) => [...prev, created]);
+        toast.success('Impresora añadida correctamente');
+      }
+      setModalAbierto(false);
+    } catch (e) {
+      console.error('Error guardando impresora:', e);
+      toast.error('No se pudo guardar la impresora');
     }
   };
 
-  const eliminarImpresora = (id: string) => {
+  const toggleActiva = async (id: number) => {
+    const impresora = impresoras.find((imp) => imp.id === id);
+    if (!impresora) return;
+    const next = !impresora.activa;
+    // Optimistic UI
+    setImpresoras((prev) => prev.map((imp) => (imp.id === id ? { ...imp, activa: next } : imp)));
+    try {
+      const updated = await impresorasApi.update(id, { activa: next });
+      if (!updated) throw new Error('UPDATE_FAILED');
+      setImpresoras((prev) => prev.map((imp) => (imp.id === id ? updated : imp)));
+      toast.success(`Impresora ${next ? 'activada' : 'desactivada'}`);
+    } catch (e) {
+      console.error('Error actualizando impresora:', e);
+      // Revert
+      setImpresoras((prev) => prev.map((imp) => (imp.id === id ? { ...imp, activa: !next } : imp)));
+      toast.error('No se pudo actualizar la impresora');
+    }
+  };
+
+  const eliminarImpresora = (id: number) => {
     if (confirm('¿Estás seguro de eliminar esta impresora?')) {
-      setImpresoras(impresoras.filter(imp => imp.id !== id));
-      toast.success('Impresora eliminada');
+      impresorasApi
+        .delete(id)
+        .then(() => {
+          setImpresoras((prev) => prev.filter((imp) => imp.id !== id));
+          toast.success('Impresora eliminada');
+        })
+        .catch((e) => {
+          console.error('Error eliminando impresora:', e);
+          toast.error('No se pudo eliminar la impresora');
+        });
     }
   };
 
@@ -196,7 +200,12 @@ export function ConfiguracionImpresoras({ puntoVentaId }: ConfiguracionImpresora
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {impresoras.length === 0 ? (
+            {loading ? (
+              <div className="text-center py-12 text-gray-400">
+                <Printer className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p>Cargando impresoras...</p>
+              </div>
+            ) : impresoras.length === 0 ? (
               <div className="text-center py-12 text-gray-400">
                 <Printer className="w-12 h-12 mx-auto mb-3 opacity-50" />
                 <p>No hay impresoras configuradas</p>

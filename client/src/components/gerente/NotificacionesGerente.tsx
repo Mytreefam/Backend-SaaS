@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -28,6 +28,8 @@ import {
   Receipt
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
+import { notificacionesApi } from '../../services/api/notificaciones.api';
+import { authApi } from '../../services/api/auth.api';
 
 interface Notificacion {
   id: string;
@@ -44,124 +46,41 @@ interface Notificacion {
 
 export function NotificacionesGerente() {
   const [vistaActual, setVistaActual] = useState<'todas' | 'noLeidas'>('noLeidas');
-  const [notificaciones, setNotificaciones] = useState<Notificacion[]>([
-    {
-      id: 'N001',
-      tipo: 'exito',
-      categoria: 'operativa',
-      titulo: 'Nueva tarea realizada',
-      mensaje: 'Carlos Ruiz completó la tarea "Limpieza profunda de cocina" en Pizzería 1',
-      fecha: '2025-11-14T18:30:00',
-      leida: false,
-      accionable: true,
-      accionLabel: 'Ver tarea',
-      icono: <CheckCircle2 className="w-5 h-5" />
-    },
-    {
-      id: 'N002',
-      tipo: 'info',
-      categoria: 'stock',
-      titulo: 'Nueva transferencia',
-      mensaje: 'Transferencia TRF-008 de 12 SKUs desde Pizzería 1 a Pizzería 2 está en tránsito',
-      fecha: '2025-11-14T11:30:00',
-      leida: false,
-      accionable: true,
-      accionLabel: 'Ver transferencia',
-      icono: <ArrowRightLeft className="w-5 h-5" />
-    },
-    {
-      id: 'N003',
-      tipo: 'advertencia',
-      categoria: 'sistema',
-      titulo: 'Nuevo ticket de soporte',
-      mensaje: 'Ticket #SUP-145: María García reporta problema con el sistema de pedidos',
-      fecha: '2025-11-14T10:15:00',
-      leida: false,
-      accionable: true,
-      accionLabel: 'Ver ticket',
-      icono: <HelpCircle className="w-5 h-5" />
-    },
-    {
-      id: 'N004',
-      tipo: 'exito',
-      categoria: 'finanzas',
-      titulo: 'Nueva factura introducida',
-      mensaje: 'Factura #2025-1145 introducida por Ana López. Importe: 1,850.50€',
-      fecha: '2025-11-14T09:45:00',
-      leida: false,
-      accionable: true,
-      accionLabel: 'Ver factura',
-      icono: <FileText className="w-5 h-5" />
-    },
-    {
-      id: 'N005',
-      tipo: 'info',
-      categoria: 'stock',
-      titulo: 'Nuevo albarán introducido',
-      mensaje: 'Albarán #ALB-2025-234 de Distribuciones Alimentarias García S.L. introducido correctamente',
-      fecha: '2025-11-14T08:20:00',
-      leida: false,
-      accionable: true,
-      accionLabel: 'Ver albarán',
-      icono: <Receipt className="w-5 h-5" />
-    },
-    {
-      id: 'N006',
-      tipo: 'exito',
-      categoria: 'operativa',
-      titulo: 'Nueva tarea realizada',
-      mensaje: 'Pedro Martínez finalizó la tarea "Revisión de ingredientes" en Cocina 2',
-      fecha: '2025-11-13T20:15:00',
-      leida: true,
-      accionable: false,
-      icono: <CheckCircle2 className="w-5 h-5" />
-    },
-    {
-      id: 'N007',
-      tipo: 'info',
-      categoria: 'stock',
-      titulo: 'Nueva transferencia',
-      mensaje: 'Transferencia TRF-007 de 8 SKUs desde Pizzería 2 a Pizzería 1 recibida',
-      fecha: '2025-11-13T16:45:00',
-      leida: true,
-      accionable: false,
-      icono: <ArrowRightLeft className="w-5 h-5" />
-    },
-    {
-      id: 'N008',
-      tipo: 'critica',
-      categoria: 'sistema',
-      titulo: 'Nuevo ticket de soporte',
-      mensaje: 'Ticket #SUP-144: Problema urgente con impresora de tickets en Pizzería 2',
-      fecha: '2025-11-13T15:30:00',
-      leida: false,
-      accionable: true,
-      accionLabel: 'Atender urgente',
-      icono: <HelpCircle className="w-5 h-5" />
-    },
-    {
-      id: 'N009',
-      tipo: 'exito',
-      categoria: 'finanzas',
-      titulo: 'Nueva factura introducida',
-      mensaje: 'Factura #2025-1144 introducida. Proveedor: Productos Frescos Mediterráneo',
-      fecha: '2025-11-13T14:00:00',
-      leida: true,
-      accionable: false,
-      icono: <FileText className="w-5 h-5" />
-    },
-    {
-      id: 'N010',
-      tipo: 'info',
-      categoria: 'stock',
-      titulo: 'Nuevo albarán introducido',
-      mensaje: 'Albarán #ALB-2025-233 de Carnes y Embutidos Ibéricos S.A. procesado',
-      fecha: '2025-11-13T12:30:00',
-      leida: true,
-      accionable: false,
-      icono: <Receipt className="w-5 h-5" />
-    },
-  ]);
+  const [notificaciones, setNotificaciones] = useState<Notificacion[]>([]);
+  const [cargando, setCargando] = useState(true);
+
+  const currentUser = useMemo(() => authApi.getCurrentUser(), []);
+
+  useEffect(() => {
+    const clienteId = (currentUser as any)?.id ? Number((currentUser as any).id) : null;
+    if (!clienteId) {
+      setNotificaciones([]);
+      setCargando(false);
+      return;
+    }
+
+    setCargando(true);
+    notificacionesApi
+      .getByClienteId(clienteId)
+      .then((data) => {
+        const now = new Date().toISOString();
+        setNotificaciones(
+          (Array.isArray(data) ? data : []).map((n) => ({
+            id: String(n.id),
+            tipo: 'info',
+            categoria: 'sistema',
+            titulo: 'Notificación',
+            mensaje: n.mensaje,
+            fecha: now,
+            leida: !!n.leida,
+            accionable: false,
+            icono: <Info className="w-5 h-5" />,
+          }))
+        );
+      })
+      .catch(() => setNotificaciones([]))
+      .finally(() => setCargando(false));
+  }, [currentUser]);
 
   const notificacionesFiltradas = notificaciones.filter(n => {
     switch (vistaActual) {
@@ -175,21 +94,36 @@ export function NotificacionesGerente() {
   const noLeidas = notificaciones.filter(n => !n.leida).length;
   const criticas = notificaciones.filter(n => n.tipo === 'critica').length;
 
-  const handleMarcarLeida = (id: string) => {
-    setNotificaciones(prev =>
-      prev.map(n => n.id === id ? { ...n, leida: true } : n)
-    );
-    toast.success('Notificación marcada como leída');
+  const handleMarcarLeida = async (id: string) => {
+    const ok = await notificacionesApi.marcarLeida(Number(id));
+    if (ok) {
+      setNotificaciones((prev) => prev.map((n) => (n.id === id ? { ...n, leida: true } : n)));
+      toast.success('Notificación marcada como leída');
+    } else {
+      toast.error('No se pudo marcar la notificación');
+    }
   };
 
-  const handleMarcarTodasLeidas = () => {
-    setNotificaciones(prev => prev.map(n => ({ ...n, leida: true })));
-    toast.success('Todas las notificaciones marcadas como leídas');
+  const handleMarcarTodasLeidas = async () => {
+    const clienteId = (currentUser as any)?.id ? Number((currentUser as any).id) : null;
+    if (!clienteId) return;
+    const ok = await notificacionesApi.marcarTodasLeidas(clienteId);
+    if (ok) {
+      setNotificaciones((prev) => prev.map((n) => ({ ...n, leida: true })));
+      toast.success('Todas las notificaciones marcadas como leídas');
+    } else {
+      toast.error('No se pudieron marcar todas');
+    }
   };
 
-  const handleEliminar = (id: string) => {
-    setNotificaciones(prev => prev.filter(n => n.id !== id));
-    toast.success('Notificación eliminada');
+  const handleEliminar = async (id: string) => {
+    const ok = await notificacionesApi.delete(Number(id));
+    if (ok) {
+      setNotificaciones((prev) => prev.filter((n) => n.id !== id));
+      toast.success('Notificación eliminada');
+    } else {
+      toast.error('No se pudo eliminar la notificación');
+    }
   };
 
   const handleAccion = (notif: Notificacion) => {
@@ -293,7 +227,14 @@ export function NotificacionesGerente() {
         </TabsList>
 
         <TabsContent value={vistaActual} className="mt-3 sm:mt-4 space-y-2 sm:space-y-3">
-          {notificacionesFiltradas.length === 0 ? (
+          {cargando ? (
+            <Card>
+              <CardContent className="p-8 sm:p-12 text-center">
+                <h3 className="text-sm sm:text-base font-medium text-gray-900 mb-2">Cargando notificaciones...</h3>
+                <p className="text-xs sm:text-sm text-gray-500">Sincronizando con el servidor</p>
+              </CardContent>
+            </Card>
+          ) : notificacionesFiltradas.length === 0 ? (
             <Card>
               <CardContent className="p-8 sm:p-12 text-center">
                 <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3 sm:mb-4">

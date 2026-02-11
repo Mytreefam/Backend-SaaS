@@ -49,7 +49,7 @@ interface PanelCajaProps {
 }
 
 
-export default function PanelCaja(props: PanelCajaProps) {
+export default function PanelCaja({ permisos, nombreUsuario }: PanelCajaProps) {
   const [cierres, setCierres] = useState<CierreCaja[]>([]);
   const [cargando, setCargando] = useState(false);
   const [turnoActual, setTurnoActual] = useState<CierreCaja | null>(null);

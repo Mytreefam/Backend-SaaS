@@ -134,4 +134,56 @@ export const AuthService = {
       data: { revokedAt: new Date() },
     });
   },
+
+  async changePassword(params: { clienteId: number; currentPassword: string; newPassword: string }) {
+    const user = await prisma.cliente.findUnique({ where: { id: params.clienteId } });
+    if (!user) return false;
+
+    // Validate current password (supports plaintext legacy)
+    let passwordOk = false;
+    if (isBcryptHash(user.password)) {
+      passwordOk = await bcrypt.compare(params.currentPassword, user.password);
+    } else {
+      passwordOk = params.currentPassword === user.password;
+    }
+    if (!passwordOk) return false;
+
+    const newHash = await bcrypt.hash(params.newPassword, 12);
+
+    // Revoke all refresh tokens for this user
+    await prisma.$transaction([
+      prisma.cliente.update({ where: { id: user.id }, data: { password: newHash } }),
+      prisma.refreshToken.updateMany({ where: { clienteId: user.id, revokedAt: null }, data: { revokedAt: new Date() } }),
+    ]);
+
+    return true;
+  },
+
+  async listSessions(params: { clienteId: number }) {
+    const now = new Date();
+    const sessions = await prisma.refreshToken.findMany({
+      where: {
+        clienteId: params.clienteId,
+        revokedAt: null,
+        expiresAt: { gt: now },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        createdAt: true,
+        expiresAt: true,
+        userAgent: true,
+        ip: true,
+      },
+    });
+    return sessions;
+  },
+
+  async revokeAllSessions(params: { clienteId: number }) {
+    const res = await prisma.refreshToken.updateMany({
+      where: { clienteId: params.clienteId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    return { revoked: res.count };
+  },
 };

@@ -11,7 +11,11 @@ export interface Turno {
   estado: string;
   tiempoEstimado?: string;
   clienteId: number;
-  pedidoId: number;
+  pedidoId?: number | null;
+  origenPedido?: string;
+  geolocalizacionValidada?: boolean;
+  fechaGeolocalizacion?: string | null;
+  creadoEn?: string;
   cliente?: any;
   pedido?: any;
 }
@@ -21,7 +25,10 @@ export interface TurnoCreate {
   estado?: string;
   tiempoEstimado?: string;
   clienteId: number;
-  pedidoId: number;
+  pedidoId?: number;
+  origenPedido?: string;
+  geolocalizacionValidada?: boolean;
+  fechaGeolocalizacion?: string;
 }
 
 export const turnosApi = {

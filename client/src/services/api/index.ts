@@ -21,6 +21,15 @@ export * from './escandallo.api';
 export * from './stock-proveedores.api';
 export * from './integraciones.api';
 export * from './chat.api';
+export * from './uploads.api';
+export * from './impresoras.api';
+export * from './horarios.api';
+export * from './stock-trabajador.api';
+export * from './trabajador-rrhh.api';
+export * from './documentos.api';
+export * from './gerente-config.api';
+export * from './puntosVenta.api';
+export * from './public-catalogo.api';
 
 // Re-exportar para fácil importación
 export { authApi } from './auth.api';
@@ -40,3 +49,12 @@ export { escandalloApi } from './escandallo.api';
 export { proveedoresApi, stockApi } from './stock-proveedores.api';
 export { integracionesApi } from './integraciones.api';
 export { chatApi } from './chat.api';
+export { uploadsApi } from './uploads.api';
+export { impresorasApi } from './impresoras.api';
+export { horariosApi } from './horarios.api';
+export { stockTrabajadorApi } from './stock-trabajador.api';
+export { trabajadorRrhhApi } from './trabajador-rrhh.api';
+export { documentosApi } from './documentos.api';
+export { gerenteConfigApi } from './gerente-config.api';
+export { puntosVentaApi } from './puntosVenta.api';
+export { publicCatalogoApi } from './public-catalogo.api';

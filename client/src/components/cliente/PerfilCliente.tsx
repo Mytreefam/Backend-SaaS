@@ -1,6 +1,34 @@
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import logoModomio from 'figma:asset/7a4d64c95291a62dd24c849142ae4540d5e2f45f.png';
 import logoBlackburger from 'figma:asset/60b944da0efe66e24a868c7d759146e988e8fa41.png';
+import { MisDirecciones } from './MisDirecciones';
+import { toast } from 'sonner@2.0.3';
+import { publicCatalogoApi, type MarcaPublicaApi } from '../../services/api';
+import { ImageWithFallback } from '../figma/ImageWithFallback';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../ui/sheet';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
+import { Separator } from '../ui/separator';
+import { Checkbox } from '../ui/checkbox';
+import { Badge } from '../ui/badge';
+import {
+  Award,
+  Building2,
+  Camera,
+  Check,
+  Eye,
+  FileText,
+  Image,
+  Info,
+  Mail,
+  Phone,
+  Store,
+  Target,
+  User,
+} from 'lucide-react';
 
 const LOGOS_MAP: Record<string, string> = {
   'MRC-001': logoModomio,
@@ -14,6 +42,8 @@ interface PerfilClienteProps {
 }
 
 export function PerfilCliente({ isOpen, onOpenChange, user }: PerfilClienteProps) {
+  const [marcas, setMarcas] = useState<MarcaPublicaApi[]>([]);
+
   const handleGuardar = () => {
     toast.success('Datos actualizados correctamente');
   };
@@ -26,6 +56,25 @@ export function PerfilCliente({ isOpen, onOpenChange, user }: PerfilClienteProps
 
   const [isEmpresa, setIsEmpresa] = useState(false);
   const [marcaPreferida, setMarcaPreferida] = useState<string | null>(null);
+
+  // Cargar marcas desde backend (fuente de verdad)
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    publicCatalogoApi
+      .listMarcas()
+      .then((list) => {
+        if (cancelled) return;
+        setMarcas((list || []).filter((m) => m.activo));
+      })
+      .catch((e) => {
+        console.error('Error cargando marcas públicas:', e);
+        if (!cancelled) setMarcas([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
 
   // Estados para Quienes Somos y FAQs
   const [quienesSomos, setQuienesSomos] = useState({
@@ -107,9 +156,13 @@ export function PerfilCliente({ isOpen, onOpenChange, user }: PerfilClienteProps
   const handleCambiarMarca = (marcaId: string) => {
     setMarcaPreferida(marcaId);
     localStorage.setItem('cliente_marca_preferida', marcaId);
-    const marca = MARCAS_ARRAY.find(m => m.id === marcaId);
+    const marca = marcas.find((m) => m.id === marcaId);
     toast.success(`Marca cambiada a ${marca?.nombre}. Los productos se actualizarán en tu próxima búsqueda.`);
   };
+
+  const marcasOrdenadas = useMemo(() => {
+    return [...(marcas || [])].sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [marcas]);
 
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
@@ -256,9 +309,9 @@ export function PerfilCliente({ isOpen, onOpenChange, user }: PerfilClienteProps
                           onChange={(e) => handleCambiarMarca(e.target.value)}
                         >
                           <option value="">Selecciona una marca</option>
-                          {MARCAS_ARRAY.map(marca => (
+                          {marcasOrdenadas.map((marca) => (
                             <option key={marca.id} value={marca.id}>
-                              {getNombreMarca(marca.id)}
+                              {marca.nombre}
                             </option>
                           ))}
                         </select>
@@ -290,7 +343,7 @@ export function PerfilCliente({ isOpen, onOpenChange, user }: PerfilClienteProps
                 Selecciona tu marca favorita para personalizar tu experiencia de compra
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {MARCAS_ARRAY.map((marca) => (
+                {marcasOrdenadas.map((marca) => (
                   <motion.div
                     key={marca.id}
                     whileTap={{ scale: 0.98 }}
@@ -312,14 +365,14 @@ export function PerfilCliente({ isOpen, onOpenChange, user }: PerfilClienteProps
 
                     {/* Logo de la marca */}
                     <div className="flex justify-center items-center h-24 mb-3 bg-black rounded-lg overflow-hidden">
-                      {LOGOS_MAP[marca.id] ? (
+                      {marca.logoUrl || LOGOS_MAP[marca.id] ? (
                         <img
-                          src={LOGOS_MAP[marca.id]}
+                          src={(marca.logoUrl || LOGOS_MAP[marca.id]) as string}
                           alt={marca.nombre}
                           className="w-full h-full object-contain p-2"
                         />
                       ) : (
-                        <div className="text-4xl">{marca.icono}</div>
+                        <div className="text-4xl">{marca.icono || '🏷️'}</div>
                       )}
                     </div>
 
@@ -333,42 +386,8 @@ export function PerfilCliente({ isOpen, onOpenChange, user }: PerfilClienteProps
             </CardContent>
           </Card>
 
-          {/* Direcciones */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle style={{ fontFamily: 'Poppins, sans-serif' }}>
-                  Direcciones
-                </CardTitle>
-                <Button variant="outline" size="sm">
-                  <MapPin className="w-4 h-4 mr-2" />
-                  Añadir Dirección
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="p-4 rounded-lg border-2 border-teal-200 bg-teal-50/30">
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <Badge className="mb-2 bg-teal-600">Principal</Badge>
-                    <p className="font-medium">Calle Mayor 123, 4ºB</p>
-                    <p className="text-sm text-gray-600">28001 Madrid, España</p>
-                  </div>
-                  <Button variant="ghost" size="sm">Editar</Button>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-lg border border-gray-200">
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <p className="font-medium">Avenida Libertad 45</p>
-                    <p className="text-sm text-gray-600">28002 Madrid, España</p>
-                  </div>
-                  <Button variant="ghost" size="sm">Editar</Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Direcciones (persistente) */}
+          <MisDirecciones clienteId={user?.id} />
 
           {/* Métodos de Pago */}
           <Card>
@@ -521,5 +540,22 @@ export function PerfilCliente({ isOpen, onOpenChange, user }: PerfilClienteProps
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function MisMetodosPago() {
+  return (
+    <div className="space-y-3">
+      <div className="rounded-lg border border-dashed p-4 text-sm text-gray-600">
+        Aún no tienes métodos de pago guardados.
+      </div>
+      <Button
+        variant="outline"
+        className="min-h-[44px]"
+        onClick={() => toast.info('Añadir método de pago próximamente')}
+      >
+        Añadir método de pago
+      </Button>
+    </div>
   );
 }

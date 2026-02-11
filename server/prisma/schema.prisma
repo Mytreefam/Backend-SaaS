@@ -53,10 +53,14 @@ model Turno {
   estado         String   @default("pendiente")
   tiempoEstimado String?
   clienteId      Int
-  pedidoId       Int
+  pedidoId       Int?
+  // TPV/cola: origen y "ya estoy aquí"
+  origenPedido   String   @default("presencial") // presencial | app
+  geolocalizacionValidada Boolean @default(false)
+  fechaGeolocalizacion DateTime?
   creadoEn       DateTime @default(now())
   cliente        Cliente  @relation(fields: [clienteId], references: [id])
-  pedido         Pedido   @relation(fields: [pedidoId], references: [id])
+  pedido         Pedido?  @relation(fields: [pedidoId], references: [id])
 }
 
 model Cliente {
@@ -80,6 +84,8 @@ model Cliente {
   facturas       Factura[]
   garajes        Garaje[]
   notificaciones Notificacion[]
+  notificacionPreferencias NotificacionPreferencias?
+  pushDeviceTokens PushDeviceToken[]
   pedidos        Pedido[]
   presupuestos   Presupuesto[]
   turnos         Turno[]
@@ -116,14 +122,29 @@ model Cupon {
 }
 
 model Direccion {
-  id           Int     @id @default(autoincrement())
-  clienteId    Int
-  calle        String
-  ciudad       String
-  provincia    String
-  pais         String
-  codigoPostal String
-  cliente      Cliente @relation(fields: [clienteId], references: [id])
+  id              Int      @id @default(autoincrement())
+  clienteId       Int
+  tipo            String   @default("casa") // casa | trabajo | otro
+  alias           String?
+  calle           String
+  numero          String   @default("S/N")
+  piso            String?
+  puerta          String?
+  codigoPostal    String
+  ciudad          String
+  provincia       String?  // optional; fallback to ciudad in UI
+  pais            String   @default("España")
+  notas           String?
+  latitud         Float?
+  longitud        Float?
+  esPredeterminada Boolean @default(false)
+  fechaCreacion   DateTime @default(now())
+  fechaUltimoUso  DateTime?
+
+  cliente         Cliente  @relation(fields: [clienteId], references: [id])
+
+  @@index([clienteId])
+  @@index([esPredeterminada])
 }
 
 model Producto {
@@ -135,6 +156,47 @@ model Producto {
   imagen      String?
   marcaId     String?     // ID de la marca a la que pertenece el producto (opcional)
   pedidoItems PedidoItem[]
+
+  escandallo  Escandallo?
+}
+
+// =========================
+// ESCANDALLO (coste real por producto)
+// =========================
+model Escandallo {
+  id           Int       @id @default(autoincrement())
+  productoId   Int       @unique
+  empresaId    String?
+  puntoVentaId String?
+  costeTotal   Float     @default(0)
+  notas        String?
+  creadoEn     DateTime  @default(now())
+  modificadoEn DateTime  @updatedAt
+
+  producto     Producto  @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  ingredientes EscandalloIngrediente[]
+
+  @@index([empresaId])
+  @@index([puntoVentaId])
+}
+
+model EscandalloIngrediente {
+  id           Int      @id @default(autoincrement())
+  escandalloId Int
+  articuloId   Int?
+  nombre       String
+  unidad       String
+  cantidad     Float
+  costeUnitario Float   @default(0)
+  costeTotal   Float    @default(0)
+  proveedorId  Int?
+  creadoEn     DateTime @default(now())
+
+  escandallo   Escandallo    @relation(fields: [escandalloId], references: [id], onDelete: Cascade)
+  articulo     ArticuloStock? @relation(fields: [articuloId], references: [id])
+
+  @@index([escandalloId])
+  @@index([articuloId])
 }
 
 model Pedido {
@@ -144,12 +206,183 @@ model Pedido {
   estado    String       @default("pendiente")
   total     Float
   tipoEntrega String?
+  direccionEntrega String?
   metodoPago String?
+  puntoVentaId String?
+  motivoCancelacion String?
+  motivoDevolucion  String?
   chats     Chat[]
   facturas  Factura[]
   cliente   Cliente      @relation(fields: [clienteId], references: [id])
   items     PedidoItem[]
   turnos    Turno[]
+
+  @@index([clienteId, fecha])
+  @@index([estado])
+  @@index([puntoVentaId])
+}
+
+model PuntoVenta {
+  id         String   @id // e.g. "PDV-TIANA"
+  nombre     String
+  direccion  String
+  latitud    Float
+  longitud   Float
+  empresaId  String   @default("HOYPCM000")
+  marcasIds  String[] @default([])
+  activo     Boolean  @default(true)
+  creadoEn   DateTime @default(now())
+  modificadoEn DateTime @updatedAt
+
+  empresa    Empresa  @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+
+  @@index([empresaId])
+  @@index([activo])
+  @@index([creadoEn])
+}
+
+// =========================
+// EMPRESAS / MARCAS (fuente de verdad)
+// =========================
+model Empresa {
+  id              String   @id // e.g. "HOYPCM000"
+  codigo          String?
+  nombreFiscal    String
+  nombreComercial String?
+  cif             String?
+  domicilioFiscal String?
+  logoComercial   String?
+  activo          Boolean  @default(true)
+  creadoEn        DateTime @default(now())
+  modificadoEn    DateTime @updatedAt
+
+  marcas          Marca[]
+  puntosVenta     PuntoVenta[]
+}
+
+model Marca {
+  id            String   @id // e.g. "MRC-001"
+  codigo        String?
+  nombre        String
+  colorIdentidad String?
+  icono         String?
+  logoUrl       String?
+  empresaId     String
+  activo        Boolean  @default(true)
+  creadoEn      DateTime @default(now())
+  modificadoEn  DateTime @updatedAt
+
+  empresa       Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@index([empresaId])
+  @@index([activo])
+}
+
+// =========================
+// DASHBOARD - ALERTAS RESUELTAS
+// =========================
+model DashboardAlertaResuelta {
+  id           Int      @id @default(autoincrement())
+  empresaId     String
+  puntoVentaId  String   @default("ALL")
+  alertaId      String
+  resueltaPorId Int?
+  resueltaEn    DateTime @default(now())
+
+  @@index([empresaId])
+  @@index([puntoVentaId])
+  @@unique([empresaId, puntoVentaId, alertaId])
+}
+
+model ImpresoraConfig {
+  id          Int      @id @default(autoincrement())
+  puntoVentaId String
+  nombre      String
+  activa      Boolean  @default(true)
+  categorias  Json
+  ipAddress   String?
+  modelo      String?
+  creadoEn    DateTime @default(now())
+  modificadoEn DateTime @updatedAt
+
+  @@index([puntoVentaId])
+  @@index([activa])
+}
+
+// =========================
+// CONFIGURACIÓN GERENTE
+// =========================
+model EmpresaConfiguracion {
+  id           String   @id // e.g. "EMP-001"
+  data         Json
+  activo       Boolean  @default(true)
+  creadoEn     DateTime @default(now())
+  modificadoEn DateTime @updatedAt
+}
+
+model AgenteExternoConfiguracion {
+  id           String   @id // e.g. "AGENTE-001"
+  data         Json
+  activo       Boolean  @default(true)
+  creadoEn     DateTime @default(now())
+  modificadoEn DateTime @updatedAt
+}
+
+model TerminalTPV {
+  id           String   @id // e.g. "PDV-TIANA-TPV1"
+  puntoVentaId String
+  numero       Int
+  nombre       String
+  tipo         String   @default("secundario") // principal | secundario
+  estado       String   @default("disponible") // disponible | ocupado | mantenimiento
+  marcas       String[] @default([])
+  activo       Boolean  @default(true)
+  creadoEn     DateTime @default(now())
+  modificadoEn DateTime @updatedAt
+
+  @@index([puntoVentaId])
+  @@index([activo])
+}
+
+model Okr {
+  id           String   @id // e.g. "OKR-001"
+  empresaId    String?
+  equipo       String
+  objetivo     String
+  progreso     Int      @default(0)
+  prioridad    String   @default("media") // baja | media | alta | urgente
+  fechaLimite  DateTime?
+  responsable  String?
+  activo       Boolean  @default(true)
+  creadoEn     DateTime @default(now())
+  modificadoEn DateTime @updatedAt
+
+  @@index([empresaId])
+  @@index([equipo])
+  @@index([activo])
+}
+
+// =========================
+// INTEGRACIONES - DELIVERY
+// =========================
+model IntegracionDelivery {
+  id                  Int      @id @default(autoincrement())
+  empresaId            String
+  codigo               String
+  nombre               String
+  logo                 String?
+  activa               Boolean  @default(false)
+  conectada            Boolean  @default(false)
+  ultimaSincronizacion DateTime?
+  errores              Int      @default(0)
+  productosSync        Int      @default(0)
+  pedidosHoy           Int      @default(0)
+  configuracion        Json?
+  creadoEn             DateTime @default(now())
+  modificadoEn         DateTime @updatedAt
+
+  @@unique([empresaId, codigo])
+  @@index([empresaId])
 }
 
 model PedidoItem {
@@ -232,11 +465,41 @@ model Garaje {
 }
 
 model Notificacion {
-  id        Int     @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
+  titulo    String?  // opcional: usado por dashboards avanzados
+  tipo      String?  // pedido | tarea | stock | sistema | ...
+  prioridad String?  // baja | media | alta | urgente
   mensaje   String
-  leida     Boolean @default(false)
+  leida     Boolean  @default(false)
+  creadoEn  DateTime @default(now())
   clienteId Int
-  cliente   Cliente @relation(fields: [clienteId], references: [id])
+  cliente   Cliente  @relation(fields: [clienteId], references: [id])
+
+  @@index([clienteId])
+  @@index([creadoEn])
+}
+
+model NotificacionPreferencias {
+  id          Int      @id @default(autoincrement())
+  clienteId   Int      @unique
+  // JSON con la estructura completa de preferencias del frontend
+  data        Json
+  actualizadoEn DateTime @updatedAt
+  cliente     Cliente   @relation(fields: [clienteId], references: [id])
+}
+
+model PushDeviceToken {
+  id         Int      @id @default(autoincrement())
+  clienteId  Int
+  token      String   @unique
+  platform   String   // ios | android | web | unknown
+  creadoEn   DateTime @default(now())
+  lastSeenEn DateTime @default(now())
+  revokedEn  DateTime?
+  cliente    Cliente  @relation(fields: [clienteId], references: [id])
+
+  @@index([clienteId])
+  @@index([revokedEn])
 }
 
 model Presupuesto {
@@ -282,10 +545,137 @@ model Empleado {
   tareas          Tarea[]
   asignacionesTurno AsignacionTurno[]
   horariosEmpleado  HorarioEmpleado[]
+  solicitudesCambioHorario SolicitudCambioHorario[]
+  solicitudesCambioHorarioRevisadas SolicitudCambioHorario[] @relation("SolicitudCambioHorarioRevisadoPor")
   tareasAsignadas   TareaOperativa[] @relation("TareasAsignadas")
   tareasCreadas     TareaOperativa[] @relation("TareasCreadas")
   documentosSubidos DocumentoEmpresa[] @relation("DocumentosSubidos")
   gastosRegistrados GastoEmpresa[] @relation("GastosRegistrados")
+  modificacionesContrato EmpleadoModificacionContrato[]
+  finalizacionesContrato EmpleadoFinalizacionContrato[]
+  remuneraciones EmpleadoRemuneracion[]
+  solicitudesVacaciones TrabajadorSolicitudVacaciones[]
+  solicitudesHorasExtra TrabajadorSolicitudHoraExtra[]
+  consumosInternos TrabajadorConsumoInterno[]
+  gastosTrabajador TrabajadorGasto[]
+}
+
+// =========================
+// RRHH TRABAJADOR (solicitudes + consumos/gastos)
+// =========================
+model TrabajadorSolicitudVacaciones {
+  id         Int      @id @default(autoincrement())
+  empleadoId Int
+  desde      DateTime
+  hasta      DateTime
+  motivo     String
+  estado     String   @default("pendiente") // pendiente | aprobada | rechazada
+  creadoEn   DateTime @default(now())
+  resueltoEn DateTime?
+
+  empleado Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@index([empleadoId])
+  @@index([estado])
+  @@index([desde, hasta])
+}
+
+model TrabajadorSolicitudHoraExtra {
+  id         Int      @id @default(autoincrement())
+  empleadoId Int
+  fecha      DateTime
+  horaInicio String
+  horaFin    String
+  motivo     String
+  estado     String   @default("pendiente") // pendiente | aprobada | rechazada
+  creadoEn   DateTime @default(now())
+  resueltoEn DateTime?
+
+  empleado Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@index([empleadoId])
+  @@index([estado])
+  @@index([fecha])
+}
+
+model TrabajadorConsumoInterno {
+  id         Int      @id @default(autoincrement())
+  empleadoId Int
+  producto   String
+  categoria  String
+  cantidad   Float    @default(1)
+  precio     Float    @default(0)
+  fecha      DateTime @default(now())
+  notas      String?
+
+  empleado Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@index([empleadoId])
+  @@index([fecha])
+  @@index([categoria])
+}
+
+model TrabajadorGasto {
+  id              Int      @id @default(autoincrement())
+  empleadoId       Int
+  concepto         String
+  categoria        String
+  importe          Float
+  fechaGasto       DateTime @default(now())
+  estado           String   @default("pendiente") // pendiente | aprobado | rechazado
+  justificanteUrl  String?
+  notas            String?
+  creadoEn         DateTime @default(now())
+
+  empleado Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@index([empleadoId])
+  @@index([estado])
+  @@index([fechaGasto])
+}
+
+model EmpleadoModificacionContrato {
+  id             Int      @id @default(autoincrement())
+  empleadoId     Int
+  fechaInicio    DateTime
+  nuevoSalario   Float?
+  nuevasFunciones String?
+  motivo         String?
+  estado         String   @default("registrado")
+  creadoEn       DateTime @default(now())
+
+  empleado Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@index([empleadoId])
+  @@index([fechaInicio])
+}
+
+model EmpleadoFinalizacionContrato {
+  id               Int      @id @default(autoincrement())
+  empleadoId       Int
+  fechaFinalizacion DateTime
+  motivo           String?
+  estado           String   @default("registrado")
+  creadoEn         DateTime @default(now())
+
+  empleado Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@index([empleadoId])
+  @@index([fechaFinalizacion])
+}
+
+model EmpleadoRemuneracion {
+  id         Int      @id @default(autoincrement())
+  empleadoId Int
+  motivo     String
+  importe    Float
+  estado     String   @default("registrado")
+  creadoEn   DateTime @default(now())
+
+  empleado Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@index([empleadoId])
+  @@index([creadoEn])
 }
 
 // ⭐ NUEVO: Horarios de trabajo (plantillas)
@@ -339,6 +729,36 @@ model HorarioEmpleado {
   empleado        Empleado  @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
 
   @@unique([empleadoId, fecha])
+}
+
+// ⭐ NUEVO: Solicitudes de cambio de horario (trabajador → gerente)
+model SolicitudCambioHorario {
+  id              Int       @id @default(autoincrement())
+  empleadoId      Int
+
+  // tipo: cambio_turno | dia_libre | cambio_horario | intercambio
+  tipo            String
+
+  // Fecha solicitada (día afectado). Se usa el componente date (00:00Z).
+  fechaSolicitada DateTime
+
+  motivoSolicitud String
+  detalles        String?
+
+  // Estado: pendiente | aprobada | rechazada
+  estado          String    @default("pendiente")
+  respuesta       String?
+
+  solicitadoEn    DateTime  @default(now())
+  revisadoPorId   Int?
+  revisadoEn      DateTime?
+
+  empleado        Empleado  @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+  revisadoPor     Empleado? @relation("SolicitudCambioHorarioRevisadoPor", fields: [revisadoPorId], references: [id])
+
+  @@index([empleadoId])
+  @@index([fechaSolicitada])
+  @@index([estado])
 }
 
 
@@ -400,6 +820,7 @@ model ArticuloStock {
   modificadoEn       DateTime          @updatedAt
   proveedor          Proveedor?        @relation(fields: [proveedorId], references: [id])
   movimientos        MovimientoStock[]
+  escandalloUsos     EscandalloIngrediente[]
 }
 
 model MovimientoStock {

@@ -5,6 +5,9 @@
 
 import { useState, useEffect } from 'react';
 import { useNotifications } from '../hooks/useNotifications';
+import { notificationsService } from '../services/notifications.service';
+import { areNotificationsEnabled, getFCMToken, requestWebNotificationPermission } from '../services/push-notifications.service';
+import { Capacitor } from '@capacitor/core';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { Button } from './ui/button';
 import { Switch } from './ui/switch';
@@ -136,9 +139,32 @@ export function NotificationPreferences({ usuarioId }: NotificationPreferencesPr
   
   const handleSave = async () => {
     if (!localPrefs) return;
-    
+
+    // If push is enabled, ensure permissions/token are registered
+    if (localPrefs.canalesActivos.push) {
+      const enabled = await areNotificationsEnabled();
+      if (!enabled) {
+        if (Capacitor.isNativePlatform()) {
+          toast.info('Activa permisos de notificaciones en tu dispositivo.');
+        } else {
+          const granted = await requestWebNotificationPermission();
+          if (!granted) toast.error('Permisos de notificaciones denegados');
+        }
+      }
+
+      const token = getFCMToken();
+      if (token) {
+        await notificationsService.registerDeviceToken({ token, platform: Capacitor.getPlatform() });
+      }
+    }
+
     await updatePreferences(localPrefs);
     setHasChanges(false);
+  };
+
+  const handleSendTest = async () => {
+    const ok = await notificationsService.sendTest();
+    if (ok) toast.success('Notificación de prueba enviada');
   };
   
   if (!localPrefs) {
@@ -374,6 +400,21 @@ export function NotificationPreferences({ usuarioId }: NotificationPreferencesPr
               onCheckedChange={handleToggleAgrupar}
             />
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Prueba */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Prueba</CardTitle>
+          <CardDescription>
+            Envía una notificación de prueba para validar tu configuración.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button variant="outline" onClick={handleSendTest} disabled={loading}>
+            Enviar notificación de prueba
+          </Button>
         </CardContent>
       </Card>
       

@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense } from 'react';
+import { useEffect, useMemo, useState, lazy, Suspense } from 'react';
 import { Button } from './ui/button';
 import { Sidebar, MenuItem, QuickAction as SidebarQuickAction } from './navigation/Sidebar';
 import { BottomNav, BottomNavItem } from './navigation/BottomNav';
@@ -28,6 +28,8 @@ import { toast } from 'sonner@2.0.3';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { getConfig } from '../config/white-label.config';
 import udarLogo from 'figma:asset/841a58f721c551c9787f7d758f8005cf7dfb6bc5.png';
+import { dashboardGerenteApi, finanzasApi, operativaApi } from '../services/api/gerente.api';
+import { gerenteConfigApi, puntosVentaApi } from '../services/api';
 import {
   LayoutDashboard,
   Store,
@@ -84,19 +86,20 @@ export function GerenteDashboard({ user, onLogout, onCambiarRol }: GerenteDashbo
   const [marcasDisponibles, setMarcasDisponibles] = useState<string[]>([]);
   const [cajaAbierta, setCajaAbierta] = useState(false);
 
-  // Badges para el menú
-  const alertas = 3;
-  const impagos = 5;
-  const urgentes = 2;
-  const noLeidos = 8;
-  const citasPendientes = 5; // Badge para citas solicitadas
+  const [badges, setBadges] = useState({
+    alertas: 0,
+    impagos: 0,
+    urgentes: 0,
+    noLeidos: 0,
+    citasPendientes: 0,
+  });
 
   const menuItems: MenuItem[] = [
     { 
       id: 'dashboard', 
       label: 'Dashboard 360', 
       icon: LayoutDashboard, 
-      badge: alertas > 0 ? alertas : undefined 
+      badge: badges.alertas > 0 ? badges.alertas : undefined 
     },
     { 
       id: 'tienda', 
@@ -112,7 +115,7 @@ export function GerenteDashboard({ user, onLogout, onCambiarRol }: GerenteDashbo
       id: 'citas', 
       label: 'Gestión de Citas', 
       icon: Calendar,
-      badge: citasPendientes > 0 ? citasPendientes : undefined 
+      badge: badges.citasPendientes > 0 ? badges.citasPendientes : undefined 
     },
     { 
       id: 'clientes', 
@@ -138,13 +141,13 @@ export function GerenteDashboard({ user, onLogout, onCambiarRol }: GerenteDashbo
       id: 'operativa', 
       label: 'Operativa', 
       icon: Coffee, 
-      badge: urgentes > 0 ? urgentes : undefined 
+      badge: badges.urgentes > 0 ? badges.urgentes : undefined 
     },
     { 
       id: 'ayuda', 
       label: 'Chat y Soporte', 
       icon: HelpCircle,
-      badge: noLeidos > 0 ? noLeidos : undefined
+      badge: badges.noLeidos > 0 ? badges.noLeidos : undefined
     },
     { 
       id: 'documentacion', 
@@ -165,10 +168,10 @@ export function GerenteDashboard({ user, onLogout, onCambiarRol }: GerenteDashbo
 
   // Bottom nav items para móvil (5 botones principales centrados)
   const bottomNavItems: BottomNavItem[] = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, badge: alertas },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, badge: badges.alertas },
     { id: 'tienda', label: 'TPV', icon: Store },
     { id: 'clientes', label: 'Clientes', icon: Users },
-    { id: 'operativa', label: 'Operativa', icon: Coffee, badge: urgentes },
+    { id: 'operativa', label: 'Operativa', icon: Coffee, badge: badges.urgentes },
     { id: 'equipo', label: 'Equipo', icon: UserCheck },
   ];
 
@@ -230,40 +233,77 @@ export function GerenteDashboard({ user, onLogout, onCambiarRol }: GerenteDashbo
     },
   ];
 
-  const kpis: KPIData[] = [
-    { 
-      id: 'mrr', 
-      label: 'MRR', 
-      value: '€12,450', 
-      change: 12.5, 
-      icon: TrendingUp, 
-      iconColor: 'text-green-600' 
-    },
-    { 
-      id: 'nps', 
-      label: 'NPS', 
-      value: '8.4', 
-      change: 5.2, 
-      icon: UserCheck, 
-      iconColor: 'text-blue-600' 
-    },
-    { 
-      id: 'margen', 
-      label: 'Margen', 
-      value: '34%', 
-      change: -2.1, 
-      icon: Percent, 
-      iconColor: 'text-orange-600' 
-    },
-    { 
-      id: 'churn', 
-      label: 'Churn', 
-      value: '2.1%', 
-      change: -8.3, 
-      icon: UserMinus, 
-      iconColor: 'text-red-600' 
-    },
-  ];
+  const [kpis, setKpis] = useState<KPIData[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadBadgesAndKpis = async () => {
+      try {
+        const empresaId = (await gerenteConfigApi.empresas.list())?.[0]?.id;
+        const [alertasArr, impagosArr, statsOperativa, kpisApi] = await Promise.all([
+          dashboardGerenteApi.obtenerAlertas(),
+          finanzasApi.obtenerImpagos(empresaId ? { empresa_id: String(empresaId) } : undefined),
+          operativaApi.obtenerEstadisticas(empresaId ? { empresa_id: String(empresaId) } : undefined),
+          dashboardGerenteApi.obtenerKPIs(empresaId ? { empresa_id: String(empresaId) } : undefined),
+        ]);
+
+        if (cancelled) return;
+        setBadges({
+          alertas: Array.isArray(alertasArr) ? alertasArr.length : 0,
+          impagos: Array.isArray(impagosArr) ? impagosArr.length : 0,
+          urgentes: Number((statsOperativa as any)?.urgentes || 0),
+          noLeidos: 0,
+          citasPendientes: 0,
+        });
+
+        const k = kpisApi || {};
+        setKpis([
+          {
+            id: 'mrr',
+            label: 'MRR',
+            value: `€${Number(k.mrr || 0).toLocaleString('es-ES')}`,
+            change: Number(k.variacion_mrr || 0),
+            icon: TrendingUp,
+            iconColor: 'text-green-600',
+          },
+          {
+            id: 'pedidos',
+            label: 'Pedidos',
+            value: `${Number(k.pedidos || 0).toLocaleString('es-ES')}`,
+            change: Number(k.variacion_pedidos || 0),
+            icon: Receipt,
+            iconColor: 'text-blue-600',
+          },
+          {
+            id: 'clientes',
+            label: 'Clientes',
+            value: `${Number(k.clientes_unicos || 0).toLocaleString('es-ES')}`,
+            change: Number(k.variacion_clientes || 0),
+            icon: Users,
+            iconColor: 'text-orange-600',
+          },
+          {
+            id: 'margen',
+            label: 'Margen',
+            value: `${Number(k.margen_porcentaje || 0).toFixed(1)}%`,
+            change: Number(k.variacion_margen || 0),
+            icon: Percent,
+            iconColor: 'text-purple-600',
+          },
+        ]);
+      } catch (e) {
+        console.error('Error cargando badges/kpis gerente:', e);
+        if (!cancelled) {
+          setBadges({ alertas: 0, impagos: 0, urgentes: 0, noLeidos: 0, citasPendientes: 0 });
+          setKpis([]);
+        }
+      }
+    };
+    void loadBadgesAndKpis();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const breadcrumbs: BreadcrumbItem[] = [
     { label: 'Gerente' },
@@ -308,13 +348,24 @@ export function GerenteDashboard({ user, onLogout, onCambiarRol }: GerenteDashbo
     setPuntoVentaActivo(puntoVentaId);
     setTpvActivo(tpvId);
     
-    // Obtener las marcas disponibles del terminal (simulado - en producción vendría del backend)
-    // Por ejemplo: Terminal 1 tiene ambas marcas, otros solo una
-    const esPrimerTerminal = tpvId.includes('TPV1') || tpvId.includes('TPV-1');
-    const marcasTerminal = esPrimerTerminal ? ['MRC-001', 'MRC-002'] : ['MRC-001']; // IDs de marca
-    
-    setMarcasDisponibles(marcasTerminal);
-    setMarcaActiva(marcaSeleccionada || marcasTerminal[0]);
+    // Marcas disponibles: terminal -> PDV
+    void (async () => {
+      try {
+        const [terminales, pdv] = await Promise.all([
+          gerenteConfigApi.terminales.list({ puntoVentaId }),
+          puntosVentaApi.getById(puntoVentaId),
+        ]);
+        const terminal = (terminales || []).find((t) => t.id === tpvId);
+        const marcas = (terminal?.marcas?.length ? terminal.marcas : pdv?.marcasIds) || [];
+        const marcasIds = (marcas || []).map(String);
+        setMarcasDisponibles(marcasIds);
+        setMarcaActiva(marcaSeleccionada || marcasIds[0] || '');
+      } catch (e) {
+        console.error(e);
+        setMarcasDisponibles([]);
+        setMarcaActiva(marcaSeleccionada || '');
+      }
+    })();
     
     // Cambiar a la sección tienda después de configurar
     setActiveSection('tienda');

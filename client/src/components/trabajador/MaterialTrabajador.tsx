@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -49,9 +49,10 @@ import {
 } from 'lucide-react';
 import { AñadirMaterialModal } from './AñadirMaterialModal';
 import { RecepcionMaterialModal } from './RecepcionMaterialModal';
-import { productosPanaderia } from '../../data/productos-panaderia';
 import { toast } from 'sonner@2.0.3';
 import { useStock } from '../../contexts/StockContext';
+import { usePuntoVentaActivo } from '../../hooks/usePuntoVentaActivo';
+import { stockTrabajadorApi, type ArticuloStockApi, type MovimientoStockApi, type PedidoProveedorApi } from '../../services/api';
 
 interface Material {
   id: string;
@@ -98,13 +99,16 @@ interface PedidoPendiente {
 export function MaterialTrabajador() {
   // ✅ HOOK DE STOCKCONTEXT - Sincronización en tiempo real
   const {
-    stock: stockFromContext,
-    pedidosProveedores: pedidosFromContext,
     puntoVentaActivo,
-    getPedidosPorPuntoVenta,
-    registrarRecepcion,
-    movimientos: movimientosFromContext,
   } = useStock();
+
+  const { puntoVentaId: puntoVentaIdFichaje } = usePuntoVentaActivo();
+  const pdvActivo = puntoVentaIdFichaje || puntoVentaActivo || '';
+
+  const [backendArticulos, setBackendArticulos] = useState<ArticuloStockApi[]>([]);
+  const [backendMovimientos, setBackendMovimientos] = useState<MovimientoStockApi[]>([]);
+  const [backendPedidosProveedor, setBackendPedidosProveedor] = useState<PedidoProveedorApi[]>([]);
+  const [cargandoBackend, setCargandoBackend] = useState(false);
 
   const [vistaActual, setVistaActual] = useState<'recepcion' | 'stock' | 'movimientos'>('recepcion');
   
@@ -125,154 +129,77 @@ export function MaterialTrabajador() {
   const [modoVentaDirecta, setModoVentaDirecta] = useState(false);
   const [pedidoSeleccionadoRecepcion, setPedidoSeleccionadoRecepcion] = useState<string | null>(null);
 
-  // ✅ DATOS DE PEDIDOS DEL CONTEXTO - Sincronizados en tiempo real con el gerente
-  const pedidosDelContexto = getPedidosPorPuntoVenta(
-    'Disarmink SL - Hoy Pecamos',
-    puntoVentaActivo || 'Tiana'
-  ).filter(p => p.estado !== 'entregado' && p.estado !== 'anulado');
+  const cargarDesdeBackend = useCallback(async () => {
+    if (!pdvActivo) return;
+    try {
+      setCargandoBackend(true);
+      const [arts, movs, pps] = await Promise.all([
+        stockTrabajadorApi.listArticulos({ puntoVentaId: pdvActivo }),
+        stockTrabajadorApi.listMovimientos({ puntoVentaId: pdvActivo }),
+        stockTrabajadorApi.listPedidosProveedor({ puntoVentaId: pdvActivo }),
+      ]);
+      setBackendArticulos(arts);
+      setBackendMovimientos(movs);
+      setBackendPedidosProveedor(pps);
+    } catch (e) {
+      console.error('Error cargando stock backend:', e);
+    } finally {
+      setCargandoBackend(false);
+    }
+  }, [pdvActivo]);
 
-  // Convertir pedidos del contexto al formato esperado
-  const pedidosPendientesFromContext: PedidoPendiente[] = pedidosDelContexto.map(pedido => ({
-    id: pedido.id,
-    proveedor: pedido.proveedorNombre,
-    fechaSolicitud: pedido.fechaSolicitud,
-    fechaEsperada: pedido.fechaEstimadaEntrega || '',
-    estado: pedido.estado as 'pendiente' | 'parcial' | 'retrasado',
-    productos: pedido.articulos.map(art => ({
-      nombre: art.nombre,
-      codigo: art.codigo,
-      cantidadSolicitada: art.cantidad,
-      cantidadRecibida: art.cantidadRecibida || 0
+  useEffect(() => {
+    cargarDesdeBackend();
+  }, [cargarDesdeBackend]);
+
+  // Fuente de verdad: backend (stockTrabajadorApi.listPedidosProveedor)
+  const pedidosPendientes: PedidoPendiente[] = backendPedidosProveedor.map((p) => ({
+    id: String(p.id),
+    proveedor: p.proveedor?.nombre || `Proveedor ${p.proveedorId}`,
+    fechaSolicitud: p.fechaPedido,
+    fechaEsperada: p.fechaEntregaEstimada || '',
+    estado: (p.estado || 'pendiente') as any,
+    productos: (p.items || []).map((it) => ({
+      nombre: it.nombreArticulo,
+      codigo: String(it.articuloId),
+      cantidadSolicitada: Number(it.cantidad),
+      cantidadRecibida: Number(it.cantidadRecibida || 0),
     })),
-    total: pedido.total
+    total: Number(p.total || 0),
   }));
 
-  // Usar datos del contexto si existen, sino usar mock local
-  const pedidosPendientes: PedidoPendiente[] = pedidosDelContexto.length > 0 
-    ? pedidosPendientesFromContext 
-    : [
-    {
-      id: 'PED-2025-011',
-      proveedor: 'Harinas Molino del Sur',
-      fechaSolicitud: '2025-11-18',
-      fechaEsperada: '2025-11-22',
-      estado: 'pendiente',
-      productos: [
-        { nombre: 'Harina Panadera T55', codigo: 'HAR-T55', cantidadSolicitada: 100, cantidadRecibida: 0 },
-        { nombre: 'Harina Integral', codigo: 'HAR-INT', cantidadSolicitada: 50, cantidadRecibida: 0 },
-        { nombre: 'Levadura Fresca', codigo: 'LEV-FRS', cantidadSolicitada: 20, cantidadRecibida: 0 }
-      ],
-      total: 285.50
-    },
-    {
-      id: 'PED-2025-010',
-      proveedor: 'Lácteos Menorca',
-      fechaSolicitud: '2025-11-15',
-      fechaEsperada: '2025-11-20',
-      estado: 'retrasado',
-      productos: [
-        { nombre: 'Mantequilla Premium', codigo: 'MANT-PRE', cantidadSolicitada: 30, cantidadRecibida: 0 },
-        { nombre: 'Leche Entera', codigo: 'LEC-ENT', cantidadSolicitada: 40, cantidadRecibida: 0 },
-        { nombre: 'Nata para Montar', codigo: 'NAT-MON', cantidadSolicitada: 25, cantidadRecibida: 0 }
-      ],
-      total: 198.75
-    },
-    {
-      id: 'PED-2025-009',
-      proveedor: 'Azúcares Iberia',
-      fechaSolicitud: '2025-11-14',
-      fechaEsperada: '2025-11-21',
-      estado: 'parcial',
-      productos: [
-        { nombre: 'Azúcar Blanco', codigo: 'AZU-BLA', cantidadSolicitada: 80, cantidadRecibida: 50 },
-        { nombre: 'Azúcar Glas', codigo: 'AZU-GLA', cantidadSolicitada: 30, cantidadRecibida: 30 },
-        { nombre: 'Chocolate Cobertura', codigo: 'CHO-COB', cantidadSolicitada: 40, cantidadRecibida: 0 }
-      ],
-      total: 342.00
-    }
-  ];
-
-  // Convertir productos de panadería CORE a formato de material
-  const materiales: Material[] = productosPanaderia.map((producto, index) => {
-    // Determinar estado según el stock
+  const materialesBackend: Material[] = backendArticulos.map((a) => {
     let estado: 'disponible' | 'bajo' | 'agotado' = 'disponible';
-    const minimo = 10; // Stock mínimo recomendado para cafés
-    
-    if (producto.stock === 0) {
-      estado = 'agotado';
-    } else if (producto.stock < minimo) {
-      estado = 'bajo';
-    }
+    if (a.stockActual <= 0) estado = 'agotado';
+    else if (a.stockActual < a.stockMinimo) estado = 'bajo';
 
     return {
-      id: producto.id,
-      codigo: producto.id,
-      nombre: producto.nombre,
-      categoria: producto.categoria,
-      stock: producto.stock,
-      minimo: minimo,
-      ubicacion: 'PDV', // Punto de venta
-      estado: estado,
-      precio: producto.precio
-    };
+      id: String(a.id),
+      codigo: a.codigoInterno,
+      nombre: a.nombre,
+      categoria: a.categoria,
+      stock: a.stockActual,
+      minimo: a.stockMinimo,
+      ubicacion: a.ubicacionAlmacen || a.puntoVentaId,
+      estado,
+      // backend aún no expone lote aquí
+      lote: undefined,
+      precio: a.precioUltimaCompra || undefined,
+    } as any;
   });
 
-  const movimientos: Movimiento[] = [
-    {
-      id: 'MOV001',
-      tipo: 'ot',
-      fecha: '2025-11-11T10:30:00',
-      material: 'Barras de Pan Artesanal',
-      codigo: 'PAN001',
-      cantidad: 15,
-      ot: 'PED-2025-001',
-      cliente: 'Juan Pérez'
-    },
-    {
-      id: 'MOV002',
-      tipo: 'venta_directa',
-      fecha: '2025-11-11T11:15:00',
-      material: 'Croissants Mantequilla',
-      codigo: 'CRSNT001',
-      cantidad: 12,
-      cliente: 'María García',
-      total: 30.00,
-      metodoPago: 'tarjeta',
-      tipoDocumento: 'ticket'
-    },
-    {
-      id: 'MOV003',
-      tipo: 'correccion',
-      fecha: '2025-11-11T12:00:00',
-      material: 'Ensaimadas',
-      codigo: 'ENSA001',
-      cantidad: 8,
-      ot: 'PED-2025-003',
-      cliente: 'Pedro López'
-    },
-    {
-      id: 'MOV004',
-      tipo: 'ot',
-      fecha: '2025-11-10T15:45:00',
-      material: 'Coca-Cola 33cl',
-      codigo: 'BEBIDA001',
-      cantidad: 8,
-      ot: 'PED-2025-002',
-      cliente: 'Ana Martín'
-    },
-    {
-      id: 'MOV005',
-      tipo: 'venta_directa',
-      fecha: '2025-11-10T09:20:00',
-      material: 'Baguettes Francesas',
-      codigo: 'BAG001',
-      cantidad: 6,
-      cliente: 'Venta mostrador',
-      total: 18.00,
-      metodoPago: 'efectivo',
-      tipoDocumento: 'factura'
-    },
-  ];
+  const materiales: Material[] = materialesBackend;
+
+  const movimientosBackendAdaptados: Movimiento[] = backendMovimientos.map((m) => ({
+    id: String(m.id),
+    tipo: (m.tipo as any) || 'correccion',
+    fecha: typeof m.fecha === 'string' ? m.fecha : new Date(m.fecha as any).toISOString(),
+    material: m.articuloNombre,
+    codigo: String(m.articuloId),
+    cantidad: Number(m.cantidad),
+  }));
+
+  const movimientos: Movimiento[] = movimientosBackendAdaptados;
 
   const categorias = ['todas', ...Array.from(new Set(materiales.map(m => m.categoria)))];
   const ubicaciones = ['todas', ...Array.from(new Set(materiales.map(m => m.ubicacion)))];
@@ -495,6 +422,21 @@ export function MaterialTrabajador() {
   return (
     <>
       <div className="space-y-4 sm:space-y-6">
+        {/* Estado de sincronización backend */}
+        {pdvActivo && (
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-gray-500">
+              PDV: <span className="font-medium text-gray-700">{pdvActivo}</span>
+              {backendArticulos.length > 0 ? ' · datos en vivo' : ' · datos demo'}
+            </p>
+            {cargandoBackend && (
+              <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                Sincronizando...
+              </Badge>
+            )}
+          </div>
+        )}
+
         {/* KPIs CALCULADOS DINÁMICAMENTE */}
         <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
           <Card>

@@ -19,20 +19,48 @@ import {
   Share2,
   ExternalLink
 } from 'lucide-react';
-import { Pedido } from '../../services/pedidos.service';
+import { facturasApi } from '../../services/api/facturas.api';
+
+export interface PedidoConfirmacionData {
+  id: string;
+  numero?: string;
+  tiempoPreparacion?: number | null;
+  tipoEntrega?: 'recogida' | 'domicilio' | string | null;
+  direccionEntrega?: string | null;
+  estado?: string | null;
+  items: Array<{ cantidad: number }>;
+  subtotal: number;
+  descuento: number;
+  iva: number;
+  total: number;
+  facturaId?: string | null;
+}
 
 interface PedidoConfirmacionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  pedido: Pedido | null;
+  pedido: PedidoConfirmacionData | null;
 }
 
 export function PedidoConfirmacionModal({ isOpen, onClose, pedido }: PedidoConfirmacionModalProps) {
   if (!pedido) return null;
 
-  const handleDescargarFactura = () => {
-    // TODO: Implementar descarga de factura PDF
-    console.log('Descargar factura:', pedido.facturaId);
+  const handleDescargarFactura = async () => {
+    if (!pedido.facturaId) return;
+    const id = Number(pedido.facturaId);
+    if (!Number.isFinite(id)) return;
+
+    const blob = await facturasApi.downloadPdf(id);
+    if (!blob) return;
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `factura-${pedido.facturaId}.html`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   };
 
   const handleCompartir = async () => {

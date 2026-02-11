@@ -6,11 +6,11 @@ import { Badge } from './ui/badge';
 import { Search, Package, CreditCard, Check, Clock, User, Phone, Mail, MapPin, Users, Volume2, VolumeX, TrendingUp, UserCircle } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import type { Pedido, PermisosTPV } from './TPV360Master';
-import { obtenerTodosPedidos } from '../services/pedidos.service';
 import { obtenerTurnosEsperando, atenderTurno, completarTurno, type TurnoSinPedido } from '../services/turnos-sin-pedido.service';
 
 interface CajaRapidaMejoradaProps {
   pedidos: Pedido[];
+  onCobrarPedido?: (pedidoId: string) => void;
   onMarcarListo: (pedidoId: string) => void;
   onMarcarEntregado: (pedidoId: string) => void;
   permisos: PermisosTPV;
@@ -18,6 +18,7 @@ interface CajaRapidaMejoradaProps {
 
 export function CajaRapidaMejorada({ 
   pedidos: pedidosProp, 
+  onCobrarPedido,
   onMarcarListo, 
   onMarcarEntregado,
   permisos 
@@ -30,56 +31,11 @@ export function CajaRapidaMejorada({
   });
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const ultimosClientesPresentesRef = useRef<Set<string>>(new Set());
-  const [pedidosActualizados, setPedidosActualizados] = useState<any[]>([]);
   const [turnosSinPedido, setTurnosSinPedido] = useState<TurnoSinPedido[]>([]);
   const ultimosTurnosPresentesRef = useRef<Set<string>>(new Set());
 
-  // Sincronizar pedidos del servicio con los props
-  useEffect(() => {
-    const cargarPedidos = () => {
-      try {
-        const pedidosServicio = obtenerTodosPedidos();
-        // Convertir pedidos del servicio al formato que espera el componente
-        const pedidosFormateados = pedidosServicio.map(p => ({
-          id: p.id,
-          codigo: p.numero || p.id.substring(0, 10),
-          cliente: p.cliente,
-          items: p.items.map(item => ({
-            producto: {
-              id: item.productoId || item.nombre,
-              nombre: item.nombre,
-              precio: item.precio,
-              categoria: '',
-              stock: 0,
-              activo: true,
-              visible_tpv: true
-            },
-            cantidad: item.cantidad,
-            subtotal: item.subtotal
-          })),
-          total: p.total,
-          estado: p.estado as any,
-          origenPedido: p.origenPedido === 'app' ? 'app' : p.origenPedido === 'tpv' ? 'presencial' : 'web',
-          metodoPago: p.metodoPago as any,
-          pagado: p.estadoPago === 'pagado',
-          fechaCreacion: new Date(p.fecha),
-          geolocalizacionValidada: p.geolocalizacionValidada,
-          fechaGeolocalizacion: p.fechaGeolocalizacion
-        }));
-        setPedidosActualizados(pedidosFormateados);
-      } catch (error) {
-        console.error('Error cargando pedidos del servicio:', error);
-      }
-    };
-
-    // Cargar al montar y cada 2 segundos para mantener sincronizado
-    cargarPedidos();
-    const interval = setInterval(cargarPedidos, 2000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Usar pedidos del servicio si están disponibles, sino usar los props
-  const pedidos = pedidosActualizados.length > 0 ? pedidosActualizados : pedidosProp;
+  // ✅ Producción: usar pedidos reales desde props (backend)
+  const pedidos = pedidosProp;
 
   // 🎫 Sincronizar turnos sin pedido
   useEffect(() => {
@@ -307,8 +263,11 @@ export function CajaRapidaMejorada({
       onMarcarEntregado(pedido.id);
     } else {
       // Pedidos pendientes: cobrar
-      toast.info('Redirigiendo a cobro de pedido...');
-      // Aquí se podría abrir un modal de cobro o redirigir al TPV
+      if (onCobrarPedido) {
+        onCobrarPedido(pedido.id);
+      } else {
+        toast.info('Cobro no configurado en este panel');
+      }
     }
   };
 

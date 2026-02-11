@@ -4,6 +4,9 @@
   import path from 'path';
 
   export default defineConfig({
+    // Panel is served behind nginx under /panel/
+    // This ensures assets and router fallbacks work correctly.
+    base: '/panel/',
     plugins: [react()],
     resolve: {
       extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],

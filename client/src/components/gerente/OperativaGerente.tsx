@@ -7,16 +7,35 @@ import {
 } from 'lucide-react';
 import { GestionTareasOperativas } from './GestionTareasOperativas';
 import { GestionHorarios } from './GestionHorarios';
-
-// Datos de ejemplo - En producción estos vendrán del contexto de usuario/empresa
-const MOCK_DATA = {
-  gerenteId: 'GER-001',
-  gerenteNombre: 'María García',
-  empresaId: 'EMP-001',
-  empresaNombre: 'Disarmink S.L.',
-};
+import { authApi, gerenteConfigApi } from '../../services/api';
+import { useEffect, useState } from 'react';
 
 export function OperativaGerente() {
+  const [empresaId, setEmpresaId] = useState('EMP-001');
+  const [empresaNombre, setEmpresaNombre] = useState('Empresa');
+  const user = authApi.getCurrentUser();
+  const gerenteId = String(user?.id ?? '');
+  const gerenteNombre = String((user as any)?.nombre || user?.name || 'Gerente');
+
+  useEffect(() => {
+    let cancelled = false;
+    gerenteConfigApi.empresas
+      .list()
+      .then((list) => {
+        if (cancelled) return;
+        const first = (list || [])[0] as any;
+        if (first?.id) setEmpresaId(String(first.id));
+        if (first?.nombreFiscal) setEmpresaNombre(String(first.nombreFiscal));
+        else if (first?.nombreComercial) setEmpresaNombre(String(first.nombreComercial));
+      })
+      .catch(() => {
+        // fallback to defaults
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -43,18 +62,18 @@ export function OperativaGerente() {
         {/* TAB 1: TAREAS */}
         <TabsContent value="tareas">
           <GestionTareasOperativas
-            gerenteId={MOCK_DATA.gerenteId}
-            gerenteNombre={MOCK_DATA.gerenteNombre}
-            empresaId={MOCK_DATA.empresaId}
-            empresaNombre={MOCK_DATA.empresaNombre}
+            gerenteId={gerenteId}
+            gerenteNombre={gerenteNombre}
+            empresaId={empresaId}
+            empresaNombre={empresaNombre}
           />
         </TabsContent>
 
         {/* TAB 2: HORARIOS */}
         <TabsContent value="horarios">
           <GestionHorarios
-            gerenteId={MOCK_DATA.gerenteId}
-            gerenteNombre={MOCK_DATA.gerenteNombre}
+            gerenteId={gerenteId}
+            gerenteNombre={gerenteNombre}
           />
         </TabsContent>
       </Tabs>

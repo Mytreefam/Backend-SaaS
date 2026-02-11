@@ -11,7 +11,9 @@
     "prisma:generate": "prisma generate",
     "prisma:seed": "prisma db seed --preview-feature",
     "seed:empleados": "ts-node prisma/seedEmpleados.ts",
-    "seed:chat": "ts-node prisma/seedChat.ts"
+    "seed:chat": "ts-node prisma/seedChat.ts",
+    "seed:reset-users": "ts-node prisma/seed-reset-users.ts",
+    "seed:default-marcas": "ts-node prisma/seed-default-marcas.ts"
   },
   "prisma": {
     "seed": "node prisma/seed.ts"

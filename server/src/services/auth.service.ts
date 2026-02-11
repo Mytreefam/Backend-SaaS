@@ -34,7 +34,16 @@ function isBcryptHash(value: string): boolean {
 
 export const AuthService = {
   async login(params: { email: string; password: string; userAgent?: string; ip?: string }) {
-    const user = await prisma.cliente.findUnique({ where: { email: params.email } });
+    const email = String(params.email || '').trim();
+    // Case-insensitive lookup to prevent production login failures due to email casing
+    const user = await prisma.cliente.findFirst({
+      where: {
+        email: {
+          equals: email,
+          mode: 'insensitive',
+        },
+      },
+    });
     if (!user) return null;
 
     // Backwards-compatible migration:

@@ -21,10 +21,10 @@ router.get('/marcas', async (_req, res) => {
         activo: true,
       },
     });
-    return res.json(marcas);
+    return res.json({ success: true, data: marcas });
   } catch (e) {
     console.error('public/marcas error:', e);
-    return res.status(500).json({ error: 'PUBLIC_MARCAS_FAILED' });
+    return res.status(500).json({ success: false, error: 'PUBLIC_MARCAS_FAILED' });
   }
 });
 
@@ -44,10 +44,10 @@ router.get('/puntos-venta', async (_req, res) => {
         activo: true,
       },
     });
-    return res.json(pdvs);
+    return res.json({ success: true, data: pdvs });
   } catch (e) {
     console.error('public/puntos-venta error:', e);
-    return res.status(500).json({ error: 'PUBLIC_PDV_FAILED' });
+    return res.status(500).json({ success: false, error: 'PUBLIC_PDV_FAILED' });
   }
 });
 
@@ -61,10 +61,10 @@ router.get('/empresas', async (_req, res) => {
         puntosVenta: { where: { activo: true }, orderBy: { id: 'asc' } },
       },
     });
-    return res.json(empresas);
+    return res.json({ success: true, data: empresas });
   } catch (e) {
     console.error('public/empresas error:', e);
-    return res.status(500).json({ error: 'PUBLIC_EMPRESAS_FAILED' });
+    return res.status(500).json({ success: false, error: 'PUBLIC_EMPRESAS_FAILED' });
   }
 });
 

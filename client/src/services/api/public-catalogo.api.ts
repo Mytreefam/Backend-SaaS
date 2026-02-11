@@ -24,11 +24,11 @@ export interface PuntoVentaPublicoApi {
 
 export const publicCatalogoApi = {
   async listMarcas(): Promise<MarcaPublicaApi[]> {
-    const res = await envelopedFetch<MarcaPublicaApi[]>('/public/marcas', { method: 'GET' });
+    const res = await envelopedFetch<MarcaPublicaApi[]>('/public/marcas', { method: 'GET', skipAuth: true });
     return res.data.data ?? [];
   },
   async listPuntosVenta(): Promise<PuntoVentaPublicoApi[]> {
-    const res = await envelopedFetch<PuntoVentaPublicoApi[]>('/public/puntos-venta', { method: 'GET' });
+    const res = await envelopedFetch<PuntoVentaPublicoApi[]>('/public/puntos-venta', { method: 'GET', skipAuth: true });
     return res.data.data ?? [];
   },
 };

@@ -59,19 +59,12 @@ import PanelCaja from './PanelCaja';
 import { GestionTurnos } from './GestionTurnos';
 import { PanelEstadosPedidos } from './PanelEstadosPedidos';
 import { ProductoPersonalizacionModal } from './ProductoPersonalizacionModal';
-import { productosPanaderia } from '../data/productos-panaderia';
 import { usePromocionesTPV } from '../hooks/usePromociones';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { 
-  EMPRESAS, 
-  MARCAS, 
-  EMPRESAS_ARRAY,
-  MARCAS_ARRAY,
-  getNombreEmpresa,
-  getNombreMarca 
-} from '../constants/empresaConfig';
 import type { PromocionDisponible } from '../data/promociones-disponibles';
 import type { ItemCarrito as ItemCarritoServicio } from '../services/promociones.service';
+import { gerenteConfigApi } from '../services/api';
+import { useGerenteEmpresasConfig } from '../hooks/useGerenteEmpresasConfig';
 import {
   Dialog,
   DialogContent,
@@ -235,6 +228,63 @@ export function TPV360Master({
   
   // 🛍️ Hook de productos centralizados
   const { productos: productosContext, categorias: categoriasContext } = useProductos();
+
+  // Config real Empresa/Marca/PDV (sin constants/empresaConfig)
+  const { getNombreMarca } = useGerenteEmpresasConfig();
+  const [empresasConfig, setEmpresasConfig] = useState<any[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await gerenteConfigApi.empresas.list();
+        if (cancelled) return;
+        setEmpresasConfig(Array.isArray(list) ? list : []);
+      } catch {
+        if (cancelled) return;
+        setEmpresasConfig([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const marcaById = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const e of empresasConfig || []) {
+      const marcas = Array.isArray((e as any)?.marcas) ? (e as any).marcas : [];
+      for (const marca of marcas) {
+        const id = String(marca?.id || '').trim();
+        if (!id) continue;
+        m.set(id, marca);
+      }
+    }
+    return m;
+  }, [empresasConfig]);
+
+  const pdvById = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const e of empresasConfig || []) {
+      const pdvs = Array.isArray((e as any)?.puntosVenta) ? (e as any).puntosVenta : [];
+      for (const pv of pdvs) {
+        const id = String(pv?.id || '').trim();
+        if (!id) continue;
+        m.set(id, pv);
+      }
+    }
+    return m;
+  }, [empresasConfig]);
+
+  const empresaById = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const e of empresasConfig || []) {
+      const id = String((e as any)?.id || '').trim();
+      if (!id) continue;
+      m.set(id, e);
+    }
+    return m;
+  }, [empresasConfig]);
   
   // Estados de promociones
   const [promocionesAplicadasActuales, setPromocionesAplicadasActuales] = useState<PromocionDisponible[]>([]);
@@ -403,118 +453,6 @@ export function TPV360Master({
     setPedidosFiltrados(filtrados);
   }, [pedidos, filtroEmpresa, filtroMarca, filtroPDV, filtroEstado, filtroOrigen, filtroBusqueda]);
 
-  // ⭐ PRODUCTOS SIMULADOS CON MARCAS (temporal - luego se conectará con GestionProductos)
-  const PRODUCTOS_TPV_MOCK: Producto[] = [
-    {
-      id: 'prod-001',
-      nombre: 'Pan de Masa Madre',
-      categoria: 'Pan de masa madre',
-      precio: 3.50,
-      stock: 25,
-      descripcion: 'Pan artesanal de masa madre',
-      imagen: '',
-      marcas_ids: [MARCAS.MODOMIO], // Solo en Modomio
-      activo: true,
-      visible_tpv: true
-    },
-    {
-      id: 'prod-002',
-      nombre: 'Croissant de Mantequilla',
-      categoria: 'Bollería simple',
-      precio: 1.80,
-      stock: 40,
-      descripcion: 'Croissant francés con mantequilla natural',
-      imagen: '',
-      marcas_ids: [MARCAS.MODOMIO], // Solo en Modomio
-      activo: true,
-      visible_tpv: true
-    },
-    {
-      id: 'prod-003',
-      nombre: 'Café Americano',
-      categoria: 'Bebidas calientes',
-      precio: 1.50,
-      stock: 100,
-      descripcion: 'Café americano recién hecho',
-      imagen: '',
-      marcas_ids: [MARCAS.MODOMIO, MARCAS.BLACKBURGUER], // ⭐ En ambas marcas
-      activo: true,
-      visible_tpv: true
-    },
-    {
-      id: 'prod-004',
-      nombre: 'Tarta de Zanahoria',
-      categoria: 'Pasteles individuales',
-      precio: 4.50,
-      stock: 12,
-      descripcion: 'Tarta casera de zanahoria con crema de queso',
-      imagen: '',
-      marcas_ids: [MARCAS.MODOMIO], // Solo en Modomio
-      activo: true,
-      visible_tpv: true
-    },
-    {
-      id: 'prod-005',
-      nombre: 'Bocadillo de Jamón Ibérico',
-      categoria: 'Bocadillos',
-      precio: 5.50,
-      stock: 8,
-      descripcion: 'Bocadillo de pan recién hecho con jamón ibérico',
-      imagen: '',
-      marcas_ids: [MARCAS.BLACKBURGUER], // Solo en Blackburguer
-      activo: true,
-      visible_tpv: true
-    },
-    {
-      id: 'prod-006',
-      nombre: 'Coca-Cola 33cl',
-      categoria: 'Bebidas frías',
-      precio: 2.50,
-      stock: 50,
-      descripcion: 'Coca-Cola lata 33cl',
-      imagen: '',
-      marcas_ids: [MARCAS.MODOMIO, MARCAS.BLACKBURGUER], // ⭐ En ambas marcas
-      activo: true,
-      visible_tpv: true
-    },
-    {
-      id: 'prod-007',
-      nombre: 'Menú Desayuno Completo',
-      categoria: 'Combos',
-      precio: 2.80,
-      stock: 999, // Combos siempre disponibles
-      descripcion: 'Croissant + Café + Zumo',
-      imagen: '',
-      marcas_ids: [MARCAS.MODOMIO], // Solo en Modomio
-      activo: true,
-      visible_tpv: true
-    },
-    {
-      id: 'prod-008',
-      nombre: 'Hamburguesa Clásica',
-      categoria: 'Hamburguesas',
-      precio: 7.50,
-      stock: 15,
-      descripcion: 'Hamburguesa 180g con queso, lechuga y tomate',
-      imagen: '',
-      marcas_ids: [MARCAS.BLACKBURGUER], // Solo en Blackburguer
-      activo: true,
-      visible_tpv: true
-    },
-    {
-      id: 'prod-009',
-      nombre: 'Napolitana de Chocolate',
-      categoria: 'Bollería simple',
-      precio: 2.00,
-      stock: 3, // ⚠️ Stock bajo
-      descripcion: 'Napolitana rellena de chocolate',
-      imagen: '',
-      marcas_ids: [MARCAS.MODOMIO], // Solo en Modomio
-      activo: true,
-      visible_tpv: true
-    },
-  ];
-  
   // ⭐ Usamos productos del contexto en lugar de mock local
   const productos = productosContext;
 
@@ -967,12 +905,13 @@ export function TPV360Master({
       }
     }
 
-    // Obtener info de PDV y empresa
-    const pdv = PUNTOS_VENTA[pdvEfectivo?.id || puntoVentaId];
-    const marcaId = marcaActiva || (pdv?.marcasDisponibles?.[0] ?? '');
-    const marca = MARCAS[marcaId];
-    const empresaId = marca?.empresaId || pdv?.empresaId || '';
-    const empresa = EMPRESAS[empresaId];
+    // Obtener info real de PDV/Empresa/Marca
+    const pdvIdFinal = String(pdvEfectivo?.id || puntoVentaId || '').trim();
+    const pdv = pdvById.get(pdvIdFinal);
+    const marcaId = String(marcaActiva || pdv?.marcasIds?.[0] || '').trim();
+    const marca = marcaById.get(marcaId);
+    const empresaId = String(marca?.empresaId || pdv?.empresaId || '').trim();
+    const empresa = empresaById.get(empresaId);
 
     // Crear nuevo pedido con datos reales de empresa y ubicación
     const nuevoPedido: Pedido = {
@@ -990,12 +929,12 @@ export function TPV360Master({
       pagado: true,
       fechaCreacion: new Date(),
       empresa: empresa?.nombreComercial || empresaId,
-      marca: marca?.nombre || marcaId,
-      pdv: pdv?.nombre || pdv?.id || puntoVentaId,
+      marca: marca?.nombre || getNombreMarca(marcaId) || marcaId,
+      pdv: pdv?.nombre || pdvIdFinal,
       // Ubicación
       direccion: pdv?.direccion,
-      latitud: pdv?.coordenadas?.latitud,
-      longitud: pdv?.coordenadas?.longitud
+      latitud: pdv?.latitud,
+      longitud: pdv?.longitud
     };
 
     setPedidos([nuevoPedido, ...pedidos]);
@@ -1790,8 +1729,8 @@ export function TPV360Master({
                           {marcasDisponiblesLocal.length > 0 && (
                             <div className="flex items-center gap-2 flex-wrap">
                               {marcasDisponiblesLocal.map(marcaId => {
-                                const marca = MARCAS[marcaId];
-                                if (!marca) return null;
+                                const marca = marcaById.get(marcaId);
+                                const nombreMarca = String(marca?.nombre || getNombreMarca(marcaId) || marcaId);
                                 
                                 const isActive = marcaActivaLocal === marcaId;
                                 const contadorProductos = productos.filter(p => 
@@ -1806,7 +1745,7 @@ export function TPV360Master({
                                     onClick={() => {
                                       setMarcaActivaLocal(marcaId);
                                       onCambiarMarca?.(marcaId);
-                                      toast.info(`Cambiado a ${marca.nombre}`);
+                                      toast.info(`Cambiado a ${nombreMarca}`);
                                     }}
                                     className={`
                                       relative group flex-shrink-0
@@ -1819,12 +1758,12 @@ export function TPV360Master({
                                         : 'border-3 border-gray-300 hover:border-[#ED1C24]/50 hover:shadow-md'
                                       }
                                     `}
-                                    title={`${marca.nombre} (${contadorProductos} productos)`}
+                                    title={`${nombreMarca} (${contadorProductos} productos)`}
                                   >
                                     {/* Imagen de la marca */}
                                     <ImageWithFallback
-                                      src={marca.logoUrl || ''}
-                                      alt={marca.nombre}
+                                      src={String(marca?.logoUrl || '')}
+                                      alt={nombreMarca}
                                       className="w-full h-full object-contain p-2"
                                     />
                                     

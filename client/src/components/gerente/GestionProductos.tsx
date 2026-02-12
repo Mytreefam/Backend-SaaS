@@ -8,18 +8,6 @@ import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Checkbox } from '../ui/checkbox';
-import { 
-  EMPRESAS_ARRAY,
-  MARCAS_ARRAY,
-  PUNTOS_VENTA_ARRAY,
-  getNombreEmpresa,
-  getNombrePDVConMarcas,
-  getNombreMarca,
-  getIconoMarca,
-  EMPRESAS,
-  MARCAS,
-  PUNTOS_VENTA
-} from '../../constants/empresaConfig';
 import { useStock } from '../../contexts/StockContext';
 import { CATEGORIAS_PRODUCTOS } from '../../contexts/ProductosContext';
 import { Button } from '../ui/button';
@@ -73,6 +61,8 @@ import {
 import { toast } from 'sonner@2.0.3';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { productosGerenteApi } from '../../services/api/gerente.api';
+import { useGerenteEmpresasConfig } from '../../hooks/useGerenteEmpresasConfig';
+import { escandalloApi } from '../../services/api';
 
 // ============================================
 // TIPOS
@@ -155,54 +145,6 @@ interface EscandalloDisponible {
   marcas_ids: string[];
 }
 
-const ESCANDALLOS_DISPONIBLES: EscandalloDisponible[] = [
-  {
-    id: 'ESC-PAN-001',
-    nombre_producto: 'Pan de Masa Madre',
-    costo_ingredientes: 1.05,
-    costo_envases: 0.15,
-    costo_total: 1.20,
-    empresa_id: EMPRESAS.DISARMINK,
-    marcas_ids: [MARCAS.MODOMIO]
-  },
-  {
-    id: 'ESC-CROIS-001',
-    nombre_producto: 'Croissant de Mantequilla',
-    costo_ingredientes: 0.40,
-    costo_envases: 0.05,
-    costo_total: 0.45,
-    empresa_id: EMPRESAS.DISARMINK,
-    marcas_ids: [MARCAS.MODOMIO]
-  },
-  {
-    id: 'ESC-TARTA-001',
-    nombre_producto: 'Tarta de Zanahoria',
-    costo_ingredientes: 1.65,
-    costo_envases: 0.15,
-    costo_total: 1.80,
-    empresa_id: EMPRESAS.DISARMINK,
-    marcas_ids: [MARCAS.MODOMIO]
-  },
-  {
-    id: 'ESC-BOC-001',
-    nombre_producto: 'Bocadillo de Jamón Ibérico',
-    costo_ingredientes: 2.30,
-    costo_envases: 0.20,
-    costo_total: 2.50,
-    empresa_id: EMPRESAS.DISARMINK,
-    marcas_ids: [MARCAS.BLACKBURGUER]
-  },
-  {
-    id: 'ESC-CAFE-001',
-    nombre_producto: 'Café con Leche',
-    costo_ingredientes: 0.12,
-    costo_envases: 0.03,
-    costo_total: 0.15,
-    empresa_id: EMPRESAS.DISARMINK,
-    marcas_ids: [MARCAS.MODOMIO, MARCAS.BLACKBURGUER] // ⭐ En ambas marcas
-  },
-];
-
 
 
 // ============================================
@@ -212,6 +154,18 @@ const ESCANDALLOS_DISPONIBLES: EscandalloDisponible[] = [
 export function GestionProductos() {
   // Contextos
   const { stock: stockArticulos, getStockPorEmpresa } = useStock();
+  const {
+    empresasArray,
+    marcasArray,
+    puntosVentaArray,
+    getNombreEmpresa,
+    getNombreMarca,
+    getIconoMarca,
+    getNombrePDVConMarcas,
+  } = useGerenteEmpresasConfig();
+
+  const [escandallosDisponibles, setEscandallosDisponibles] = useState<EscandalloDisponible[]>([]);
+  const [cargandoEscandallos, setCargandoEscandallos] = useState<boolean>(false);
   
   // Estados - Cargar productos desde la API
   const [productos, setProductos] = useState<Producto[]>([]);
@@ -226,6 +180,39 @@ export function GestionProductos() {
   const [empresaFiltro, setEmpresaFiltro] = useState<string>('todos');
   const [marcaFiltro, setMarcaFiltro] = useState<string>('todos');
   const [ordenar, setOrdenar] = useState<'nombre' | 'precio' | 'stock' | 'ventas'>('nombre');
+
+  // Cargar escandallos reales desde API (para productos manufacturados)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setCargandoEscandallos(true);
+      try {
+        const empresaId = empresaFiltro !== 'todos' ? empresaFiltro : (empresasArray[0]?.id || '');
+        const escs = await escandalloApi.getAll({ empresaId: empresaId || undefined } as any);
+        if (cancelled) return;
+        setEscandallosDisponibles(
+          (escs || []).map((e: any) => ({
+            id: String(e?.id ?? ''),
+            nombre_producto: String(e?.productoNombre ?? e?.producto_nombre ?? '').trim(),
+            costo_ingredientes: Number(e?.costeUnitario ?? 0),
+            costo_envases: 0,
+            costo_total: Number(e?.costeUnitario ?? 0),
+            empresa_id: String(empresaId || '').trim(),
+            marcas_ids: [],
+          }))
+        );
+      } catch {
+        if (cancelled) return;
+        setEscandallosDisponibles([]);
+      } finally {
+        if (cancelled) return;
+        setCargandoEscandallos(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [empresaFiltro, empresasArray]);
   
   // Cargar productos de la API
   useEffect(() => {
@@ -242,24 +229,37 @@ export function GestionProductos() {
         console.log('✅ Productos recibidos de la API:', productosData.length, productosData);
         
         // Mapear datos de la API al formato del componente
-        const productosMapeados = productosData.map(p => ({
-          ...p,
-          tipo_producto: 'simple' as 'simple' | 'manufacturado' | 'combo',
-          empresa_id: p.empresa_id || EMPRESAS.DISARMINK,
-          empresa_nombre: 'Mi Empresa',
-          marcas_ids: [MARCAS.MODOMIO],
-          marcas_nombres: ['Mi Marca'],
-          precio_compra: p.precio_compra || p.precio * 0.6,
-          stock_minimo: p.stock_minimo || 10,
-          activo: p.activo !== undefined ? p.activo : true,
-          destacado: false,
-          visible_app: p.visible_app !== undefined ? p.visible_app : true,
-          visible_tpv: p.visible_tpv !== undefined ? p.visible_tpv : true,
-          iva: 10,
-          unidad: 'unidad' as 'unidad' | 'kg' | 'litro',
-          fecha_creacion: new Date(),
-          fecha_modificacion: new Date()
-        }));
+        const productosMapeados = productosData.map((p: any) => {
+          const empresaId = String(
+            p.empresa_id || (empresaFiltro !== 'todos' ? empresaFiltro : empresasArray[0]?.id || 'HOYPCM000')
+          ).trim();
+          const marcas_ids: string[] = Array.isArray(p.marcas_ids)
+            ? p.marcas_ids.map((x: any) => String(x))
+            : p.marcaId
+              ? [String(p.marcaId)]
+              : marcaFiltro !== 'todos'
+                ? [String(marcaFiltro)]
+                : (marcasArray[0]?.id ? [String(marcasArray[0].id)] : []);
+
+          return {
+            ...p,
+            tipo_producto: (p.tipo_producto || 'simple') as 'simple' | 'manufacturado' | 'combo',
+            empresa_id: empresaId,
+            empresa_nombre: getNombreEmpresa(empresaId),
+            marcas_ids,
+            marcas_nombres: marcas_ids.map(getNombreMarca),
+            precio_compra: Number(p.precio_compra ?? 0),
+            stock_minimo: Number(p.stock_minimo ?? 0),
+            activo: typeof p.activo === 'boolean' ? p.activo : Number(p.stock ?? 0) > 0,
+            destacado: Boolean(p.destacado ?? false),
+            visible_app: typeof p.visible_app === 'boolean' ? p.visible_app : true,
+            visible_tpv: typeof p.visible_tpv === 'boolean' ? p.visible_tpv : true,
+            iva: Number(p.iva ?? 0),
+            unidad: (p.unidad || 'unidad') as 'unidad' | 'kg' | 'litro',
+            fecha_creacion: p.fecha_creacion ? new Date(p.fecha_creacion) : new Date(),
+            fecha_modificacion: p.fecha_modificacion ? new Date(p.fecha_modificacion) : new Date(),
+          } as Producto;
+        });
         
         console.log('✅ Productos mapeados para la interfaz:', productosMapeados.length);
         setProductos(productosMapeados);
@@ -276,7 +276,7 @@ export function GestionProductos() {
     };
     
     cargarProductos();
-  }, [empresaFiltro, marcaFiltro, estadoFiltro]); // Removido productosContext de dependencias
+  }, [empresaFiltro, marcaFiltro, estadoFiltro, empresasArray, marcasArray, getNombreEmpresa, getNombreMarca]); // Removido productosContext de dependencias
   
   // Modales
   const [modalProducto, setModalProducto] = useState(false);
@@ -291,10 +291,10 @@ export function GestionProductos() {
     descripcion: '',
     categoria: '',
     tipo_producto: 'simple',
-    empresa_id: EMPRESAS.DISARMINK,
-    empresa_nombre: 'Disarmink SL - Hoy Pecamos',
-    marcas_ids: [MARCAS.MODOMIO], // ⭐ Array de marcas
-    marcas_nombres: ['Modomio'],
+    empresa_id: '',
+    empresa_nombre: '',
+    marcas_ids: [], // ⭐ Array de marcas
+    marcas_nombres: [],
     precio: 0,
     precio_compra: 0,
     stock: 0,
@@ -308,6 +308,20 @@ export function GestionProductos() {
     notas: ''
   });
 
+  useEffect(() => {
+    if (formData.empresa_id) return;
+    if (!empresasArray.length) return;
+    const id = String(empresasArray[0].id);
+    setFormData((prev) => ({ ...prev, empresa_id: id, empresa_nombre: getNombreEmpresa(id) }));
+  }, [empresasArray, formData.empresa_id, getNombreEmpresa]);
+
+  useEffect(() => {
+    if (Array.isArray(formData.marcas_ids) && formData.marcas_ids.length > 0) return;
+    if (!marcasArray.length) return;
+    const id = String(marcasArray[0].id);
+    setFormData((prev) => ({ ...prev, marcas_ids: [id], marcas_nombres: [getNombreMarca(id)] }));
+  }, [marcasArray, formData.marcas_ids, getNombreMarca]);
+
   // ============================================
   // CÁLCULOS CON USEMEMO
   // ============================================
@@ -316,7 +330,7 @@ export function GestionProductos() {
   const escandallosFiltrados = useMemo(() => {
     if (!formData.empresa_id) return [];
     
-    return ESCANDALLOS_DISPONIBLES.filter(esc => {
+    return escandallosDisponibles.filter(esc => {
       // Debe pertenecer a la misma empresa
       const matchEmpresa = esc.empresa_id === formData.empresa_id;
       
@@ -337,7 +351,7 @@ export function GestionProductos() {
 
     // Si hay escandallo seleccionado, obtener su costo
     if (formData.tipo_producto === 'manufacturado' && formData.escandallo_id) {
-      const escandallo = ESCANDALLOS_DISPONIBLES.find(e => e.id === formData.escandallo_id);
+      const escandallo = escandallosDisponibles.find(e => e.id === formData.escandallo_id);
       if (escandallo) {
         costo_ingredientes = escandallo.costo_ingredientes;
         costo_envases = escandallo.costo_envases;
@@ -446,10 +460,10 @@ export function GestionProductos() {
       descripcion: '',
       categoria: '',
       tipo_producto: 'simple',
-      empresa_id: EMPRESAS.DISARMINK,
-      empresa_nombre: 'Disarmink SL - Hoy Pecamos',
-      marcas_ids: [MARCAS.MODOMIO], // ⭐ Array de marcas
-      marcas_nombres: ['Modomio'],
+      empresa_id: String(empresasArray[0]?.id || 'HOYPCM000'),
+      empresa_nombre: getNombreEmpresa(String(empresasArray[0]?.id || 'HOYPCM000')),
+      marcas_ids: marcasArray[0]?.id ? [String(marcasArray[0].id)] : [], // ⭐ Array de marcas
+      marcas_nombres: marcasArray[0]?.id ? [getNombreMarca(String(marcasArray[0].id))] : [],
       precio: 0,
       precio_compra: 0,
       stock: 0,
@@ -499,9 +513,9 @@ export function GestionProductos() {
     }
 
     // Actualizar nombres de empresa y marcas según los IDs
-    const empresaSeleccionada = EMPRESAS_ARRAY.find(e => e.id === formData.empresa_id);
+    const empresaSeleccionada = empresasArray.find(e => e.id === formData.empresa_id);
     const marcasNombres = formData.marcas_ids?.map(marcaId => {
-      const marca = MARCAS_ARRAY.find(m => m.id === marcaId);
+      const marca = marcasArray.find(m => m.id === marcaId);
       return marca ? getNombreMarca(marca.id) : '';
     }).filter(Boolean) || [];
 
@@ -609,7 +623,7 @@ export function GestionProductos() {
       return false;
     }
 
-    const escandallo = ESCANDALLOS_DISPONIBLES.find(e => e.id === producto.escandallo_id);
+    const escandallo = escandallosDisponibles.find(e => e.id === producto.escandallo_id);
     if (!escandallo) return false;
 
     // Comparar con tolerancia de 0.01€
@@ -630,7 +644,7 @@ export function GestionProductos() {
       return;
     }
 
-    const escandallo = ESCANDALLOS_DISPONIBLES.find(e => e.id === producto.escandallo_id);
+    const escandallo = escandallosDisponibles.find(e => e.id === producto.escandallo_id);
     if (!escandallo) {
       toast.error('Escandallo no encontrado');
       return;
@@ -849,7 +863,7 @@ export function GestionProductos() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todas las empresas</SelectItem>
-                  {EMPRESAS_ARRAY.map(emp => (
+                  {empresasArray.map(emp => (
                     <SelectItem key={emp.id} value={emp.id}>
                       {getNombreEmpresa(emp.id)}
                     </SelectItem>
@@ -864,7 +878,7 @@ export function GestionProductos() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todas las marcas</SelectItem>
-                  {MARCAS_ARRAY.map(marca => (
+                  {marcasArray.map(marca => (
                     <SelectItem key={marca.id} value={marca.id}>
                       {getNombreMarca(marca.id)}
                     </SelectItem>
@@ -1237,7 +1251,7 @@ export function GestionProductos() {
                       <SelectValue placeholder="Selecciona empresa" />
                     </SelectTrigger>
                     <SelectContent>
-                      {EMPRESAS_ARRAY.map(emp => (
+                      {empresasArray.map(emp => (
                         <SelectItem key={emp.id} value={emp.id}>
                           {getNombreEmpresa(emp.id)}
                         </SelectItem>
@@ -1264,7 +1278,7 @@ export function GestionProductos() {
                     </PopoverTrigger>
                     <PopoverContent className="w-full p-3">
                       <div className="space-y-2">
-                        {MARCAS_ARRAY.map(marca => (
+                        {marcasArray.map(marca => (
                           <label key={marca.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
                             <Checkbox
                               checked={formData.marcas_ids?.includes(marca.id) || false}
@@ -1340,7 +1354,7 @@ export function GestionProductos() {
                       <SelectValue placeholder="Selecciona marca" />
                     </SelectTrigger>
                     <SelectContent>
-                      {MARCAS_ARRAY.map(marca => (
+                      {marcasArray.map(marca => (
                         <SelectItem key={marca.id} value={marca.id}>
                           {getNombreMarca(marca.id)}
                         </SelectItem>

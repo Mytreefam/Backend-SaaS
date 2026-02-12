@@ -11,7 +11,7 @@ import { authApi, gerenteConfigApi } from '../../services/api';
 import { useEffect, useState } from 'react';
 
 export function OperativaGerente() {
-  const [empresaId, setEmpresaId] = useState('EMP-001');
+  const [empresaId, setEmpresaId] = useState('HOYPCM000');
   const [empresaNombre, setEmpresaNombre] = useState('Empresa');
   const user = authApi.getCurrentUser();
   const gerenteId = String(user?.id ?? '');
@@ -72,6 +72,7 @@ export function OperativaGerente() {
         {/* TAB 2: HORARIOS */}
         <TabsContent value="horarios">
           <GestionHorarios
+            empresaId={empresaId}
             gerenteId={gerenteId}
             gerenteNombre={gerenteNombre}
           />

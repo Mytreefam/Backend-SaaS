@@ -37,6 +37,7 @@ import { toast } from 'sonner';
 import gerenteApi from '../../services/api/gerente.api';
 
 interface GestionHorariosProps {
+  empresaId: string;
   gerenteId: string;
   gerenteNombre: string;
 }
@@ -63,7 +64,7 @@ interface Empleado {
   puesto: string;
 }
 
-export function GestionHorarios({ gerenteId, gerenteNombre }: GestionHorariosProps) {
+export function GestionHorarios({ empresaId, gerenteId, gerenteNombre }: GestionHorariosProps) {
   const [activeTab, setActiveTab] = useState('horarios');
   const [horarios, setHorarios] = useState<Horario[]>([]);
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
@@ -97,7 +98,7 @@ export function GestionHorarios({ gerenteId, gerenteNombre }: GestionHorariosPro
     setLoading(true);
     try {
       const [horariosData, empleadosData, solicitudesData] = await Promise.all([
-        gerenteApi.horarios.obtenerHorarios('EMP-001'),
+        gerenteApi.horarios.obtenerHorarios(empresaId),
         gerenteApi.empleados.obtenerEmpleados(),
         gerenteApi.horarios.obtenerSolicitudesCambioHorario({ estado: 'pendiente' }),
       ]);
@@ -136,7 +137,7 @@ export function GestionHorarios({ gerenteId, gerenteNombre }: GestionHorariosPro
       await gerenteApi.horarios.crearHorario({
         nombre: nombreHorario,
         descripcion,
-        empresaId: 'EMP-001',
+        empresaId,
         lunes: lunes || null,
         martes: martes || null,
         miercoles: miercoles || null,

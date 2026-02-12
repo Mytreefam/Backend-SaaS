@@ -6,15 +6,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
-import { 
-  EMPRESAS_ARRAY,
-  MARCAS_ARRAY,
-  PUNTOS_VENTA_ARRAY,
-  getNombreEmpresa,
-  getNombrePDVConMarcas,
-  getNombreMarca,
-  getIconoMarca
-} from '../../constants/empresaConfig';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';

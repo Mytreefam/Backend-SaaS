@@ -62,15 +62,50 @@ export const obtenerProductos = async (req: Request, res: Response) => {
       busqueda
     } = req.query;
 
-    // Obtener productos de Prisma
+    const defaultEmpresaId = String(process.env.DEFAULT_EMPRESA_ID || 'HOYPCM000').trim();
+    const empresaId = String(empresa_id || defaultEmpresaId).trim();
+    const marcaId = marca_id ? String(marca_id).trim() : '';
+
+    // Resolver marcas válidas de la empresa (si no se pidió una marca específica)
+    const marcasEmpresa = await prisma.marca
+      .findMany({ where: { empresaId } })
+      .catch(() => []);
+    const marcasEmpresaIds = (marcasEmpresa || []).map((m) => m.id);
+
+    const where: any = {};
+    if (marcaId) where.marcaId = marcaId;
+    else if (empresaId && marcasEmpresaIds.length) where.marcaId = { in: marcasEmpresaIds };
+
+    if (typeof busqueda === 'string' && busqueda.trim()) {
+      const q = busqueda.trim();
+      where.OR = [
+        { nombre: { contains: q, mode: 'insensitive' } },
+        { descripcion: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+
+    if (typeof activo !== 'undefined') {
+      const b = String(activo) === 'true';
+      // Por ahora no hay campo "activo" en schema; usamos stock > 0 como aproximación real.
+      where.stock = b ? { gt: 0 } : { lte: 0 };
+    }
+
+    // Obtener productos de Prisma (incluye escandallo para inferir tipo)
     const productos = await prisma.producto.findMany({
+      where,
       include: {
+        escandallo: true,
         pedidoItems: {
           take: 10,
-          orderBy: { id: 'desc' }
-        }
-      }
+          orderBy: { id: 'desc' },
+        },
+      },
+      orderBy: { id: 'desc' },
     });
+
+    const empresa = await prisma.empresa.findUnique({ where: { id: empresaId } }).catch(() => null);
+    const marcaMap = new Map<string, any>();
+    for (const m of marcasEmpresa || []) marcaMap.set(m.id, m);
 
     // Transformar a formato esperado por frontend
     const productosTransformados = productos.map((p: any) => ({
@@ -78,31 +113,32 @@ export const obtenerProductos = async (req: Request, res: Response) => {
       sku: `PRD-${p.id.toString().padStart(3, '0')}`,
       nombre: p.nombre,
       descripcion: p.descripcion,
-      categoria: 'General', // TODO: Agregar categoría al schema
-      tipo_producto: 'simple', // TODO: Agregar al schema
-      empresa_id: empresa_id || 'EMP-001',
-      empresa_nombre: 'Mi Empresa',
-      marcas_ids: [marca_id || 'MRC-001'],
-      marcas_nombres: ['Mi Marca'],
+      // Campos no persistidos aún en schema; mantener valores seguros (no simulados).
+      categoria: typeof categoria === 'string' ? categoria : '',
+      tipo_producto: p.escandallo ? 'manufacturado' : 'simple',
+      empresa_id: empresaId,
+      empresa_nombre: empresa?.nombreComercial || empresa?.nombreFiscal || empresaId,
+      marcas_ids: p.marcaId ? [String(p.marcaId)] : [],
+      marcas_nombres: p.marcaId ? [String(marcaMap.get(String(p.marcaId))?.nombre || p.marcaId)] : [],
       precio: p.precio,
-      precio_compra: p.precio * 0.6, // Estimado
+      precio_compra: null,
       stock: p.stock,
-      stock_minimo: 10,
+      stock_minimo: null,
       imagen: p.imagen,
       activo: p.stock > 0,
       destacado: false,
       visible_app: true,
       visible_tpv: true,
-      iva: 10,
-      unidad: 'unidad',
-      fecha_creacion: new Date(),
-      fecha_modificacion: new Date()
+      iva: null,
+      unidad: null,
+      fecha_creacion: p.creadoEn || null,
+      fecha_modificacion: p.modificadoEn || null,
     }));
 
-    res.json(productosTransformados);
+    return res.json({ success: true, data: productosTransformados });
   } catch (error) {
     console.error('Error al obtener productos:', error);
-    res.status(500).json({ error: 'Error al obtener productos' });
+    return res.status(500).json({ success: false, error: 'GERENTE_PRODUCTOS_LIST_FAILED' });
   }
 };
 

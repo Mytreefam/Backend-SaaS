@@ -1,14 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader } from '../ui/card';
 import { FiltroEstandarGerente } from './FiltroEstandarGerente';
-import { 
-  EMPRESAS_ARRAY,
-  MARCAS_ARRAY,
-  PUNTOS_VENTA_ARRAY,
-  getNombreEmpresa,
-  getNombrePDVConMarcas,
-  getNombreMarca
-} from '../../constants/empresaConfig';
 import { stockApi } from '../../services/api/gerente.api';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';

@@ -91,7 +91,6 @@ import { ModalAgenteExterno, AgenteExterno as AgenteExternoType } from './ModalA
 import { ConfiguracionEmpresas } from './ConfiguracionEmpresas';
 import { GestionMarcas } from './GestionMarcas';
 import { ModalConfiguracionZonaHoraria } from './ModalConfiguracionZonaHoraria';
-import { CronJobsMonitor } from './CronJobsMonitor';
 import { ConfiguracionCupones } from './ConfiguracionCupones';
 import { 
   obtenerConfiguracionZonaHoraria,
@@ -2718,7 +2717,9 @@ export function ConfiguracionGerente({ activeSubsection = 'cuenta', user, onCamb
 
               {/* Monitor de Tareas Automatizadas */}
               <div className="mt-6">
-                <CronJobsMonitor />
+                <div className="text-sm text-gray-600">
+                  Monitor de cron jobs removido (evitar datos simulados en frontend).
+                </div>
               </div>
             </div>
 

@@ -24,7 +24,6 @@ import { CuponesProvider } from './contexts/CuponesContext';
 import { PedidosProvider } from './contexts/PedidosContext';
 import { inicializarPedidosDemo } from './data/pedidos-demo';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { inicializarCronJobs } from './services/cron-jobs';
 import { getConfig } from './config/white-label.config';
 import { inicializarMarcasDefault } from './utils/marcasHelper';
 import { authApi } from './services/api';
@@ -109,7 +108,7 @@ function App() {
     inicializarPedidosDemo();
 
     // Inicializar cron jobs
-    inicializarCronJobs();
+    // Cron jobs en frontend fueron removidos (evitar datos mock).
 
     // Cargar test helpers para Caja Rápida
     import('./utils/test-helpers-caja-rapida').catch(() => {

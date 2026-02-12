@@ -57,8 +57,8 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
-import { EMPRESAS, PUNTOS_VENTA, getNombreEmpresa, getNombrePDV } from '../../constants/empresaConfig';
 import { documentacionApi } from '../../services/api/gerente.api';
+import { gerenteConfigApi } from '../../services/api';
 
 interface Documento {
   id: string;
@@ -192,11 +192,75 @@ export function DocumentacionGerente() {
   const [todoDia, setTodoDia] = useState(false);
   const [metodoPago, setMetodoPago] = useState<'efectivo' | 'tarjeta'>('tarjeta');
 
+  // Config real (Empresa/PDV) desde backend
+  const [empresasConfig, setEmpresasConfig] = useState<any[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await gerenteConfigApi.empresas.list();
+        if (cancelled) return;
+        const arr = Array.isArray(list) ? list : [];
+        setEmpresasConfig(arr);
+        const firstId = String((arr[0] as any)?.id || '').trim();
+        if (!docEmpresa && firstId) setDocEmpresa(firstId);
+      } catch {
+        if (cancelled) return;
+        setEmpresasConfig([]);
+        if (!docEmpresa) setDocEmpresa('HOYPCM000');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const empresaIdActivo = String(docEmpresa || (empresasConfig[0] as any)?.id || 'HOYPCM000').trim();
+
+  const empresasArray = useCallback(() => {
+    return (empresasConfig || [])
+      .map((e: any) => ({
+        id: String(e?.id || '').trim(),
+        nombreFiscal: String(e?.nombreFiscal || '').trim(),
+        nombreComercial: String(e?.nombreComercial || '').trim(),
+      }))
+      .filter((e: any) => e.id);
+  }, [empresasConfig]);
+
+  const puntosVentaArray = useCallback(() => {
+    const out: Array<{ id: string; nombre: string; empresaId: string }> = [];
+    for (const e of empresasConfig || []) {
+      const eid = String((e as any)?.id || '').trim();
+      const pdvs = Array.isArray((e as any)?.puntosVenta) ? (e as any).puntosVenta : [];
+      for (const pv of pdvs) {
+        const id = String(pv?.id || '').trim();
+        if (!id) continue;
+        out.push({ id, nombre: String(pv?.nombre || id).trim(), empresaId: eid });
+      }
+    }
+    return out;
+  }, [empresasConfig]);
+
+  const getNombreEmpresa = (empresaId: string) => {
+    const emp = empresasArray().find((e) => e.id === empresaId);
+    if (!emp) return empresaId;
+    const a = emp.nombreFiscal;
+    const b = emp.nombreComercial;
+    return a && b ? `${a} - ${b}` : (a || b || empresaId);
+  };
+
+  const getNombrePDV = (pdvId: string) => {
+    const pv = puntosVentaArray().find((p) => p.id === pdvId);
+    return pv?.nombre || pdvId;
+  };
+
   // ⭐ FUNCIONES PARA CARGAR DATOS DE LA API
   const cargarDocumentos = useCallback(async () => {
     try {
       console.log('📥 Cargando documentos...');
-      const data = await documentacionApi.obtenerDocumentos({ empresa_id: '1' });
+      const data = await documentacionApi.obtenerDocumentos({ empresa_id: empresaIdActivo });
       console.log('📥 Documentos recibidos:', data);
       
       // Mapear datos del backend al formato del frontend
@@ -223,7 +287,7 @@ export function DocumentacionGerente() {
   const cargarGastos = useCallback(async () => {
     try {
       console.log('📥 Cargando gastos...');
-      const data = await documentacionApi.obtenerGastos({ empresa_id: '1' });
+      const data = await documentacionApi.obtenerGastos({ empresa_id: empresaIdActivo });
       console.log('📥 Gastos recibidos:', data);
       
       const gastosMapeados = (data || []).map((gasto: any) => ({
@@ -247,7 +311,7 @@ export function DocumentacionGerente() {
   const cargarPagosCalendario = useCallback(async () => {
     try {
       console.log('📥 Cargando pagos calendario...');
-      const data = await documentacionApi.obtenerPagosCalendario({ empresa_id: '1' });
+      const data = await documentacionApi.obtenerPagosCalendario({ empresa_id: empresaIdActivo });
       console.log('📥 Pagos recibidos:', data);
       
       const pagosMapeados = (data || []).map((pago: any) => ({
@@ -528,7 +592,7 @@ export function DocumentacionGerente() {
       setGuardando(true);
       
       const nuevoGasto = {
-        empresa_id: '1',
+        empresa_id: empresaIdActivo,
         concepto: datosFormulario.concepto,
         proveedor_nombre: datosFormulario.proveedor,
         nif_proveedor: datosFormulario.nif_proveedor,
@@ -580,7 +644,7 @@ export function DocumentacionGerente() {
       setGuardando(true);
       
       const nuevoPago = {
-        empresa_id: '1',
+        empresa_id: empresaIdActivo,
         concepto: datosFormulario.concepto,
         monto: parseFloat(datosFormulario.monto) || 0,
         categoria: datosFormulario.categoria || 'Otros',
@@ -1370,7 +1434,7 @@ export function DocumentacionGerente() {
                       <SelectValue placeholder="Selecciona una empresa" />
                     </SelectTrigger>
                     <SelectContent>
-                      {Object.values(EMPRESAS).map(empresa => (
+                      {empresasArray().map(empresa => (
                         <SelectItem key={empresa.id} value={empresa.id}>
                           {getNombreEmpresa(empresa.id)}
                         </SelectItem>
@@ -1391,7 +1455,7 @@ export function DocumentacionGerente() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="todos">Todos los puntos de venta</SelectItem>
-                      {docEmpresa && Object.values(PUNTOS_VENTA)
+                      {docEmpresa && puntosVentaArray()
                         .filter(pdv => pdv.empresaId === docEmpresa)
                         .map(pdv => (
                           <SelectItem key={pdv.id} value={pdv.id}>

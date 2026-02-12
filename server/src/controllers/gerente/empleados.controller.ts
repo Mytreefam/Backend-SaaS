@@ -175,12 +175,15 @@ export const crearEmpleado = async (req: Request, res: Response) => {
     let apellidos = req.body.apellidos || '';
     let telefono = req.body.telefono || '';
     let puesto = req.body.puesto || 'Empleado';
-    let empresaId = req.body.empresaId || 'EMP-001';
-    let puntoVentaId = req.body.puntoVentaId || 'PDV001';
+    const defaultEmpresaId = String(process.env.DEFAULT_EMPRESA_ID || 'HOYPCM000').trim();
+    let empresaId = req.body.empresaId || defaultEmpresaId;
+    let puntoVentaId = req.body.puntoVentaId || '';
 
     // Limpiar espacios
     nombre = nombre ? nombre.toString().trim() : '';
     email = email ? email.toString().trim().toLowerCase() : '';
+    empresaId = empresaId ? empresaId.toString().trim() : defaultEmpresaId;
+    puntoVentaId = puntoVentaId ? puntoVentaId.toString().trim() : '';
 
     console.log('📝 Datos recibidos:', { nombre, email, apellidos });
 
@@ -209,6 +212,31 @@ export const crearEmpleado = async (req: Request, res: Response) => {
     const passwordBasica = String(req.body?.password || 'udar2026');
     const passwordProvided = typeof req.body?.password === 'string' && req.body.password.trim().length > 0;
     const passwordHash = await bcrypt.hash(passwordBasica, 12);
+
+    // Ensure empresa exists (or fallback one)
+    const empresa = await prisma.empresa.findUnique({ where: { id: empresaId } }).catch(() => null);
+    if (!empresa) {
+      return res.status(400).json({ error: `Empresa inválida: ${empresaId}` });
+    }
+
+    // Resolve default PDV if not provided
+    if (!puntoVentaId) {
+      const pv = await prisma.puntoVenta.findFirst({
+        where: { empresaId, activo: true },
+        orderBy: { id: 'asc' },
+        select: { id: true },
+      });
+      if (!pv) {
+        return res.status(400).json({ error: `No hay puntos de venta activos para empresa ${empresaId}` });
+      }
+      puntoVentaId = pv.id;
+    } else {
+      // Validate PDV belongs to empresa
+      const pv = await prisma.puntoVenta.findUnique({ where: { id: puntoVentaId }, select: { id: true, empresaId: true, activo: true } });
+      if (!pv || pv.empresaId !== empresaId) {
+        return res.status(400).json({ error: `Punto de venta inválido para empresa ${empresaId}: ${puntoVentaId}` });
+      }
+    }
 
     // Crear (o actualizar) identidad de login en `Cliente` para que pueda iniciar sesión como trabajador
     // Nota: el sistema de auth actual usa `Cliente` para todos los roles.

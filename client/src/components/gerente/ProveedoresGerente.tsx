@@ -1,25 +1,15 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Checkbox } from '../ui/checkbox';
 import { Filter, ChevronDown } from 'lucide-react';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
-import { 
-  EMPRESAS_ARRAY,
-  MARCAS_ARRAY,
-  PUNTOS_VENTA_ARRAY,
-  getNombreEmpresa,
-  getNombrePDVConMarcas,
-  getNombreMarca,
-  getIconoMarca,
-  EMPRESAS,
-  MARCAS,
-  PUNTOS_VENTA
-} from '../../constants/empresaConfig';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Package, FileText, Star, TrendingUp, Plus } from 'lucide-react';
+import { stockApi } from '../../services/api/gerente.api';
+import { useGerenteEmpresasConfig } from '../../hooks/useGerenteEmpresasConfig';
 
 // ============================================
 // INTERFACES
@@ -35,39 +25,83 @@ interface Proveedor {
 }
 
 export function ProveedoresGerente() {
+  const {
+    empresasArray,
+    marcasArray,
+    puntosVentaArray,
+    getNombreEmpresa,
+    getNombrePDVConMarcas,
+    getNombreMarca,
+    getIconoMarca,
+  } = useGerenteEmpresasConfig();
+
   // Estado para filtros
   const [filtrosSeleccionados, setFiltrosSeleccionados] = useState<string[]>([]);
   const [busqueda, setBusqueda] = useState('');
   
   // ============================================
-  // DATOS MOCK - Ahora con más proveedores
+  // Datos reales desde API
   // ============================================
-  const [proveedores] = useState<Proveedor[]>([
-    { id: '1', nombre: 'Repuestos Premium SA', categoria: 'Autopartes', sla: 95, evaluacion: 4.5, pedidos: 45 },
-    { id: '2', nombre: 'Lubricantes del Norte', categoria: 'Aceites', sla: 88, evaluacion: 4.2, pedidos: 32 },
-    { id: '3', nombre: 'Distribuciones Cafés Barcelona', categoria: 'Café', sla: 92, evaluacion: 4.7, pedidos: 58 },
-    { id: '4', nombre: 'Harinas Molinos del Sur SL', categoria: 'Panadería', sla: 85, evaluacion: 4.1, pedidos: 41 },
-    { id: '5', nombre: 'Lácteos San Pedro', categoria: 'Lácteos', sla: 90, evaluacion: 4.6, pedidos: 52 },
-    { id: '6', nombre: 'Azucarera Industrial', categoria: 'Azúcar', sla: 78, evaluacion: 3.9, pedidos: 28 },
-    { id: '7', nombre: 'Levaduras Pro', categoria: 'Levaduras', sla: 94, evaluacion: 4.8, pedidos: 36 },
-    { id: '8', nombre: 'Chocolates Premium', categoria: 'Chocolates', sla: 87, evaluacion: 4.4, pedidos: 44 },
-    { id: '9', nombre: 'Frutos Secos Sol', categoria: 'Frutos Secos', sla: 91, evaluacion: 4.3, pedidos: 39 },
-    { id: '10', nombre: 'Oleícola Española', categoria: 'Aceites', sla: 89, evaluacion: 4.5, pedidos: 47 },
-    { id: '11', nombre: 'Especias del Mundo', categoria: 'Especias', sla: 93, evaluacion: 4.7, pedidos: 33 },
-    { id: '12', nombre: 'Granja Feliz', categoria: 'Huevos', sla: 96, evaluacion: 4.9, pedidos: 62 },
-    { id: '13', nombre: 'Materiales Hostelería Pro', categoria: 'Material', sla: 82, evaluacion: 4.0, pedidos: 29 },
-    { id: '14', nombre: 'Envases y Embalajes SL', categoria: 'Envases', sla: 86, evaluacion: 4.2, pedidos: 37 },
-    { id: '15', nombre: 'Tecnología TPV Systems', categoria: 'Tecnología', sla: 75, evaluacion: 3.8, pedidos: 18 },
-    { id: '16', nombre: 'Servicios Limpieza Integral', categoria: 'Limpieza', sla: 88, evaluacion: 4.1, pedidos: 25 },
-    { id: '17', nombre: 'Bebidas Refrescantes SA', categoria: 'Bebidas', sla: 91, evaluacion: 4.6, pedidos: 55 },
-    { id: '18', nombre: 'Carnes Selectas Premium', categoria: 'Carnes', sla: 94, evaluacion: 4.8, pedidos: 48 },
-  ]);
+  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
+  const [cargando, setCargando] = useState<boolean>(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setCargando(true);
+      try {
+        const data = await stockApi.obtenerProveedores?.({});
+        if (cancelled) return;
+        const list = Array.isArray(data) ? data : [];
+        setProveedores(
+          list.map((p: any) => ({
+            id: String(p?.id ?? ''),
+            nombre: String(p?.nombre ?? p?.razonSocial ?? '').trim(),
+            categoria: String(p?.categoria ?? p?.tipo ?? 'General').trim(),
+            // Métricas avanzadas: si no existen en backend, se muestran como 0.
+            sla: Number(p?.sla ?? 0),
+            evaluacion: Number(p?.evaluacion ?? 0),
+            pedidos: Number(p?.pedidos ?? 0),
+          }))
+        );
+      } catch {
+        if (cancelled) return;
+        setProveedores([]);
+      } finally {
+        if (cancelled) return;
+        setCargando(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // ============================================
   // CÁLCULOS DINÁMICOS CON useMemo
   // ============================================
 
   const estadisticas = useMemo(() => {
+    if (!proveedores.length) {
+      return {
+        totalProveedores: 0,
+        totalPedidos: 0,
+        slaPromedio: 0,
+        evaluacionMedia: 0,
+        proveedoresExcelentes: 0,
+        proveedoresBuenos: 0,
+        proveedoresMejorables: 0,
+        proveedorMayorSLA: null,
+        proveedorMejorEvaluacion: null,
+        proveedorMasPedidos: null,
+        totalCategorias: 0,
+        pedidosPorCategoria: [],
+        pedidoPromedioPorProveedor: 0,
+        proveedoresMuyActivos: 0,
+        proveedoresPocoActivos: 0,
+      };
+    }
+
     // GRUPO 1: Totales básicos
     const totalProveedores = proveedores.length;
     const totalPedidos = proveedores.reduce((sum, p) => sum + p.pedidos, 0);
@@ -157,7 +191,7 @@ export function ProveedoresGerente() {
               {/* Empresa */}
               <div>
                 <Label className="text-xs font-medium text-gray-700 mb-2 block">Empresa</Label>
-                {EMPRESAS_ARRAY.map(empresa => (
+                {empresasArray.map(empresa => (
                   <div key={empresa.id} className="flex items-center gap-2 mb-2">
                     <Checkbox 
                       id={`empresa-${empresa.id}`}
@@ -181,7 +215,7 @@ export function ProveedoresGerente() {
               <div>
                 <Label className="text-xs font-medium text-gray-700 mb-2 block">Puntos de Venta</Label>
                 <div className="space-y-2">
-                  {PUNTOS_VENTA_ARRAY.map(pdv => (
+                  {puntosVentaArray.map(pdv => (
                     <div key={pdv.id} className="flex items-center gap-2">
                       <Checkbox 
                         id={`pdv-${pdv.id}`}
@@ -206,7 +240,7 @@ export function ProveedoresGerente() {
               <div>
                 <Label className="text-xs font-medium text-gray-700 mb-2 block">Marcas</Label>
                 <div className="space-y-2">
-                  {MARCAS_ARRAY.map(marca => (
+                  {marcasArray.map(marca => (
                     <div key={marca.id} className="flex items-center gap-2">
                       <Checkbox 
                         id={`marca-${marca.id}`}
@@ -255,9 +289,9 @@ export function ProveedoresGerente() {
           <div className="flex flex-wrap gap-1 sm:gap-2">
             {filtrosSeleccionados.map(id => {
               let label = '';
-              if (EMPRESAS[id]) label = getNombreEmpresa(id);
-              else if (PUNTOS_VENTA[id]) label = PUNTOS_VENTA[id].nombre;
-              else if (MARCAS[id]) label = getNombreMarca(id);
+              if (empresasArray.some((e) => e.id === id)) label = getNombreEmpresa(id);
+              else if (puntosVentaArray.some((p) => p.id === id)) label = getNombrePDVConMarcas(id);
+              else if (marcasArray.some((m) => m.id === id)) label = getNombreMarca(id);
               
               return (
                 <Badge key={id} variant="outline" className="text-xs">

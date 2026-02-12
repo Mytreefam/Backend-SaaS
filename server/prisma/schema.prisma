@@ -561,6 +561,39 @@ model Empleado {
 }
 
 // =========================
+// RRHH GERENTE - INVITACIONES EMPLEADOS
+// =========================
+model InvitacionEmpleado {
+  id                 String   @id // e.g. "INV-<ts>-<rand>"
+  empresaId           String
+  empresaNombre       String?
+  metodo              String   @default("email") // email | codigo | preregistro
+  email               String
+  nombre              String?
+  apellidos           String?
+  puesto              String?
+  departamento        String?
+  estado              String   @default("pendiente") // pendiente | aceptada | rechazada | expirada | cancelada
+  fechaCreacion       DateTime @default(now())
+  fechaExpiracion     DateTime
+  fechaAceptacion     DateTime?
+  creadoPor           String?
+  creadoPorNombre     String?
+  codigoInvitacion    String?
+  linkInvitacion      String?
+  usuarioTemporal     String?
+  passwordTemporal    String?
+  notas               String?
+  horasSemanales      Float?
+  tipoContrato        String?
+
+  @@index([empresaId])
+  @@index([email])
+  @@index([estado])
+  @@index([fechaExpiracion])
+}
+
+// =========================
 // RRHH TRABAJADOR (solicitudes + consumos/gastos)
 // =========================
 model TrabajadorSolicitudVacaciones {

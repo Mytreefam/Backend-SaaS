@@ -16,7 +16,6 @@ import { ProductividadGerente } from './gerente/ProductividadGerente';
 import { EquipoRRHH } from './gerente/EquipoRRHH';
 import { IntegracionesDelivery } from './gerente/IntegracionesDelivery';
 import { PedidosGerente } from './gerente/PedidosGerente';
-import { PUNTOS_VENTA_ARRAY, getNombrePDVConMarcas, getNombreMarca, MARCAS } from '../constants/empresaConfig';
 import { NotificacionesGerente } from './gerente/NotificacionesGerente';
 import { AyudaGerente } from './gerente/AyudaGerente';
 import { ConfiguracionGerente } from './gerente/ConfiguracionGerente';
@@ -30,6 +29,7 @@ import { getConfig } from '../config/white-label.config';
 import udarLogo from 'figma:asset/841a58f721c551c9787f7d758f8005cf7dfb6bc5.png';
 import { dashboardGerenteApi, finanzasApi, operativaApi } from '../services/api/gerente.api';
 import { gerenteConfigApi, puntosVentaApi } from '../services/api';
+import { useGerenteEmpresasConfig } from '../hooks/useGerenteEmpresasConfig';
 import {
   LayoutDashboard,
   Store,
@@ -73,6 +73,7 @@ interface GerenteDashboardProps {
 
 export function GerenteDashboard({ user, onLogout, onCambiarRol }: GerenteDashboardProps) {
   console.log('👑 GerenteDashboard iniciado para usuario:', user);
+  const { getNombreMarca } = useGerenteEmpresasConfig();
   const [activeSection, setActiveSection] = useState('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);

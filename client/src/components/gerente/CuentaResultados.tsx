@@ -9,8 +9,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '../ui/tooltip';
-import { PUNTOS_VENTA, getNombrePDVConMarcas } from '../../constants/empresaConfig';
-import { dashboardGerenteApi } from '../../services/api/gerente.api';
+import { finanzasApi } from '../../services/api/gerente.api';
+import { gerenteConfigApi } from '../../services/api';
 
 // ============================================
 // DATA SCHEMA - ESTRUCTURA UNIVERSAL
@@ -83,11 +83,78 @@ export function CuentaResultados({
     tipoPeriodo === 'Mes completo' ? 'mes_completo' : 'acumulado_hoy'
   );
   const [comparativaLocal, setComparativaLocal] = useState<boolean>(comparativaActiva);
-  const [pdvComparado, setPdvComparado] = useState<string>(tiendaComparativa || 'PDV-TIANA');
+  const [pdvComparado, setPdvComparado] = useState<string>(tiendaComparativa || '');
 
   // Estado para datos
   const [datosAPI, setDatosAPI] = useState<CuentaResultadosData | null>(null);
   const [cargandoDatos, setCargandoDatos] = useState<boolean>(false);
+
+  // Config jerárquica real para resolver nombres de PDV/Marca
+  const [empresasConfig, setEmpresasConfig] = useState<any[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await gerenteConfigApi.empresas.list();
+        if (cancelled) return;
+        setEmpresasConfig(Array.isArray(list) ? list : []);
+      } catch {
+        if (cancelled) return;
+        setEmpresasConfig([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const puntosVentaArray = useMemo(() => {
+    const out: Array<{ id: string; nombre: string; marcasIds: string[] }> = [];
+    for (const e of empresasConfig || []) {
+      const pdvs = Array.isArray((e as any)?.puntosVenta) ? (e as any).puntosVenta : [];
+      for (const pv of pdvs) {
+        const id = String(pv?.id || '').trim();
+        if (!id) continue;
+        out.push({
+          id,
+          nombre: String(pv?.nombre || pv?.id || '').trim(),
+          marcasIds: Array.isArray(pv?.marcasIds) ? pv.marcasIds.map((x: any) => String(x)) : [],
+        });
+      }
+    }
+    return out;
+  }, [empresasConfig]);
+
+  const marcaNameMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const e of empresasConfig || []) {
+      const marcas = Array.isArray((e as any)?.marcas) ? (e as any).marcas : [];
+      for (const marca of marcas) {
+        const id = String(marca?.id || '').trim();
+        if (!id) continue;
+        m.set(id, String(marca?.nombre || id).trim());
+      }
+    }
+    return m;
+  }, [empresasConfig]);
+
+  const getNombreMarca = (id: string) => marcaNameMap.get(id) || id;
+  const getNombrePDVConMarcas = (pdvId?: string | null) => {
+    const id = String(pdvId || '').trim();
+    if (!id) return '';
+    const pdv = puntosVentaArray.find((p) => p.id === id);
+    if (!pdv) return id;
+    const marcas = (pdv.marcasIds || [])
+      .map((mid) => getNombreMarca(mid))
+      .filter((x) => typeof x === 'string' && x.length > 0);
+    return marcas.length ? `${pdv.nombre} - ${marcas.join(', ')}` : pdv.nombre;
+  };
+
+  useEffect(() => {
+    if (pdvComparado) return;
+    if (puntosVentaArray.length) setPdvComparado(puntosVentaArray[0].id);
+  }, [pdvComparado, puntosVentaArray]);
 
   const periodos = ['Hoy', 'Semana', 'Mes', 'Trimestre', 'Año', 'Personalizado'];
 
@@ -102,14 +169,23 @@ export function CuentaResultados({
         const fechaInicio = new Date();
         fechaInicio.setDate(1); // Primer día del mes
         const fechaFin = new Date(); // Hoy
+
+        const empresaId = String(
+          selectedContext[0]?.empresa_id || (empresasConfig[0] as any)?.id || 'HOYPCM000'
+        ).trim();
+        const puntoVentaId = String(
+          selectedContext[0]?.punto_venta_id || puntosVentaArray[0]?.id || ''
+        ).trim();
         
-        const params = {
+        const params: any = {
           fecha_inicio: fechaInicio.toISOString().split('T')[0],
           fecha_fin: fechaFin.toISOString().split('T')[0],
           modo_visualizacion: modoVisualizacion
         };
+        if (empresaId) params.empresa_id = empresaId;
+        if (puntoVentaId) params.punto_venta_id = puntoVentaId;
 
-        const datos = await dashboardGerenteApi.obtenerCuentaResultados(params);
+        const datos = await finanzasApi.obtenerCuentaResultados(params);
         console.log('🔍 Datos cuenta resultados desde API:', datos);
         
         if (datos && datos.lineas) {
@@ -237,8 +313,8 @@ export function CuentaResultados({
           
           const datosTransformados: CuentaResultadosData = {
             filtros: {
-              empresa_id: "EMP-001",
-              punto_venta_id_base: "PDV-001", 
+              empresa_id: empresaId,
+              punto_venta_id_base: puntoVentaId || '',
               punto_venta_id_comparada: null,
               periodo_tipo: 'mes',
               fecha_inicio: params.fecha_inicio,
@@ -275,326 +351,12 @@ export function CuentaResultados({
     };
 
     cargarDatosCuentaResultados();
-  }, [modoVisualizacion, selectedContext]);
+  }, [modoVisualizacion, selectedContext, empresasConfig, puntosVentaArray]);
 
   // ============================================
-  // FUNCIONES DE CÁLCULO
+  // SIN MOCKS
   // ============================================
-
-  const calcularDiasPeriodo = (fechaInicio: string, fechaFin: string): number => {
-    const inicio = new Date(fechaInicio);
-    const fin = new Date(fechaFin);
-    const diferencia = fin.getTime() - inicio.getTime();
-    return Math.ceil(diferencia / (1000 * 3600 * 24)) + 1;
-  };
-
-  const calcularDiasTranscurridos = (fechaInicio: string, fechaFin: string): number => {
-    const inicio = new Date(fechaInicio);
-    const hoy = new Date();
-    const fin = new Date(fechaFin);
-    const fechaLimite = hoy < fin ? hoy : fin;
-    const diferencia = fechaLimite.getTime() - inicio.getTime();
-    return Math.ceil(diferencia / (1000 * 3600 * 24)) + 1;
-  };
-
-  const calcularObjetivoVisible = (
-    objetivoMes: number, 
-    modoVis: 'mes_completo' | 'acumulado_hoy',
-    diasPeriodo: number,
-    diasTranscurridos: number
-  ): number => {
-    if (modoVis === 'mes_completo') {
-      return objetivoMes;
-    }
-    return objetivoMes * (diasTranscurridos / diasPeriodo);
-  };
-
-  const simularImporteReal = (objetivoVisible: number, variacion: number): number => {
-    // Simulamos importes reales basados en el objetivo con una variación
-    return objetivoVisible * (1 + variacion / 100);
-  };
-
-  const calcularCumplimiento = (importeReal: number, objetivoVisible: number): number => {
-    if (objetivoVisible === 0) return 0;
-    return (importeReal / objetivoVisible) * 100;
-  };
-
-  const determinarEstado = (cumplimientoPct: number): 'up' | 'flat' | 'down' => {
-    if (cumplimientoPct >= 100) return 'up';
-    if (cumplimientoPct >= 90) return 'flat';
-    return 'down';
-  };
-
-  // ============================================
-  // GENERACIÓN DE MOCK DATA
-  // ============================================
-
-  const generarMockData = (): CuentaResultadosData => {
-    // Usar fechas del mes actual
-    const ahora = new Date();
-    const primerDia = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
-    const ultimoDia = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 0);
-    
-    const fechaInicio = primerDia.toISOString().split('T')[0];
-    const fechaFin = ultimoDia.toISOString().split('T')[0];
-    const diasPeriodo = calcularDiasPeriodo(fechaInicio, fechaFin);
-    const diasTranscurridos = calcularDiasTranscurridos(fechaInicio, fechaFin);
-
-    // Definir objetivos mensuales y variaciones para simular datos realistas
-    const definicionesLineas = [
-      // INGRESOS NETOS
-      { id: 'ING_MOSTRADOR', grupo: 'INGRESOS_NETOS' as const, concepto: 'Ingresos por ventas en mostrador', objetivo_mes: 175000, variacion: 5, variacionComparada: 2 },
-      { id: 'ING_APP_WEB', grupo: 'INGRESOS_NETOS' as const, concepto: 'Ingresos App / Web', objetivo_mes: 85000, variacion: 8, variacionComparada: 4 },
-      { id: 'ING_TERCEROS', grupo: 'INGRESOS_NETOS' as const, concepto: 'Ingresos por terceros (apps de delivery)', objetivo_mes: 35000, variacion: -3, variacionComparada: -5 },
-      { id: 'ING_OTROS', grupo: 'INGRESOS_NETOS' as const, concepto: 'Otros ingresos (eventos, alquiler de sala, etc.)', objetivo_mes: 8000, variacion: -10, variacionComparada: -8 },
-      
-      // COSTE DE VENTAS
-      { id: 'CSV_MATERIAS', grupo: 'COSTE_VENTAS' as const, concepto: 'Materias primas alimentación (pan, bollería, etc.)', objetivo_mes: 75000, variacion: -5, variacionComparada: -3 },
-      { id: 'CSV_BEBIDAS', grupo: 'COSTE_VENTAS' as const, concepto: 'Bebidas y complementos', objetivo_mes: 20000, variacion: -8, variacionComparada: -6 },
-      { id: 'CSV_ENVASES', grupo: 'COSTE_VENTAS' as const, concepto: 'Envases y embalajes', objetivo_mes: 10000, variacion: -4, variacionComparada: -2 },
-      { id: 'CSV_MERMAS', grupo: 'COSTE_VENTAS' as const, concepto: 'Mermas y roturas', objetivo_mes: 12000, variacion: 15, variacionComparada: 12 },
-      { id: 'CSV_CONSUMOS', grupo: 'COSTE_VENTAS' as const, concepto: 'Consumos internos (productos para personal, etc.)', objetivo_mes: 8000, variacion: 18, variacionComparada: 15 },
-      
-      // GASTOS OPERATIVOS
-      { id: 'GOP_PERSONAL', grupo: 'GASTOS_OPERATIVOS' as const, concepto: 'Personal (sueldos + Seguridad Social)', objetivo_mes: 95000, variacion: -3, variacionComparada: -2 },
-      { id: 'GOP_ALQUILER', grupo: 'GASTOS_OPERATIVOS' as const, concepto: 'Alquiler del local', objetivo_mes: 18000, variacion: 0, variacionComparada: 0 },
-      { id: 'GOP_SUMINISTROS', grupo: 'GASTOS_OPERATIVOS' as const, concepto: 'Suministros (luz, agua, gas)', objetivo_mes: 9000, variacion: -8, variacionComparada: -6 },
-      { id: 'GOP_LIMPIEZA', grupo: 'GASTOS_OPERATIVOS' as const, concepto: 'Limpieza e higiene', objetivo_mes: 5000, variacion: -12, variacionComparada: -10 },
-      { id: 'GOP_MARKETING', grupo: 'GASTOS_OPERATIVOS' as const, concepto: 'Marketing y publicidad', objetivo_mes: 5000, variacion: -25, variacionComparada: -20 },
-      { id: 'GOP_TRANSPORTE', grupo: 'GASTOS_OPERATIVOS' as const, concepto: 'Transporte y reparto', objetivo_mes: 6000, variacion: -10, variacionComparada: -8 },
-      { id: 'GOP_COMISIONES', grupo: 'GASTOS_OPERATIVOS' as const, concepto: 'Comisiones TPV / pasarela de pago', objetivo_mes: 5000, variacion: -12, variacionComparada: -10 },
-      
-      // COSTES ESTRUCTURALES
-      { id: 'CES_AMORTIZACIONES', grupo: 'COSTES_ESTRUCTURALES' as const, concepto: 'Amortizaciones', objetivo_mes: 8000, variacion: 0, variacionComparada: 0 },
-      { id: 'CES_SEGUROS', grupo: 'COSTES_ESTRUCTURALES' as const, concepto: 'Seguros', objetivo_mes: 3000, variacion: 0, variacionComparada: 0 },
-      { id: 'CES_ASESORIA', grupo: 'COSTES_ESTRUCTURALES' as const, concepto: 'Asesoría legal y fiscal', objetivo_mes: 2500, variacion: 0, variacionComparada: 0 },
-      { id: 'CES_TECNOLOGIA', grupo: 'COSTES_ESTRUCTURALES' as const, concepto: 'Tecnología y software', objetivo_mes: 2000, variacion: 0, variacionComparada: 0 },
-      { id: 'CES_OTROS', grupo: 'COSTES_ESTRUCTURALES' as const, concepto: 'Otros gastos estructurales', objetivo_mes: 1500, variacion: 0, variacionComparada: 0 },
-    ];
-
-    // Generar líneas de detalle - usar datos reales si están disponibles
-    const lineas: Linea[] = datosAPI?.lineas ? 
-      // Usar datos reales del API
-      datosAPI.lineas.map(lineaAPI => ({
-        id: lineaAPI.id,
-        grupo: lineaAPI.grupo as any,
-        concepto: lineaAPI.concepto,
-        tipo: lineaAPI.tipo as any,
-        objetivo_mes: lineaAPI.objetivo_mes,
-        objetivo_visible: lineaAPI.objetivo_mes, // Por ahora usar el objetivo mensual
-        importe_real: lineaAPI.importe_real,
-        cumplimiento_pct: lineaAPI.cumplimiento_pct,
-        estado: lineaAPI.estado as any
-      })) : 
-      // Fallback a datos simulados solo si no hay datos del API
-      definicionesLineas.map(def => {
-        const objetivo_visible = calcularObjetivoVisible(
-          def.objetivo_mes,
-          modoVisualizacion,
-          diasPeriodo,
-          diasTranscurridos
-        );
-        const importe_real = simularImporteReal(objetivo_visible, def.variacion);
-        const cumplimiento_pct = calcularCumplimiento(importe_real, objetivo_visible);
-        const estado = determinarEstado(cumplimiento_pct);
-
-        return {
-          id: def.id,
-          grupo: def.grupo,
-          concepto: def.concepto,
-          tipo: 'detalle',
-          objetivo_mes: def.objetivo_mes,
-          objetivo_visible,
-          importe_real,
-          cumplimiento_pct,
-          estado
-        };
-      });
-
-    // Calcular totales por grupo
-    const calcularTotalGrupo = (grupo: string): Linea => {
-      const lineasGrupo = lineas.filter(l => l.grupo === grupo);
-      const objetivo_mes = lineasGrupo.reduce((sum, l) => sum + l.objetivo_mes, 0);
-      const objetivo_visible = lineasGrupo.reduce((sum, l) => sum + l.objetivo_visible, 0);
-      const importe_real = lineasGrupo.reduce((sum, l) => sum + l.importe_real, 0);
-      const cumplimiento_pct = calcularCumplimiento(importe_real, objetivo_visible);
-      const estado = determinarEstado(cumplimiento_pct);
-
-      let concepto = '';
-      switch (grupo) {
-        case 'INGRESOS_NETOS':
-          concepto = 'TOTAL INGRESOS NETOS';
-          break;
-        case 'COSTE_VENTAS':
-          concepto = 'TOTAL COSTE DE VENTAS';
-          break;
-        case 'GASTOS_OPERATIVOS':
-          concepto = 'TOTAL GASTOS OPERATIVOS';
-          break;
-      }
-
-      return {
-        id: `TOTAL_${grupo}`,
-        grupo: grupo as any,
-        concepto,
-        tipo: 'total_grupo',
-        objetivo_mes,
-        objetivo_visible,
-        importe_real,
-        cumplimiento_pct,
-        estado
-      };
-    };
-
-    const totalIngresosNetos = calcularTotalGrupo('INGRESOS_NETOS');
-    const totalCosteVentas = calcularTotalGrupo('COSTE_VENTAS');
-    const totalGastosOperativos = calcularTotalGrupo('GASTOS_OPERATIVOS');
-
-    // Calcular MARGEN BRUTO
-    const margenBruto: Linea = {
-      id: 'MARGEN_BRUTO',
-      grupo: 'MARGEN_BRUTO',
-      concepto: 'MARGEN BRUTO',
-      tipo: 'total_global',
-      objetivo_mes: totalIngresosNetos.objetivo_mes - totalCosteVentas.objetivo_mes,
-      objetivo_visible: totalIngresosNetos.objetivo_visible - totalCosteVentas.objetivo_visible,
-      importe_real: totalIngresosNetos.importe_real - totalCosteVentas.importe_real,
-      cumplimiento_pct: calcularCumplimiento(
-        totalIngresosNetos.importe_real - totalCosteVentas.importe_real,
-        totalIngresosNetos.objetivo_visible - totalCosteVentas.objetivo_visible
-      ),
-      estado: determinarEstado(
-        calcularCumplimiento(
-          totalIngresosNetos.importe_real - totalCosteVentas.importe_real,
-          totalIngresosNetos.objetivo_visible - totalCosteVentas.objetivo_visible
-        )
-      )
-    };
-
-    // Calcular EBITDA
-    const ebitda: Linea = {
-      id: 'EBITDA',
-      grupo: 'EBITDA',
-      concepto: 'EBITDA',
-      tipo: 'total_global',
-      objetivo_mes: margenBruto.objetivo_mes - totalGastosOperativos.objetivo_mes,
-      objetivo_visible: margenBruto.objetivo_visible - totalGastosOperativos.objetivo_visible,
-      importe_real: margenBruto.importe_real - totalGastosOperativos.importe_real,
-      cumplimiento_pct: calcularCumplimiento(
-        margenBruto.importe_real - totalGastosOperativos.importe_real,
-        margenBruto.objetivo_visible - totalGastosOperativos.objetivo_visible
-      ),
-      estado: determinarEstado(
-        calcularCumplimiento(
-          margenBruto.importe_real - totalGastosOperativos.importe_real,
-          margenBruto.objetivo_visible - totalGastosOperativos.objetivo_visible
-        )
-      )
-    };
-
-    // Calcular Total Costes Estructurales
-    const totalCostesEstructurales = calcularTotalGrupo('COSTES_ESTRUCTURALES');
-
-    // Calcular BAI (EBITDA - Costes Estructurales)
-    const bai: Linea = {
-      id: 'BAI',
-      grupo: 'BAI',
-      concepto: 'BAI',
-      tipo: 'total_global',
-      objetivo_mes: ebitda.objetivo_mes - totalCostesEstructurales.objetivo_mes,
-      objetivo_visible: ebitda.objetivo_visible - totalCostesEstructurales.objetivo_visible,
-      importe_real: ebitda.importe_real - totalCostesEstructurales.importe_real,
-      cumplimiento_pct: calcularCumplimiento(
-        ebitda.importe_real - totalCostesEstructurales.importe_real,
-        ebitda.objetivo_visible - totalCostesEstructurales.objetivo_visible
-      ),
-      estado: determinarEstado(
-        calcularCumplimiento(
-          ebitda.importe_real - totalCostesEstructurales.importe_real,
-          ebitda.objetivo_visible - totalCostesEstructurales.objetivo_visible
-        )
-      )
-    };
-
-    // Calcular IMPUESTO SOBRE SOCIEDADES (25% aprox. sobre BAI)
-    const impuestoSociedades: Linea = {
-      id: 'IMPUESTO_SOCIEDADES',
-      grupo: 'IMPUESTO_SOCIEDADES',
-      concepto: 'IMPUESTO SOBRE SOCIEDADES (25% aprox.)',
-      tipo: 'total_global',
-      objetivo_mes: bai.objetivo_mes * 0.25,
-      objetivo_visible: bai.objetivo_visible * 0.25,
-      importe_real: bai.importe_real * 0.25,
-      cumplimiento_pct: 100, // Siempre es 25% del BAI
-      estado: 'flat' as 'flat'
-    };
-
-    // Calcular BENEFICIO NETO (BAI - Impuesto)
-    const beneficioNeto: Linea = {
-      id: 'BENEFICIO_NETO',
-      grupo: 'BENEFICIO_NETO',
-      concepto: 'BENEFICIO NETO',
-      tipo: 'total_global',
-      objetivo_mes: bai.objetivo_mes - impuestoSociedades.objetivo_mes,
-      objetivo_visible: bai.objetivo_visible - impuestoSociedades.objetivo_visible,
-      importe_real: bai.importe_real - impuestoSociedades.importe_real,
-      cumplimiento_pct: calcularCumplimiento(
-        bai.importe_real - impuestoSociedades.importe_real,
-        bai.objetivo_visible - impuestoSociedades.objetivo_visible
-      ),
-      estado: determinarEstado(
-        calcularCumplimiento(
-          bai.importe_real - impuestoSociedades.importe_real,
-          bai.objetivo_visible - impuestoSociedades.objetivo_visible
-        )
-      )
-    };
-
-    // Generar datos de comparativa
-    const lineasComparativa: LineaComparativa[] = definicionesLineas.map(def => {
-      const objetivo_visible = calcularObjetivoVisible(
-        def.objetivo_mes,
-        modoVisualizacion,
-        diasPeriodo,
-        diasTranscurridos
-      );
-      const importe_base = simularImporteReal(objetivo_visible, def.variacion);
-      const importe_comparada = simularImporteReal(objetivo_visible, def.variacionComparada);
-
-      return {
-        id: def.id,
-        importe_base,
-        importe_comparada
-      };
-    });
-
-    // Obtener PDV seleccionado para mostrar
-    const pdvSeleccionado = selectedContext.length > 0 && selectedContext[0].punto_venta_id 
-      ? selectedContext[0].punto_venta_id 
-      : 'PDV-TIANA';
-
-    return {
-      filtros: {
-        empresa_id: selectedContext[0]?.empresa_id || 'EMP-001',
-        punto_venta_id_base: pdvSeleccionado,
-        punto_venta_id_comparada: comparativaLocal ? pdvComparado : null,
-        periodo_tipo: 'mes',
-        fecha_inicio: fechaInicio,
-        fecha_fin: fechaFin,
-        modo_visualizacion: modoVisualizacion
-      },
-      lineas,
-      totales: [totalIngresosNetos, totalCosteVentas, totalGastosOperativos, margenBruto, ebitda, totalCostesEstructurales, bai, impuestoSociedades, beneficioNeto],
-      comparativa: {
-        activo: comparativaLocal,
-        nombre_tienda_comparada: comparativaLocal ? (PUNTOS_VENTA[pdvComparado]?.nombre || pdvComparado) : null,
-        lineas: lineasComparativa
-      }
-    };
-  };
-
-  // Los datos se cargan desde el API en el primer useEffect
-  // No necesitamos regenerar mock data, usamos los datos reales del API
+  // Los datos se cargan desde el API en el primer useEffect.
 
   // Sincronizar con props externas
   useEffect(() => {
@@ -604,10 +366,10 @@ export function CuentaResultados({
   useEffect(() => {
     if (tiendaComparativa) {
       // Intentar encontrar el PDV por nombre (legacy) o usar directamente si es un ID
-      const pdvEncontrado = Object.values(PUNTOS_VENTA).find(pdv => pdv.nombre === tiendaComparativa);
-      setPdvComparado(pdvEncontrado?.id || tiendaComparativa);
+      const match = (puntosVentaArray || []).find(p => p.nombre === tiendaComparativa);
+      setPdvComparado(match?.id || tiendaComparativa);
     }
-  }, [tiendaComparativa]);
+  }, [tiendaComparativa, puntosVentaArray]);
 
   useEffect(() => {
     setModoVisualizacion(tipoPeriodo === 'Mes completo' ? 'mes_completo' : 'acumulado_hoy');

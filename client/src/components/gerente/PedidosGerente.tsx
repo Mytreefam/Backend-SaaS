@@ -58,8 +58,8 @@ import {
 import { pedidosApi } from '../../services/api/pedidos.api';
 import { ModalDetallePedido } from '../pedidos/ModalDetallePedido';
 import { BotonGenerarPedidosDemo } from '../dev/BotonGenerarPedidosDemo';
-import { EMPRESAS, MARCAS, PUNTOS_VENTA } from '../../constants/empresaConfig';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { useGerenteEmpresasConfig } from '../../hooks/useGerenteEmpresasConfig';
 
 type VistaMode = 'tabla' | 'tarjetas';
 
@@ -68,6 +68,7 @@ type VistaMode = 'tabla' | 'tarjetas';
 // ============================================================================
 
 export function PedidosGerente() {
+  const { empresasConfig, empresasArray, puntosVentaArray } = useGerenteEmpresasConfig();
   const [busqueda, setBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState<'todos' | EstadoPedido>('todos');
   const [filtroOrigen, setFiltroOrigen] = useState<'todos' | OrigenPedido>('todos');
@@ -189,45 +190,33 @@ export function PedidosGerente() {
 
   // Opciones de empresas
   const empresasOpciones = useMemo(() => {
-    return Object.entries(EMPRESAS).map(([id, empresa]) => ({
-      value: id,
-      label: empresa.nombreComercial
+    return (empresasArray || []).map((empresa: any) => ({
+      value: empresa.id,
+      label: empresa.nombreComercial || empresa.nombreFiscal || empresa.id,
     }));
-  }, []);
+  }, [empresasArray]);
 
   // Opciones de marcas (filtradas por empresa)
   const marcasOpciones = useMemo(() => {
-    if (filtroEmpresa === 'todas') {
-      return Object.entries(MARCAS).map(([id, marca]) => ({
-        value: id,
-        label: marca.nombre
-      }));
-    }
-    
-    return Object.entries(MARCAS)
-      .filter(([_, marca]) => marca.empresaId === filtroEmpresa)
-      .map(([id, marca]) => ({
-        value: id,
-        label: marca.nombre
-      }));
-  }, [filtroEmpresa]);
+    const all = (empresasConfig || []).flatMap((e: any) => (Array.isArray(e?.marcas) ? e.marcas : []));
+    const filtered =
+      filtroEmpresa === 'todas'
+        ? all
+        : (Array.isArray((empresasConfig || []).find((e: any) => String(e?.id) === String(filtroEmpresa))?.marcas)
+            ? (empresasConfig as any[]).find((e: any) => String(e?.id) === String(filtroEmpresa))?.marcas
+            : []);
+    return (filtered || [])
+      .map((m: any) => ({ value: String(m?.id || '').trim(), label: String(m?.nombre || m?.id || '').trim() }))
+      .filter((x: any) => x.value);
+  }, [empresasConfig, filtroEmpresa]);
 
   // Opciones de PDVs (filtradas por marca)
   const pdvsOpciones = useMemo(() => {
-    if (filtroMarca === 'todas') {
-      return Object.entries(PUNTOS_VENTA).map(([id, pdv]) => ({
-        value: id,
-        label: pdv.nombre
-      }));
-    }
-    
-    return Object.entries(PUNTOS_VENTA)
-      .filter(([_, pdv]) => pdv.marcas.some(m => m.marcaId === filtroMarca))
-      .map(([id, pdv]) => ({
-        value: id,
-        label: pdv.nombre
-      }));
-  }, [filtroMarca]);
+    const base = (puntosVentaArray || [])
+      .filter((pv: any) => (filtroEmpresa === 'todas' ? true : String(pv.empresaId) === String(filtroEmpresa)))
+      .filter((pv: any) => (filtroMarca === 'todas' ? true : (pv.marcasIds || []).some((id: any) => String(id) === String(filtroMarca))));
+    return base.map((pdv: any) => ({ value: pdv.id, label: pdv.nombre || pdv.id }));
+  }, [puntosVentaArray, filtroEmpresa, filtroMarca]);
 
   return (
     <div className="space-y-6">

@@ -22,7 +22,7 @@ import {
   Check
 } from 'lucide-react';
 import { stockApi } from '../../../services/api/gerente.api';
-import { PUNTOS_VENTA_ARRAY, getNombrePDVConMarcas } from '../../../constants/empresaConfig';
+import { useGerenteEmpresasConfig } from '../../../hooks/useGerenteEmpresasConfig';
 
 interface LineaPedidoTemp {
   id: string;
@@ -42,6 +42,7 @@ interface ModalCrearPedidoProveedorProps {
 
 export function ModalCrearPedidoProveedor({ isOpen, onClose, onCrearPedido }: ModalCrearPedidoProveedorProps) {
   const [paso, setPaso] = useState(1); // 1: Datos generales, 2: Líneas de pedido, 3: Resumen
+  const { puntosVentaArray, getNombrePDVConMarcas } = useGerenteEmpresasConfig();
   
   // Datos generales
   const [proveedorSeleccionado, setProveedorSeleccionado] = useState<string>('');
@@ -307,7 +308,7 @@ export function ModalCrearPedidoProveedor({ isOpen, onClose, onCrearPedido }: Mo
                     <SelectValue placeholder="Selecciona destino" />
                   </SelectTrigger>
                   <SelectContent>
-                    {PUNTOS_VENTA_ARRAY.map((pdv) => (
+                    {puntosVentaArray.map((pdv) => (
                       <SelectItem key={pdv.id} value={pdv.id}>
                         <div className="flex items-center gap-2">
                           <Store className="w-4 h-4" />

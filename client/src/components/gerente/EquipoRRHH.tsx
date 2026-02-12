@@ -7,6 +7,8 @@ import { GestionHorarios } from './GestionHorarios';
 import { DashboardOnboarding } from './DashboardOnboarding';
 import { InvitacionesPendientes } from './InvitacionesPendientes';
 import { authApi } from '../../services/api/auth.api';
+import { gerenteConfigApi } from '../../services/api';
+import { useEffect, useState } from 'react';
 
 /**
  * Equipo y RRHH (Gerente)
@@ -23,6 +25,25 @@ export function EquipoRRHH() {
   const currentUser = authApi.getCurrentUser();
   const gerenteId = currentUser?.id ? String(currentUser.id) : 'GER-001';
   const gerenteNombre = currentUser?.nombre || currentUser?.name || 'Gerente';
+  const [empresaId, setEmpresaId] = useState<string>('HOYPCM000');
+
+  // Resolve empresaId from backend config (fallback to HOYPCM000)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const empresas = await gerenteConfigApi.empresas.list();
+        const first = Array.isArray(empresas) ? empresas[0] : null;
+        const id = String((first as any)?.id || '').trim();
+        if (!cancelled && id) setEmpresaId(id);
+      } catch {
+        // keep fallback
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -73,15 +94,15 @@ export function EquipoRRHH() {
         </TabsContent>
 
         <TabsContent value="horarios">
-          <GestionHorarios gerenteId={gerenteId} gerenteNombre={gerenteNombre} />
+          <GestionHorarios empresaId={empresaId} gerenteId={gerenteId} gerenteNombre={gerenteNombre} />
         </TabsContent>
 
         <TabsContent value="onboarding">
-          <DashboardOnboarding />
+          <DashboardOnboarding empresaId={empresaId} gerenteId={gerenteId} />
         </TabsContent>
 
         <TabsContent value="invitaciones">
-          <InvitacionesPendientes />
+          <InvitacionesPendientes empresaId={empresaId} />
         </TabsContent>
       </Tabs>
     </div>

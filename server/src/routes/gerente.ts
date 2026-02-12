@@ -23,6 +23,7 @@ import * as escandalloController from '../controllers/gerente/escandallo.control
 import * as stockExtController from '../controllers/gerente/stock-extendido.controller';
 import * as chatController from '../controllers/gerente/chat.controller';
 import * as configuracionController from '../controllers/gerente/configuracion.controller';
+import * as invitacionesController from '../controllers/gerente/invitaciones.controller';
 
 const router = Router();
 
@@ -340,6 +341,16 @@ router.get('/productividad/okrs', configuracionController.listOkrs);
 router.post('/productividad/okrs', configuracionController.upsertOkr);
 router.put('/productividad/okrs/:id', configuracionController.upsertOkr);
 router.delete('/productividad/okrs/:id', configuracionController.deleteOkr);
+
+// ============================================
+// RRHH - INVITACIONES EMPLEADOS (backend real)
+// ============================================
+router.get('/rrhh/invitaciones', invitacionesController.listInvitaciones);
+router.get('/rrhh/invitaciones/estadisticas', invitacionesController.getEstadisticas);
+router.post('/rrhh/invitaciones', invitacionesController.crearInvitacion);
+router.post('/rrhh/invitaciones/limpiar-expiradas', invitacionesController.limpiarExpiradas);
+router.put('/rrhh/invitaciones/:id/cancelar', invitacionesController.cancelar);
+router.post('/rrhh/invitaciones/:id/reenviar', invitacionesController.reenviar);
 
 // ============================================
 // TICKETS DE SOPORTE

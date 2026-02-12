@@ -127,18 +127,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { 
-  EMPRESAS, 
-  MARCAS, 
-  PUNTOS_VENTA,
-  getNombreEmpresa,
-  getNombrePDVConMarcas,
-  getNombreMarca,
-  getIconoMarca,
-  EMPRESAS_ARRAY,
-  MARCAS_ARRAY,
-  PUNTOS_VENTA_ARRAY
-} from '../../constants/empresaConfig';
+import { useGerenteEmpresasConfig } from '../../hooks/useGerenteEmpresasConfig';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -312,6 +301,17 @@ interface Producto {
 }
 
 export function ClientesGerente() {
+  const {
+    empresasArray,
+    marcasArray,
+    puntosVentaArray,
+    getNombreEmpresa,
+    getNombreMarca,
+    getNombrePDV,
+    getNombrePDVConMarcas,
+    getIconoMarca,
+  } = useGerenteEmpresasConfig();
+
   const [activeTab, setActiveTab] = useState('clientes');
   const [busqueda, setBusqueda] = useState('');
   const [modalAñadirPromocion, setModalAñadirPromocion] = useState(false);
@@ -2065,7 +2065,7 @@ export function ClientesGerente() {
                       {/* Empresa */}
                       <div>
                         <Label className="text-xs font-medium text-gray-700 mb-2 block">Empresa</Label>
-                        {EMPRESAS_ARRAY.map(empresa => (
+                        {empresasArray.map(empresa => (
                           <div key={empresa.id} className="flex items-center gap-2">
                             <Checkbox 
                               id={`empresa-${empresa.id}`}
@@ -2089,7 +2089,7 @@ export function ClientesGerente() {
                       <div>
                         <Label className="text-xs font-medium text-gray-700 mb-2 block">Puntos de Venta</Label>
                         <div className="space-y-2">
-                          {PUNTOS_VENTA_ARRAY.map(pdv => (
+                          {puntosVentaArray.map(pdv => (
                             <div key={pdv.id} className="flex items-center gap-2">
                               <Checkbox 
                                 id={`pdv-${pdv.id}`}
@@ -2114,7 +2114,7 @@ export function ClientesGerente() {
                       <div>
                         <Label className="text-xs font-medium text-gray-700 mb-2 block">Marcas</Label>
                         <div className="space-y-2">
-                          {MARCAS_ARRAY.map(marca => (
+                          {marcasArray.map(marca => (
                             <div key={marca.id} className="flex items-center gap-2">
                               <Checkbox 
                                 id={`marca-${marca.id}`}
@@ -2203,9 +2203,9 @@ export function ClientesGerente() {
               {filtroPDV.length > 0 && (
                 <Badge variant="outline" className="bg-white text-[10px] sm:text-xs h-5 sm:h-6">
                   Filtros: {filtroPDV.map(id => {
-                    if (EMPRESAS[id]) return getNombreEmpresa(id);
-                    if (PUNTOS_VENTA[id]) return PUNTOS_VENTA[id].nombre;
-                    if (MARCAS[id]) return getNombreMarca(id);
+                    if (empresasArray.some((e) => e.id === id)) return getNombreEmpresa(id);
+                    if (puntosVentaArray.some((p) => p.id === id)) return getNombrePDV(id);
+                    if (marcasArray.some((m) => m.id === id)) return getNombreMarca(id);
                     return id;
                   }).join(', ')}
                 </Badge>
@@ -4428,7 +4428,7 @@ export function ClientesGerente() {
                               <SelectValue placeholder="Selecciona una marca" />
                             </SelectTrigger>
                             <SelectContent>
-                              {MARCAS_ARRAY.map((marca) => (
+                              {marcasArray.map((marca) => (
                                 <SelectItem key={marca.id} value={marca.id}>
                                   <div className="flex items-center gap-2">
                                     <span>{getIconoMarca(marca.id)}</span>

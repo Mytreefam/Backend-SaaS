@@ -24,6 +24,7 @@ export async function createTicketSoporte(ticket: {
 
 import { apiService } from '../api.service';
 import { toast } from 'sonner';
+import { envelopedFetch } from '../http/envelopedFetch';
 
 // ============================================
 // TIPOS
@@ -1839,19 +1840,20 @@ export const documentacionApi = {
     try {
       const formData = new FormData();
       formData.append('archivo', archivo);
-      
-      const response = await fetch('http://localhost:4000/gerente/documentacion/upload', {
+
+      // Use centralized base URL + auth token handling (works in production behind Nginx)
+      const res = await envelopedFetch<{
+        url: string;
+        nombre: string;
+        tamano: number;
+        mimeType: string;
+      }>('/gerente/documentacion/upload', {
         method: 'POST',
         body: formData,
-      });
-      
-      const result = await response.json();
-      
-      if (result.success) {
-        return result.data;
-      }
-      
-      throw new Error(result.error || 'Error al subir archivo');
+        credentials: 'include',
+      } as any);
+
+      return res.data.data ?? null;
     } catch (error) {
       console.error('Error al subir archivo:', error);
       return null;

@@ -542,9 +542,9 @@ export function GerenteDashboard({ user, onLogout, onCambiarRol }: GerenteDashbo
                   className="relative min-w-[44px] min-h-[44px] p-0 flex items-center justify-center"
                 >
                   <Bell className="w-5 h-5" />
-                  {alertas > 0 && (
+                  {badges.alertas > 0 && (
                     <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center px-1">
-                      {alertas > 9 ? '9+' : alertas}
+                      {badges.alertas > 9 ? '9+' : badges.alertas}
                     </span>
                   )}
                 </Button>

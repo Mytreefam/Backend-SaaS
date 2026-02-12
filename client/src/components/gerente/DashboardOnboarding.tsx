@@ -60,8 +60,8 @@ export function DashboardOnboarding({ empresaId, gerenteId }: DashboardOnboardin
         onboardingService.obtenerEstadisticas(empresaId)
       ]);
 
-      setProcesos(procesosData);
-      setEstadisticas(statsData);
+      setProcesos(Array.isArray(procesosData) ? procesosData : []);
+      setEstadisticas(statsData && typeof statsData === 'object' ? (statsData as any) : null);
     } catch (error) {
       console.error('Error cargando datos:', error);
       toast.error('Error al cargar datos de onboarding');
@@ -199,14 +199,14 @@ export function DashboardOnboarding({ empresaId, gerenteId }: DashboardOnboardin
               variant={filtroFase === 'documentacion_pendiente' ? 'default' : 'outline'}
               onClick={() => setFiltroFase('documentacion_pendiente')}
             >
-              Documentación ({estadisticas?.porFase.documentacion_pendiente || 0})
+              Documentación ({estadisticas?.porFase?.documentacion_pendiente || 0})
             </Button>
             <Button
               size="sm"
               variant={filtroFase === 'formacion_pendiente' ? 'default' : 'outline'}
               onClick={() => setFiltroFase('formacion_pendiente')}
             >
-              Formación ({estadisticas?.porFase.formacion_pendiente || 0})
+              Formación ({estadisticas?.porFase?.formacion_pendiente || 0})
             </Button>
           </div>
 
